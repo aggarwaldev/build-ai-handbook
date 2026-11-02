@@ -1,0 +1,35 @@
+{
+  "about": "Invented member records for the capstone. Brindlemere City Library and its members do not exist, and every title is made up. A record holds only what the help desk needs: no name, address, email or phone number.",
+  "currency": "GBP",
+  "members": {
+    "M-1001": {
+      "card": "adult",
+      "loans": [
+        {"title": "Knots for Nervous Sailors", "format": "book", "due": "2026-11-09", "renewals_used": 1, "reserved_by_someone_else": false},
+        {"title": "Brindlemere in Old Photographs", "format": "book", "due": "2026-10-30", "renewals_used": 3, "reserved_by_someone_else": false},
+        {"title": "The Heron at Dusk", "format": "DVD", "due": "2026-11-04", "renewals_used": 0, "reserved_by_someone_else": true}
+      ],
+      "reservations": [
+        {"title": "A Year of Allotment Soups", "status": "ready to collect at Riverside Library", "collect_by": "2026-11-06"}
+      ],
+      "charges_owed": "0.75"
+    },
+    "M-1002": {
+      "card": "adult",
+      "loans": [
+        {"title": "Twelve Walks around Northgate", "format": "book", "due": "2026-11-12", "renewals_used": 0, "reserved_by_someone_else": false}
+      ],
+      "reservations": [],
+      "charges_owed": "0.00"
+    },
+    "M-1003": {
+      "card": "child",
+      "loans": [
+        {"title": "Pip and the Paper Moon", "format": "book", "due": "2026-10-28", "renewals_used": 0, "reserved_by_someone_else": false},
+        {"title": "The Robot Who Liked Rain", "format": "book", "due": "2026-11-16", "renewals_used": 0, "reserved_by_someone_else": false}
+      ],
+      "reservations": [],
+      "charges_owed": "0.00"
+    }
+  }
+}
