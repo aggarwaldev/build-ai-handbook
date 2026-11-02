@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 8: an LLM judge you can trust &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part V &middot; Build it</p>
+<h1>Lab 8: an LLM judge you can trust</h1>
+<p class="lead">Write a pass-or-fail judge with a rubric, then test it the way you would test any classifier: against labels a person wrote, on answers with defects you planted yourself, and with each pair of answers shown in both orders. You will compute agreement, Cohen's kappa (by hand first), a confusion matrix, the judge's recall on each kind of defect, and how often its choice flips when the order does.</p>
+
+<div class="callout why"><span class="title">Why do this</span><p>A model that grades answers is still a model: until it agrees with careful people and catches defects you planted on purpose, its scores are only opinions (<a href="evals.html">chapter 44</a>). Measuring a judge takes an afternoon and forty labelled answers. Skipping it means every later decision rests on numbers nobody has checked.</p></div>
+
+<h2 id="what-you-will-build">What you will build</h2>
+<p>One file, <code class="path">labs/08-judge/judge.py</code>, of about 330 lines, a rule card and 40 labelled answers in <code class="path">labs/08-judge/data/</code>, and the tests in <code class="path">labs/08-judge/test_judge.py</code>. It:</p>
+<ul>
+<li>asks a judge to grade each answer against a four-part <a class="g" href="glossary.html#rubric">rubric</a> and reply with JSON <code>{"reason": &hellip;, "verdict": "PASS" | "FAIL"}</code>;</li>
+<li>parses every reply strictly and counts the ones that do not parse;</li>
+<li>compares the verdicts with a person's labels: agreement, <a class="g" href="glossary.html#cohen-kappa">Cohen's kappa</a>, a confusion matrix and recall per defect type;</li>
+<li>runs a pairwise judge on each (good, bad) pair twice, once in each order, and counts the flips;</li>
+<li>prints what the run would cost on <code>claude-haiku-5-5</code>.</li>
+</ul>
+
+<h2 id="before-you-start">Before you start</h2>
+<p>Finish <a href="lab-setup.html">Lab 0</a>, and read <a href="evals.html">chapter 44</a> for the ideas behind each measurement. Any backend works. On the fake backend a keyword heuristic stands in for the model, so the offline run prints real numbers:</p>
+<pre><code>export LLM_BACKEND=fake</code></pre>
+<div class="callout warn"><span class="title">These numbers measure the plumbing, not a model</span><p>Everything this page prints comes from the fake backend's heuristic: a few keyword rules you can read in a minute. They prove that the prompts, the parser and the metrics work, and they make realistic mistakes for you to study. They say nothing about how well Claude or a local model judges. Run the lab on a real model to find that out.</p></div>
+
+<h2 id="step-1">Step 1: a task, and labels you trust</h2>
+<p>The task is invented: a city library's help desk answers borrowers' questions from a rule card of ten short rules (<code class="path">labs/08-judge/data/library_rules.txt</code>), such as "Books are lent for 21 days and DVDs for 7 days" and "Late fees for adults are 25p per day per book, capped at &pound;6 per item."</p>
+<p>The test set, <code class="path">labs/08-judge/data/items.json</code>, holds 20 questions. Each has a good answer, labelled PASS, and a copy with exactly one planted defect, labelled FAIL with its defect type. Planting one defect per copy means you know what the judge should fail and why (<a href="evals.html#seeded">chapter 44</a>). There are four types, five of each:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Defect</th><th>Question</th><th>The planted copy says</th></tr>
+<tr><td><code>wrong_number</code></td><td>How long can I keep a DVD?</td><td>"DVDs are lent for 14 days." (the rules say 7)</td></tr>
+<tr><td><code>unsupported</code></td><td>How far ahead can I book a study room?</td><td>&hellip; "Groups of six or more get the large room for free." (the rules say nothing of the sort)</td></tr>
+<tr><td><code>off_question</code></td><td>What are the opening hours on weekdays?</td><td>"We are closed on Sundays." (true, but not what was asked)</td></tr>
+<tr><td><code>rude</code></td><td>Are you open on Sunday?</td><td>"Obviously not. The library is closed on Sundays, as the sign on the door says."</td></tr>
+</table></div>
+<p>The labels are the "truth" every number below is measured against, so they are worth checking. In a real project two people label the answers blind, without seeing which ones were planted, and you measure their agreement with each other before you measure the judge (<a href="evals.html#calibrate">chapter 44</a>).</p>
+
+<h2 id="step-2">Step 2: the judge prompt</h2>
+<p>The rubric names four tests, each one a thing a person could check in seconds. A verdict is binary, because two careful people agree far more often on pass or fail with a written rule than on a score out of ten (<a href="evals.html#verdicts">chapter 44</a>). The reason comes before the verdict, so the verdict follows from the reasoning rather than the other way round:</p>
+<pre><code>You grade answers written by a city library's help desk.
+Read the library's rules, the borrower's question and the answer. The answer passes only
+if all four tests hold:
+1. Correct: every number, time and price in it matches the rules.
+2. Supported: it claims nothing that the rules do not say.
+3. On the question: it answers what was asked.
+4. Courteous: no sarcasm, no blame, no talking down.
+If any test fails, the answer fails. Write the reason first, then the verdict. Reply with
+one JSON object and nothing else:
+{"reason": "one short sentence naming the test that failed, if any", "verdict": "PASS" or "FAIL"}</code></pre>
+<p>The user message carries the rules, the question and the answer in tags: <code>&lt;rules&gt;</code>, <code>&lt;question&gt;</code>, <code>&lt;answer&gt;</code>. Each call sets <code>effort="low"</code> and leaves <code>max_tokens</code> at 2,048, because Claude's thinking counts toward <code>max_tokens</code> and a reply cut off mid-JSON does not parse.</p>
+
+<h2 id="step-3">Step 3: parse strictly, count what does not parse</h2>
+<p>A judge that breaks its output contract is a fact to measure, not a mess to tidy. If the parser dug a verdict out of prose with a regular expression, you would never learn how often the judge failed to follow instructions, and a guess would sometimes be wrong. So the parser accepts exactly one JSON object with exactly two keys:</p>
+<pre><code><span class="k">def</span> <span class="n">parse_verdict</span>(text):
+    <span class="k">try</span>:
+        data = json.loads(text)
+    <span class="k">except</span> ValueError:
+        <span class="k">return</span> <span class="k">None</span>
+    <span class="k">if</span> (<span class="k">not</span> isinstance(data, dict) <span class="k">or</span> set(data) != {<span class="s">"verdict"</span>, <span class="s">"reason"</span>}
+            <span class="k">or</span> data[<span class="s">"verdict"</span>] <span class="k">not in</span> (<span class="s">"PASS"</span>, <span class="s">"FAIL"</span>) <span class="k">or not</span> isinstance(data[<span class="s">"reason"</span>], str)):
+        <span class="k">return</span> <span class="k">None</span>
+    <span class="k">return</span> data</code></pre>
+<p>It refuses prose before the JSON, a code fence around it, <code>"pass"</code> in lower case, a missing reason, an extra key and unescaped quotes; the tests try each one. In the run below one reply fails to parse:</p>
+<pre><code>q08-fail: {"reason": "this claim is not in the rules: Reserved books wait for a month on the "Collect here" shelf.", "verdict": "FAIL"}</code></pre>
+<p>The fake judge pastes its reason into a JSON template, much as a model writes JSON one token at a time, and its reason quoted an answer that holds double quotes. The verdict inside is even right. It still counts as unparseable, and the report says so.</p>
+
+<h2 id="step-4">Step 4: agreement and Cohen's kappa</h2>
+<p>Agreement is the share of answers where the judge's verdict matches the person's. It flatters, because two raters agree some of the time by luck. <a class="g" href="glossary.html#cohen-kappa">Cohen's kappa</a> subtracts the agreement you would expect by chance (<a href="evals.html#kappa">chapter 44</a>). Work it by hand once on ten answers:</p>
+<pre><code>person: P P P P P P F F F F
+judge:  P P P P P F F F P P</code></pre>
+<div class="tbl-wrap"><table class="worked">
+<tr><th></th><th>judge PASS</th><th>judge FAIL</th><th>person total</th></tr>
+<tr><td>person PASS</td><td class="num">5</td><td class="num">1</td><td class="num">6</td></tr>
+<tr><td>person FAIL</td><td class="num">2</td><td class="num">2</td><td class="num">4</td></tr>
+<tr><td>judge total</td><td class="num">7</td><td class="num">3</td><td class="num">10</td></tr>
+</table></div>
+<ol>
+<li><b>Observed agreement.</b> The diagonal, 5 + 2 = 7 of 10, so p<sub>o</sub> = 0.70.</li>
+<li><b>Chance agreement.</b> The person says PASS to 6/10 of answers and the judge to 7/10. Raters who labelled at random with those shares would both say PASS on 0.6 &times; 0.7 = 0.42 of answers, and both say FAIL on 0.4 &times; 0.3 = 0.12. So p<sub>e</sub> = 0.42 + 0.12 = 0.54.</li>
+<li><b>Kappa.</b> Of the agreement possible beyond chance, 1 &minus; 0.54 = 0.46, they reached 0.70 &minus; 0.54 = 0.16. So &kappa; = 0.16 / 0.46 &asymp; 0.348.</li>
+</ol>
+<p>Seventy per cent agreement sounds respectable; a kappa of 0.35 says most of it is what two coin-flippers with the same habits would manage. In code:</p>
+<pre><code><span class="k">def</span> <span class="n">cohen_kappa</span>(a, b):
+    n = len(a)
+    po = sum(x == y <span class="k">for</span> x, y <span class="k">in</span> zip(a, b)) / n
+    ca, cb = Counter(a), Counter(b)
+    pe = sum((ca[label] / n) * (cb[label] / n) <span class="k">for</span> label <span class="k">in</span> set(ca) | set(cb))
+    <span class="k">return</span> <span class="k">None</span> <span class="k">if</span> pe == 1 <span class="k">else</span> (po - pe) / (1 - pe)</code></pre>
+<pre><code>$ python labs/08-judge/judge.py kappa-example
+person: P P P P P P F F F F
+judge:  P P P P P F F F P P
+kappa = 0.348</code></pre>
+<p>When both raters give one label to everything, p<sub>e</sub> = 1 and kappa is not defined, so the function returns <code>None</code> rather than divide by zero. The tests also check that perfect agreement gives 1 and perfect disagreement gives &minus;1.</p>
+
+<h2 id="step-5">Step 5: which way does the judge err?</h2>
+<p>Kappa is one number. The <a class="g" href="glossary.html#precision-recall">confusion matrix</a> shows the direction of the mistakes: rows are the person's labels, columns the judge's verdicts, and unparseable replies get a column of their own (<a href="evals.html#confusion">chapter 44</a>). Treat FAIL as the thing being detected:</p>
+<ul>
+<li><b>Recall on defects</b>: of the answers the person failed, the share the judge failed too. A miss here ships a bad answer.</li>
+<li><b>Precision of a FAIL</b>: of the answers the judge failed, the share the person failed too. A miss here blocks or flags a good answer.</li>
+</ul>
+<p>Planted defects add one more view: recall for each defect type. A judge with a fine overall kappa can still be blind to one kind of mistake, and that kind is the one that will reach your users.</p>
+
+<h2 id="step-6">Step 6: position bias in a pairwise judge</h2>
+<p>A pairwise judge sees two answers to the same question and picks the better one (<a href="evals.html#pointwise-pairwise">chapter 44</a>). Comparing is easier than grading on an absolute scale, but a judge may lean towards whichever answer it sees first. The test is cheap: show every (good, bad) pair twice, once in each order, map each reply back to the answer it chose, and count the pairs where the choice changed:</p>
+<pre><code><span class="k">def</span> <span class="n">position_flips</span>(first_order, swapped):
+    out = Counter()
+    <span class="k">for</span> w1, w2 <span class="k">in</span> zip(first_order, swapped):
+        <span class="k">if</span> w1 <span class="k">is</span> <span class="k">None</span> <span class="k">or</span> w2 <span class="k">is</span> <span class="k">None</span>:
+            out[<span class="s">"unparseable"</span>] += 1
+            <span class="k">continue</span>
+        chose_1 = <span class="s">"good"</span> <span class="k">if</span> w1 == <span class="s">"1"</span> <span class="k">else</span> <span class="s">"bad"</span>   <span class="c"># shown (good, bad)</span>
+        chose_2 = <span class="s">"good"</span> <span class="k">if</span> w2 == <span class="s">"2"</span> <span class="k">else</span> <span class="s">"bad"</span>   <span class="c"># shown (bad, good)</span>
+        out[f<span class="s">"{chose_1} both times"</span> <span class="k">if</span> chose_1 == chose_2 <span class="k">else</span> <span class="s">"flipped"</span>] += 1
+    <span class="k">return</span> dict(out)</code></pre>
+<p>A flip means the order decided, not the answers. The usual remedy is to keep the double judging and count a win only when both orders agree, calling the rest a tie (<a href="evals.html#biases">chapter 44</a>). That doubles the cost of pairwise judging, which is why you measure the flip rate first.</p>
+
+<h2 id="stand-in">The stand-in judge</h2>
+<p>On the fake backend, <code>heuristic_judge</code> answers both kinds of prompt with four keyword rules, one per test: a number, time or price in the answer that is not on the rule card fails <i>correct</i>; a sentence of four or more content words, fewer than 60% of which appear in the rules or the question, fails <i>supported</i>; no content word shared with the question fails <i>on the question</i>; and phrases such as "obviously" or "as I already said" fail <i>courteous</i>. For a pair, the answer with fewer problems wins, and on a tie it picks the first answer shown. That last rule is a position bias, built in where a weak judge would have one: when it cannot tell two answers apart.</p>
+
+<h2 id="checklist">Checklist</h2>
+<ul class="checklist">
+<li data-check="lab-judge:labels">I read the rule card and a few labelled pairs, and can name the four defect types.</li>
+<li data-check="lab-judge:prompt">I can say why the verdict is binary and why the reason comes first.</li>
+<li data-check="lab-judge:strict">I saw a reply counted as unparseable and can say why the parser does not guess.</li>
+<li data-check="lab-judge:kappa">I worked the ten-answer kappa by hand and matched the code's 0.348.</li>
+<li data-check="lab-judge:confusion">I read the confusion matrix and recall per defect type from a full run.</li>
+<li data-check="lab-judge:position">I ran the position-bias test and can explain every flip.</li>
+<li data-check="lab-judge:tests">The lab's tests pass.</li>
+</ul>
+
+<h2 id="run-it">Run it</h2>
+<p>The whole run on the fake backend, from the repository root:</p>
+<pre><code>$ LLM_BACKEND=fake python labs/08-judge/judge.py run
+Judge run: 40 items on the fake backend (keyword heuristic: these numbers measure the plumbing, not a model)
+unparseable replies: 1 of 40 ['q08-fail']
+  q08-fail: {"reason": "this claim is not in the rules: Reserved books wait for a month on the "Collect here" shelf.", "verdict": "FAIL"}
+agreement on the 39 parsed: 30/39 = 0.769; counting unparseable as wrong: 30/40 = 0.750
+Cohen's kappa on the parsed: 0.535
+confusion matrix (rows: person, columns: judge)
+                PASS  FAIL  unparseable
+  person PASS     18     2            0
+  person FAIL      7    12            1
+recall per defect type (planted defects the judge called FAIL)
+  wrong_number  3 of 5
+  unsupported   2 of 5
+  off_question  3 of 5
+  rude          4 of 5
+disagreements: q04-fail (judge PASS), q05-fail (judge PASS), q06-fail (judge PASS), q07-fail (judge PASS), q08-pass (judge FAIL), q12-fail (judge PASS), q15-pass (judge FAIL), q15-fail (judge PASS), q19-fail (judge PASS)
+position bias: 20 pairs, each judged in both orders: bad both times 1, flipped 7, good both times 12
+calls: 80, 29131 input and 1224 output tokens (fake); on claude-haiku-5-5 about $0.0035, at most $0.0848 if every reply used max_tokens=2048</code></pre>
+<h3 id="reading">Reading the numbers</h3>
+<ul>
+<li><b>Kappa.</b> p<sub>o</sub> = 30/39 = 0.769. The person says PASS to 20 of the 39 parsed answers and the judge to 25, so p<sub>e</sub> = (20 &times; 25 + 19 &times; 14) / 39<sup>2</sup> = 766 / 1,521 = 0.504, and &kappa; = (0.769 &minus; 0.504) / (1 &minus; 0.504) = 0.535. If you had decided in advance that a judge needs &kappa; of at least 0.6 and a catch rate of at least 0.8 on every defect type, as chapter 44 suggests, this judge fails both bars. That is the harness doing its job.</li>
+<li><b>Which way it errs.</b> Precision of a FAIL is 12 / 14 = 0.86: when it fails an answer it is usually right. Recall is 12 / 19 = 0.63 on the parsed answers, or 12 / 20 = 0.60 counting the unparseable one as a miss. It lets defects through far more often than it blocks good answers.</li>
+<li><b>The misses are realistic.</b> <code>q04-fail</code> says the library opens at 9:00 on Saturdays; 9:00 is on the rule card, for weekdays, so a check that only asks "is this number in the rules?" passes it. <code>q05-fail</code> writes "five times" in words, which no digit pattern sees. <code>q12-fail</code> answers about black-and-white printing when asked about colour, and shares enough words with the question to look on topic.</li>
+<li><b>The false alarms are realistic too.</b> <code>q08-pass</code> ("Reservations cost 50p each") and <code>q15-pass</code> (about renewing) answer the question in different words from it, and a word-overlap rule cannot see a paraphrase.</li>
+<li><b>Position.</b> Twelve pairs were judged the same way in both orders. Seven flipped, and in every one the judge picked whichever answer came first: these are the pairs where it found no difference, so its tie rule decided. One pair, q15, went to the bad answer both times, because the judge wrongly failed the good one.</li>
+</ul>
+<h3 id="reasons">Read the reasons, not only the verdicts</h3>
+<p>Recall on <code>rude</code> is 4 of 5. Here are the replies for those five items, from the same heuristic:</p>
+<pre><code>q16-fail {"reason": "this claim is not in the rules: The library is closed on Sundays, as the sign on the door says.", "verdict": "FAIL"}
+q17-fail {"reason": "the tone is not courteous ('as i already said')", "verdict": "FAIL"}
+q18-fail {"reason": "the answer does not address the question", "verdict": "FAIL"}
+q19-fail {"reason": "passes all four tests", "verdict": "PASS"}
+q20-fail {"reason": "this claim is not in the rules: Please don't waste our time asking again.", "verdict": "FAIL"}</code></pre>
+<p>Only one of the four catches was for rudeness. The others were right for the wrong reason, and a small change elsewhere could turn them into misses. Recall per defect type counts verdicts; the reasons tell you whether the judge understood. Read a sample of them every time you change the judge.</p>
+<p>The tests check the parser, kappa against the worked example, the confusion matrix, recall, the flip counting, the heuristic's broken JSON and the exact numbers of the run above. From <code class="path">labs/</code>:</p>
+<pre><code>$ python -m pytest 08-judge
+....................                                                     [100%]
+20 passed in 0.03s</code></pre>
+<p><b>What it costs.</b> A run makes 80 calls: 40 single judgements and 20 pairs in two orders. On the fake backend the token counts are estimates at about four characters per token, the system prompt included: 29,131 input and 1,224 output tokens. On <code>claude-haiku-5-5</code> that is 29,131 &times; $0.10 / 1,000,000 + 1,224 &times; $0.50 / 1,000,000 = $0.0035. A real model writes longer reasons and its thinking counts as output, so the script also prints the ceiling, every reply using all 2,048 of its <code>max_tokens</code>: 29,131 &times; 0.10 / 1,000,000 + 80 &times; 2,048 &times; 0.50 / 1,000,000 = $0.0848, under nine US cents. Ollama and the fake backend cost nothing.</p>
+
+<h2 id="experiments">Experiments</h2>
+<ol>
+<li><b>Measure a real judge.</b> Run <code>LLM_BACKEND=anthropic python labs/08-judge/judge.py run</code>, or use Ollama. Compare kappa, recall per defect type and the flip count with the heuristic's. Write down the model id with the numbers: a new model version means a new measurement.</li>
+<li><b>Make the rubric vague.</b> Replace the four tests with "Is this a good answer?" and run it on a real model. What happens to kappa, and to recall on <code>off_question</code>?</li>
+<li><b>Label the set yourself.</b> Shuffle the 40 answers, hide the label and defect columns, and label them against the rubric. Compute kappa between your labels and the file's with <code>cohen_kappa</code>. How good is the "truth"?</li>
+<li><b>Fix the heuristic, carefully.</b> Make the number rule check numbers in context, and read number words. Recall on <code>wrong_number</code> should rise. Then ask: you tuned the rules on the test set, so are the new numbers still honest? Split the questions in half, tune on one half and measure on the other.</li>
+<li><b>Add a defect type.</b> Plant five copies that leave out a condition, such as "unless someone else has reserved it". Which rubric test should catch it? Does the judge?</li>
+<li><b>Use both orders.</b> Count a pairwise win only when both orders agree. How many of the 20 pairs become ties?</li>
+<li><b>Verdict first.</b> On a real model, swap the order of the keys in the prompt so the verdict comes before the reason. Does agreement change?</li>
+</ol>
+
+<h2 id="going-further">Going further</h2>
+<ul>
+<li><b>Put error bars on recall.</b> Five items per defect type is a small sample: 3 of 5 could easily be 1 of 5 or 5 of 5 on another draw. A <a class="g" href="glossary.html#wilson-interval">Wilson interval</a> shows how wide the uncertainty is (<a href="evals.html#thresholds">chapter 44</a>).</li>
+<li><b>A verbosity probe.</b> Add one true but useless sentence to every good answer and rerun. A judge that starts failing them, or prefers them in pairs, is reacting to length, not content.</li>
+<li><b>Per-criterion verdicts.</b> Ask for a verdict on each of the four tests rather than one overall verdict, and measure recall per test. It makes "right for the wrong reason" countable.</li>
+<li><b>A regression gate.</b> Once the judge clears your bar, run it in your test suite on every prompt change, and fail the build when the pass rate drops (<a href="lab-prompt-bench.html">Lab 2</a> builds the bench).</li>
+<li><b>Judge in production.</b> <a href="lab-tracing.html">Lab 9</a> records every call as a span; a sampled judge score belongs on the same trace.</li>
+</ul>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>A judge agrees with your labels on 90% of answers, yet kappa is 0.2. How can that be?</summary><div><p>Both raters give the same verdict to nearly everything. If each says PASS to about 93% of answers, chance agreement is already p<sub>e</sub> &asymp; 0.933 &times; 0.933 + 0.067 &times; 0.067 &asymp; 0.875, and &kappa; = (0.90 &minus; 0.875) / (1 &minus; 0.875) = 0.2. Kappa counts only the agreement beyond chance, and there was little room left.</p></div></details>
+<details><summary>Why count unparseable replies rather than pull the verdict out with a regular expression?</summary><div><p>A judge that breaks its output format is a measurable fault. Guessing hides how often it happens, and a guess can be wrong. Counting it, and reporting agreement both with and without those replies, keeps the numbers honest.</p></div></details>
+<details><summary>The heuristic's kappa is 0.535. Does that tell you how good Claude is as a judge?</summary><div><p>No. It measures a few keyword rules, and proves that the prompts, the parser and the metrics work. Only a run on the real model, with the same labels, measures that model.</p></div></details>
+<details><summary>A pair flips: the judge picks answer 1 in both orders. What does that mean, and what can you do?</summary><div><p>The order decided, not the content: in one order it chose the good answer and in the other the bad one. Judge every pair in both orders and count a win only when both agree, calling the rest a tie.</p></div></details>
+<details><summary>Recall on rude answers is 4 of 5, but only one was failed for its tone. Is the judge good at spotting rudeness?</summary><div><p>No. Three catches were right for the wrong reason, which a small change could undo. Recall counts verdicts; reading the reasons tells you what the judge actually noticed.</p></div></details>
+<details><summary>Why plant exactly one defect in each copy?</summary><div><p>So you know what the judge should fail and why. With two defects in one answer, a FAIL could be a catch of either, and recall per defect type would be impossible to count.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://arxiv.org/abs/2306.05685" target="_blank" rel="noopener noreferrer">Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena (2023)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Measures how well strong models agree with people, and describes position, verbosity and self-preference biases.</span></li>
+<li><a href="https://eugeneyan.com/writing/llm-evaluators/" target="_blank" rel="noopener noreferrer">Evaluating the Effectiveness of LLM-Evaluators (aka LLM-as-Judge)</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">A long review of judge designs, the metrics used to test them and what the research says works.</span></li>
+<li><a href="https://en.wikipedia.org/wiki/Cohen%27s_kappa" target="_blank" rel="noopener noreferrer">Cohen's kappa (Wikipedia)</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">The definition, a worked example and the usual reading of its values.</span></li>
+<li><a href="https://langfuse.com/docs/evaluation/evaluation-methods/llm-as-a-judge" target="_blank" rel="noopener noreferrer">LLM-as-a-Judge (Langfuse docs)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">How a tracing tool runs judges over recorded answers, the step after this lab.</span></li>
+</ul>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

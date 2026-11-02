@@ -1,0 +1,233 @@
+[
+ {
+  "id": "o-01",
+  "label": "clean",
+  "retrieved": [
+   "c-03",
+   "c-05"
+  ],
+  "reply": "{\"answer\": \"Late fees are 25p a day per book for adults, capped at £6 per item. Children's cards never pay late fees.\", \"citations\": [\"c-03\"]}"
+ },
+ {
+  "id": "o-02",
+  "label": "clean",
+  "retrieved": [
+   "c-02",
+   "c-01"
+  ],
+  "reply": "{\"answer\": \"You can renew an item up to 3 times, online or at the desk, unless someone has reserved it.\", \"citations\": [\"c-02\"]}"
+ },
+ {
+  "id": "o-03",
+  "label": "clean",
+  "retrieved": [
+   "c-01",
+   "c-02"
+  ],
+  "reply": "{\"answer\": \"Adults may borrow up to 12 items at once, and books are lent for 21 days.\", \"citations\": [\"c-01\", \"c-02\"]}"
+ },
+ {
+  "id": "o-04",
+  "label": "clean",
+  "retrieved": [
+   "c-07"
+  ],
+  "reply": "{\"answer\": \"Printing costs 10p a page in black and white and 40p a page in colour.\", \"citations\": [\"c-07\"]}"
+ },
+ {
+  "id": "o-05",
+  "label": "clean",
+  "retrieved": [
+   "c-06",
+   "c-12"
+  ],
+  "reply": "{\"answer\": \"Wi-Fi is free for 3 hours a day. Ask at the desk for a code.\", \"citations\": [\"c-06\"]}"
+ },
+ {
+  "id": "o-06",
+  "label": "clean",
+  "retrieved": [
+   "c-08"
+  ],
+  "reply": "{\"answer\": \"You are not guaranteed a study room unless you book one. Rooms can be booked up to 7 days ahead, for at most 2 hours.\", \"citations\": [\"c-08\"]}"
+ },
+ {
+  "id": "o-07",
+  "label": "clean",
+  "retrieved": [
+   "c-11"
+  ],
+  "reply": "{\"answer\": \"A lost library card costs £2.50 to replace. Bring photo ID.\", \"citations\": [\"c-11\"]}"
+ },
+ {
+  "id": "o-08",
+  "label": "clean",
+  "retrieved": [
+   "c-12",
+   "c-06"
+  ],
+  "reply": "{\"answer\": \"The library is closed on Sundays and on public holidays.\", \"citations\": [\"c-12\"]}"
+ },
+ {
+  "id": "o-09",
+  "label": "clean",
+  "retrieved": [
+   "c-01",
+   "c-02",
+   "c-03",
+   "c-05",
+   "c-07"
+  ],
+  "reply": "{\"answer\": \"Adults may borrow up to 12 items at once and children up to 8. Books are lent for 21 days and DVDs for 7 days. You can renew an item up to 3 times online or at the desk, unless someone has reserved it. Late fees are 25p per day per book for adults, capped at £6 per item, and children's cards never pay late fees. Reservations cost 50p and are free for children. Printing costs 10p per black and whit\", \"citations\": [\"c-01\", \"c-02\", \"c-03\"]}"
+ },
+ {
+  "id": "o-10",
+  "label": "clean",
+  "retrieved": [
+   "c-02"
+  ],
+  "reply": "{\"answer\": \"You can renew it up to 3 times. I will text a reminder to <PHONE_A> before it is due.\", \"citations\": [\"c-02\"]}"
+ },
+ {
+  "id": "o-11",
+  "label": "clean",
+  "retrieved": [
+   "c-05"
+  ],
+  "reply": "{\"answer\": \"Reservations cost 50p, and they are free for children.\", \"citations\": [\"c-05\"]}"
+ },
+ {
+  "id": "j-01",
+  "label": "json_shape",
+  "retrieved": [
+   "c-03"
+  ],
+  "reply": "Late fees are 25p a day per book, capped at £6 per item [c-03]."
+ },
+ {
+  "id": "j-02",
+  "label": "json_shape",
+  "retrieved": [
+   "c-03"
+  ],
+  "reply": "```json\n{\"answer\": \"Late fees are 25p a day per book, capped at £6 per item.\", \"citations\": [\"c-03\"]}\n```"
+ },
+ {
+  "id": "j-03",
+  "label": "json_shape",
+  "retrieved": [
+   "c-03"
+  ],
+  "reply": "{\"answer\": \"Late fees are 25p a day per book.\", \"citations\": [\"c-03\"],}"
+ },
+ {
+  "id": "j-04",
+  "label": "json_shape",
+  "retrieved": [
+   "c-03"
+  ],
+  "reply": "{\"answer\": \"Late fees are 25p a day per book.\"}"
+ },
+ {
+  "id": "j-05",
+  "label": "json_shape",
+  "retrieved": [
+   "c-03"
+  ],
+  "reply": "{\"answer\": \"Late fees are 25p a day per book.\", \"citations\": [\"c-03\"], \"confidence\": \"high\"}"
+ },
+ {
+  "id": "k-01",
+  "label": "citations",
+  "retrieved": [
+   "c-03"
+  ],
+  "reply": "{\"answer\": \"Late fees are 25p a day per book.\", \"citations\": []}"
+ },
+ {
+  "id": "k-02",
+  "label": "citations",
+  "retrieved": [
+   "c-03",
+   "c-05"
+  ],
+  "reply": "{\"answer\": \"The library's chatbot can renew your books.\", \"citations\": [\"c-09\"]}"
+ },
+ {
+  "id": "k-03",
+  "label": "citations",
+  "retrieved": [
+   "c-03",
+   "c-05"
+  ],
+  "reply": "{\"answer\": \"Late fees are 25p a day, and reservations cost 50p.\", \"citations\": [\"c-03\", \"c-99\"]}"
+ },
+ {
+  "id": "b-01",
+  "label": "banned_phrases",
+  "retrieved": [
+   "c-05"
+  ],
+  "reply": "{\"answer\": \"Your reservation is guaranteed to arrive this week.\", \"citations\": [\"c-05\"]}"
+ },
+ {
+  "id": "b-02",
+  "label": "banned_phrases",
+  "retrieved": [
+   "c-02"
+  ],
+  "reply": "{\"answer\": \"I promise the book will be back by Friday.\", \"citations\": [\"c-02\"]}"
+ },
+ {
+  "id": "b-03",
+  "label": "banned_phrases",
+  "retrieved": [
+   "c-07"
+  ],
+  "reply": "{\"answer\": \"As an AI language model I cannot see the printers, but printing costs 10p a page.\", \"citations\": [\"c-07\"]}"
+ },
+ {
+  "id": "b-04",
+  "label": "banned_phrases",
+  "retrieved": [
+   "c-05"
+  ],
+  "reply": "{\"answer\": \"We guarantee every reservation arrives within a week.\", \"citations\": [\"c-05\"]}"
+ },
+ {
+  "id": "l-01",
+  "label": "length_cap",
+  "retrieved": [
+   "c-01",
+   "c-02",
+   "c-03",
+   "c-05",
+   "c-07"
+  ],
+  "reply": "{\"answer\": \"Adults may borrow up to 12 items at once and children up to 8. Books are lent for 21 days and DVDs for 7 days. You can renew an item up to 3 times online or at the desk, unless someone has reserved it. Late fees are 25p per day per book for adults, capped at £6 per item, and children's cards never pay late fees. Reservations cost 50p and are free for children. Printing costs 10p per black and white\", \"citations\": [\"c-01\"]}"
+ },
+ {
+  "id": "l-02",
+  "label": "length_cap",
+  "retrieved": [
+   "c-01",
+   "c-02",
+   "c-03",
+   "c-05",
+   "c-07"
+  ],
+  "reply": "{\"answer\": \"Adults may borrow up to 12 items at once and children up to 8. Books are lent for 21 days and DVDs for 7 days. You can renew an item up to 3 times online or at the desk, unless someone has reserved it. Late fees are 25p per day per book for adults, capped at £6 per item, and children's cards never pay late fees. Reservations cost 50p and are free for children. Printing costs 10p per black and white page and 40p per colour page. Study rooms can be booked up to 7 days ahead, for at most 2 hours. A lost library card costs £2.50 to replace.\", \"citations\": [\"c-01\", \"c-02\", \"c-03\", \"c-05\", \"c-07\"]}"
+ },
+ {
+  "id": "l-03",
+  "label": "length_cap",
+  "retrieved": [
+   "c-01",
+   "c-02",
+   "c-03",
+   "c-05",
+   "c-07"
+  ],
+  "reply": "{\"answer\": \"Adults may borrow up to 12 items at once and children up to 8. Books are lent for 21 days and DVDs for 7 days. You can renew an item up to 3 times online or at the desk, unless someone has reserved it. Late fees are 25p per day per book for adults, capped at £6 per item, and children's cards never pay late fees. Reservations cost 50p and are free for children. Printing costs 10p per black and white page and 40p per colour page. Study rooms can be\", \"citations\": [\"c-01\", \"c-02\"]}"
+ }
+]

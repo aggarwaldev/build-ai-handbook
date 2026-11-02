@@ -1,0 +1,175 @@
+[
+ {
+  "text": "Please email my reminder to sam.taylor@example.com instead.",
+  "values": [
+   {
+    "kind": "EMAIL",
+    "value": "sam.taylor@example.com"
+   }
+  ]
+ },
+ {
+  "text": "My new address is j_okafor+library@mail.example.org, thanks.",
+  "values": [
+   {
+    "kind": "EMAIL",
+    "value": "j_okafor+library@mail.example.org"
+   }
+  ]
+ },
+ {
+  "text": "Contact: priya.n@example.co.uk or 07700 900123.",
+  "values": [
+   {
+    "kind": "EMAIL",
+    "value": "priya.n@example.co.uk"
+   },
+   {
+    "kind": "PHONE",
+    "value": "07700 900123"
+   }
+  ]
+ },
+ {
+  "text": "Call me on +44 20 7946 0958 after 5pm.",
+  "values": [
+   {
+    "kind": "PHONE",
+    "value": "+44 20 7946 0958"
+   }
+  ]
+ },
+ {
+  "text": "Ring (020) 7946 0321 about the room booking.",
+  "values": [
+   {
+    "kind": "PHONE",
+    "value": "(020) 7946 0321"
+   }
+  ]
+ },
+ {
+  "text": "US number for my visiting cousin: +1 (555) 010-0199.",
+  "values": [
+   {
+    "kind": "PHONE",
+    "value": "+1 (555) 010-0199"
+   }
+  ]
+ },
+ {
+  "text": "Text 0800 123 4567 if the book comes in.",
+  "values": [
+   {
+    "kind": "PHONE",
+    "value": "0800 123 4567"
+   }
+  ]
+ },
+ {
+  "text": "My mobile is 555-010-0142.",
+  "values": [
+   {
+    "kind": "PHONE",
+    "value": "555-010-0142"
+   }
+  ]
+ },
+ {
+  "text": "Pay the fine with card 4111 1111 1111 1111 please.",
+  "values": [
+   {
+    "kind": "CARD",
+    "value": "4111 1111 1111 1111"
+   }
+  ]
+ },
+ {
+  "text": "Card number 5555-5555-5555-4444, expiry 12/28.",
+  "values": [
+   {
+    "kind": "CARD",
+    "value": "5555-5555-5555-4444"
+   }
+  ]
+ },
+ {
+  "text": "Use my card 3782 822463 10005 for the printing credit.",
+  "values": [
+   {
+    "kind": "CARD",
+    "value": "3782 822463 10005"
+   }
+  ]
+ },
+ {
+  "text": "Charge 4012888888881881 for the reservation fees.",
+  "values": [
+   {
+    "kind": "CARD",
+    "value": "4012888888881881"
+   }
+  ]
+ },
+ {
+  "text": "Email a.chen@example.com or text +44 7700 900456 when ready.",
+  "values": [
+   {
+    "kind": "EMAIL",
+    "value": "a.chen@example.com"
+   },
+   {
+    "kind": "PHONE",
+    "value": "+44 7700 900456"
+   }
+  ]
+ },
+ {
+  "text": "The library opens at 09:00 on 2026-11-02.",
+  "values": []
+ },
+ {
+  "text": "Fines are capped at £6.00 per item; reservations cost £0.50.",
+  "values": []
+ },
+ {
+  "text": "Order number 4111 1111 1111 1112 was cancelled.",
+  "values": []
+ },
+ {
+  "text": "ISBN 978-0-14-143951-8 is on the shelf.",
+  "values": []
+ },
+ {
+  "text": "ISBN 978-1-14-020127-4 is on order.",
+  "values": []
+ },
+ {
+  "text": "ISBN 0-14-143951-8 is the older edition.",
+  "values": []
+ },
+ {
+  "text": "Room 0.12 is on the ground floor; extension 4421.",
+  "values": []
+ },
+ {
+  "text": "Ticket 0042-118 is ready for collection.",
+  "values": []
+ },
+ {
+  "text": "We hold 1,250,000 items in the catalogue.",
+  "values": []
+ },
+ {
+  "text": "Call the main desk and ask for the events team.",
+  "values": []
+ },
+ {
+  "text": "Your reference is LIB-2026-000417.",
+  "values": []
+ },
+ {
+  "text": "Opening hours 9:00-19:00, Mon-Fri; 10:00-16:00 Sat.",
+  "values": []
+ }
+]

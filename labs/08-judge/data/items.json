@@ -1,0 +1,282 @@
+[
+ {
+  "id": "q01-pass",
+  "question": "How many books can I borrow at once?",
+  "answer": "Adults can borrow up to 12 items at once, and children up to 8.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q01-fail",
+  "question": "How many books can I borrow at once?",
+  "answer": "Adults can borrow up to 15 items at once, and children up to 8.",
+  "human_label": "FAIL",
+  "defect": "wrong_number"
+ },
+ {
+  "id": "q02-pass",
+  "question": "How long can I keep a DVD?",
+  "answer": "DVDs are lent for 7 days. You can renew one up to 3 times unless someone else has reserved it.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q02-fail",
+  "question": "How long can I keep a DVD?",
+  "answer": "DVDs are lent for 14 days. You can renew one up to 3 times unless someone else has reserved it.",
+  "human_label": "FAIL",
+  "defect": "wrong_number"
+ },
+ {
+  "id": "q03-pass",
+  "question": "What is the most I can be fined for one late book?",
+  "answer": "Late fees are 25p a day per book, and they stop at £6 for any one item.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q03-fail",
+  "question": "What is the most I can be fined for one late book?",
+  "answer": "Late fees are 25p a day per book, and they stop at £10 for any one item.",
+  "human_label": "FAIL",
+  "defect": "wrong_number"
+ },
+ {
+  "id": "q04-pass",
+  "question": "When do you open on Saturday?",
+  "answer": "On Saturdays we are open from 10:00 to 16:00.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q04-fail",
+  "question": "When do you open on Saturday?",
+  "answer": "On Saturdays we are open from 9:00 to 16:00.",
+  "human_label": "FAIL",
+  "defect": "wrong_number"
+ },
+ {
+  "id": "q05-pass",
+  "question": "How many times can I renew a book?",
+  "answer": "You can renew a book up to 3 times, online or at the desk, unless someone else has reserved it.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q05-fail",
+  "question": "How many times can I renew a book?",
+  "answer": "You can renew a book up to five times, online or at the desk, unless someone else has reserved it.",
+  "human_label": "FAIL",
+  "defect": "wrong_number"
+ },
+ {
+  "id": "q06-pass",
+  "question": "How do I renew a book?",
+  "answer": "You can renew online or at the desk, up to 3 times, unless someone else has reserved the book.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q06-fail",
+  "question": "How do I renew a book?",
+  "answer": "You can renew online or at the desk, up to 3 times, unless someone else has reserved the book. You can also renew by phone on Sundays.",
+  "human_label": "FAIL",
+  "defect": "unsupported"
+ },
+ {
+  "id": "q07-pass",
+  "question": "Is the Wi-Fi free?",
+  "answer": "Yes. Wi-Fi is free for 3 hours a day; ask at the desk for a code.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q07-fail",
+  "question": "Is the Wi-Fi free?",
+  "answer": "Yes. Wi-Fi is free for 3 hours a day, and members get unlimited streaming in the quiet room.",
+  "human_label": "FAIL",
+  "defect": "unsupported"
+ },
+ {
+  "id": "q08-pass",
+  "question": "Can I reserve a book?",
+  "answer": "Yes. Reservations cost 50p each, and they are free for children.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q08-fail",
+  "question": "Can I reserve a book?",
+  "answer": "Yes. Reservations cost 50p each, and they are free for children. Reserved books wait for a month on the \"Collect here\" shelf.",
+  "human_label": "FAIL",
+  "defect": "unsupported"
+ },
+ {
+  "id": "q09-pass",
+  "question": "Do I need anything to replace a lost card?",
+  "answer": "Yes, bring photo ID. A replacement card costs £2.50.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q09-fail",
+  "question": "Do I need anything to replace a lost card?",
+  "answer": "Yes, bring photo ID and a recent utility bill. A replacement card costs £2.50.",
+  "human_label": "FAIL",
+  "defect": "unsupported"
+ },
+ {
+  "id": "q10-pass",
+  "question": "How far ahead can I book a study room?",
+  "answer": "You can book a study room up to 7 days ahead, for at most 2 hours.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q10-fail",
+  "question": "How far ahead can I book a study room?",
+  "answer": "You can book a study room up to 7 days ahead, for at most 2 hours. Groups of six or more get the large room for free.",
+  "human_label": "FAIL",
+  "defect": "unsupported"
+ },
+ {
+  "id": "q11-pass",
+  "question": "What are the opening hours on weekdays?",
+  "answer": "Monday to Friday we are open from 9:00 to 19:00.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q11-fail",
+  "question": "What are the opening hours on weekdays?",
+  "answer": "We are closed on Sundays.",
+  "human_label": "FAIL",
+  "defect": "off_question"
+ },
+ {
+  "id": "q12-pass",
+  "question": "How much does colour printing cost?",
+  "answer": "Colour printing costs 40p a page.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q12-fail",
+  "question": "How much does colour printing cost?",
+  "answer": "Black and white printing costs 10p a page.",
+  "human_label": "FAIL",
+  "defect": "off_question"
+ },
+ {
+  "id": "q13-pass",
+  "question": "How many items can a child borrow?",
+  "answer": "Children can borrow up to 8 items at once.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q13-fail",
+  "question": "How many items can a child borrow?",
+  "answer": "Children's cards never pay late fees, so there is nothing to worry about.",
+  "human_label": "FAIL",
+  "defect": "off_question"
+ },
+ {
+  "id": "q14-pass",
+  "question": "Do you charge for the Wi-Fi?",
+  "answer": "No, Wi-Fi is free for 3 hours a day.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q14-fail",
+  "question": "Do you charge for the Wi-Fi?",
+  "answer": "You can ask at the desk for help with anything.",
+  "human_label": "FAIL",
+  "defect": "off_question"
+ },
+ {
+  "id": "q15-pass",
+  "question": "Can I keep a book longer than 21 days?",
+  "answer": "Yes, by renewing it: up to 3 times, online or at the desk, unless someone else has reserved it.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q15-fail",
+  "question": "Can I keep a book longer than 21 days?",
+  "answer": "Books are lent for 21 days.",
+  "human_label": "FAIL",
+  "defect": "off_question"
+ },
+ {
+  "id": "q16-pass",
+  "question": "Are you open on Sunday?",
+  "answer": "No, the library is closed on Sundays.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q16-fail",
+  "question": "Are you open on Sunday?",
+  "answer": "Obviously not. The library is closed on Sundays, as the sign on the door says.",
+  "human_label": "FAIL",
+  "defect": "rude"
+ },
+ {
+  "id": "q17-pass",
+  "question": "How much is the late fee on a children's book?",
+  "answer": "There are no late fees on children's cards.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q17-fail",
+  "question": "How much is the late fee on a children's book?",
+  "answer": "As I already said, there are no late fees on children's cards.",
+  "human_label": "FAIL",
+  "defect": "rude"
+ },
+ {
+  "id": "q18-pass",
+  "question": "Where do I get the Wi-Fi code?",
+  "answer": "Ask at the desk and we will give you a code.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q18-fail",
+  "question": "Where do I get the Wi-Fi code?",
+  "answer": "Just ask at the desk. It's not hard.",
+  "human_label": "FAIL",
+  "defect": "rude"
+ },
+ {
+  "id": "q19-pass",
+  "question": "How much is black and white printing?",
+  "answer": "Black and white printing costs 10p a page.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q19-fail",
+  "question": "How much is black and white printing?",
+  "answer": "Black and white printing costs 10p a page, which you could have found yourself.",
+  "human_label": "FAIL",
+  "defect": "rude"
+ },
+ {
+  "id": "q20-pass",
+  "question": "How long can I book a study room for?",
+  "answer": "You can book a study room for at most 2 hours.",
+  "human_label": "PASS",
+  "defect": null
+ },
+ {
+  "id": "q20-fail",
+  "question": "How long can I book a study room for?",
+  "answer": "At most 2 hours. Please don't waste our time asking again.",
+  "human_label": "FAIL",
+  "defect": "rude"
+ }
+]

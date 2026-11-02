@@ -1,0 +1,248 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 9: tracing and cost &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part V &middot; Build it</p>
+<h1>Lab 9: tracing and cost</h1>
+<p class="lead">Build a small tracer: every model call becomes a span with its model, tokens, cost, latency and stop reason, spans nest so a run's steps form a tree, and each span is written as one line of JSON with personal data masked first. Then summarise a run, and add a budget guard that refuses a call before it could push the run past a spending cap.</p>
+
+<div class="callout why"><span class="title">Why do this</span><p>A model application fails quietly: a prompt change can double the cost or a step can start stopping at <code>max_tokens</code>, with no error anywhere (<a href="observability.html">chapter 45</a>). Traces turn guessing into reading. Writing a tracer yourself, in under 400 lines, shows exactly what a tracing service records and why, and a budget guard turns a runaway loop into an error message instead of a bill.</p></div>
+
+<h2 id="what-you-will-build">What you will build</h2>
+<p>One file, <code class="path">labs/09-tracing/tracing.py</code>, of about 380 lines, and its tests in <code class="path">labs/09-tracing/test_tracing.py</code>. Runs are written to <code class="path">labs/09-tracing/traces/</code>, which git ignores. The pieces:</p>
+<ul>
+<li><code>Tracer.span(name)</code>, a context manager that opens a <a class="g" href="glossary.html#span">span</a>; spans nest.</li>
+<li>A listener on the shared adapter that turns every <code>llm.chat()</code> call into a span of its own.</li>
+<li>Masking with <a href="lab-guardrails.html">Lab 7</a>'s <code>mask</code>, plus exact masking by key name, before anything is written.</li>
+<li><code>summary</code>: calls, tokens, cost, p50 and p95 latency, and the span tree with costs rolled up to every parent.</li>
+<li><code>BudgetGuard</code>, which raises before a call when the run's spend plus that call's worst case would pass a cap.</li>
+</ul>
+
+<h2 id="before-you-start">Before you start</h2>
+<p>Finish <a href="lab-setup.html">Lab 0</a>. The lab imports the masker from <code class="path">labs/07-guardrails/guardrails.py</code>, so that folder must be present; you do not need to have done Lab 7 first, though step 4 makes more sense if you have. Any backend works, and the outputs on this page come from the fake backend:</p>
+<pre><code>export LLM_BACKEND=fake</code></pre>
+<p>On the fake backend a call takes a few microseconds, so every latency on this page is tiny. Read the shape of the tree and the token counts; the times only mean something on a real model.</p>
+
+<h2 id="step-1">Step 1: a span is a context manager</h2>
+<p>A <a class="g" href="glossary.html#trace">trace</a> is a tree of spans, and a span is one piece of work: a name, a start, a duration, some attributes, and the id of its parent, the work that started it (<a href="observability.html#traces">chapter 45</a>). Python's <code>with</code> statement has exactly that shape: something happens on the way in, the work runs, and something happens on the way out, even if the work raises.</p>
+<pre><code>@contextmanager
+<span class="k">def</span> <span class="n">span</span>(self, name, **attrs):
+    parent = self._current.get()             <span class="c"># the span we are inside, if any</span>
+    span_id = uuid.uuid4().hex[:8]
+    token = self._current.set(span_id)       <span class="c"># spans opened inside this one see it as parent</span>
+    wall, started = time.time(), time.perf_counter()
+    status = <span class="s">"ok"</span>
+    <span class="k">try</span>:
+        <span class="k">yield</span> attrs
+    <span class="k">except</span> BaseException <span class="k">as</span> exc:
+        status = f<span class="s">"error: {type(exc).__name__}"</span>
+        <span class="k">raise</span>
+    <span class="k">finally</span>:
+        self._current.reset(token)
+        self._write({<span class="s">"span_id"</span>: span_id, <span class="s">"parent_id"</span>: parent, <span class="s">"name"</span>: name, <span class="s">"kind"</span>: <span class="s">"span"</span>,
+                     <span class="s">"start"</span>: wall, <span class="s">"duration_s"</span>: time.perf_counter() - started,
+                     <span class="s">"status"</span>: status, <span class="s">"attrs"</span>: attrs})</code></pre>
+<p>The current span lives in a context variable, not a global. Code that runs inside a <code>with</code> block sees the innermost open span, and asyncio tasks started inside it inherit it, so parallel branches land under the right parent and two users' requests never mix. The duration comes from <code>time.perf_counter()</code>, a clock made for measuring intervals; the start comes from <code>time.time()</code>, so a person can tell when the span happened.</p>
+
+<h2 id="step-2">Step 2: every model call becomes a span</h2>
+<p>The shared adapter calls every function registered with <code>llm.add_listener</code> after each call, with the request and the reply. The tracer registers one, so every model call in the run is recorded without touching the code that makes it:</p>
+<pre><code><span class="k">def</span> <span class="n">_on_call</span>(self, request, reply):
+    <span class="s">"""Called by llm.chat after every call: the span ends now and began latency_s ago."""</span>
+    now = time.time()
+    self._write({
+        <span class="s">"span_id"</span>: uuid.uuid4().hex[:8], <span class="s">"parent_id"</span>: self._current.get(),
+        <span class="s">"name"</span>: f<span class="s">"llm {reply.model}"</span>, <span class="s">"kind"</span>: <span class="s">"llm"</span>,
+        <span class="s">"start"</span>: now - reply.latency_s, <span class="s">"duration_s"</span>: reply.latency_s, <span class="s">"status"</span>: <span class="s">"ok"</span>,
+        <span class="s">"attrs"</span>: {
+            <span class="s">"backend"</span>: reply.backend, <span class="s">"model"</span>: reply.model,
+            <span class="s">"input_tokens"</span>: reply.input_tokens, <span class="s">"output_tokens"</span>: reply.output_tokens,
+            <span class="s">"cost_usd"</span>: reply.cost_usd, <span class="s">"latency_s"</span>: reply.latency_s,
+            <span class="s">"stop_reason"</span>: reply.stop_reason, <span class="s">"max_tokens"</span>: request[<span class="s">"max_tokens"</span>],
+            <span class="s">"effort"</span>: request[<span class="s">"effort"</span>],
+            <span class="s">"tool_calls"</span>: [c.name <span class="k">for</span> c <span class="k">in</span> reply.tool_calls],
+            <span class="s">"input"</span>: preview(_last_input(request[<span class="s">"messages"</span>])), <span class="s">"output"</span>: preview(reply.text),
+        },
+    })
+    <span class="k">if</span> self.guard:
+        self.guard.record(reply)</code></pre>
+<p>The listener runs when the call has finished, so the span's start is worked out backwards: now, minus the latency the adapter measured. Its parent is whatever span was open when <code>llm.chat()</code> was called. Keep <code>stop_reason</code> beside <code>max_tokens</code>: on Claude the thinking counts toward <code>max_tokens</code>, and a rise in <code>max_tokens</code> stops after a change is the trace telling you replies are being cut off (<a href="observability.html#per-call">chapter 45</a>).</p>
+
+<h2 id="step-3">Step 3: one JSON line per span</h2>
+<p>A file with one JSON object per line is a trace store you can search with <code>grep</code> and turn back into a tree with a few lines of code. Each span is written when it ends, so children reach the file before their parents. This is the first line of the demo run's file:</p>
+<pre><code>{"trace_id": "41595362c1f34a47", "span_id": "ffb1449c", "parent_id": "740e2db6", "name": "llm fake", "kind": "llm", "start": 1793633253.9371805, "duration_s": 1.325004268437624e-05, "status": "ok", "attrs": {"backend": "fake", "model": "fake", "input_tokens": 48, "output_tokens": 45, "cost_usd": 0.0, "latency_s": 1.325004268437624e-05, "stop_reason": "end", "max_tokens": 1024, "effort": "low", "tool_calls": [], "input": "List the parts of this trip to plan: I'm going from Leeds to Edinburgh on 14 March for two nights. Send the plan to &lt;EMAIL_A&gt; or text &lt;PHONE_A&gt;.", "output": "[fake model] You said: List the parts of this trip to plan: I'm going from Leeds to Edinburgh on 14 March for two nights. Send the plan to &lt;EMAIL_A&gt; or text &lt;PHONE_A&gt;."}}</code></pre>
+<p>The model call above took 13 microseconds, because the fake backend answers from memory. Tracing must never break the run it watches: if a span cannot be written (a full disk, an attribute that will not serialise), <code>_write</code> drops it and adds one to <code>tracer.dropped</code>, and the run carries on. The budget guard in step 6 takes the opposite view, on purpose.</p>
+
+<h2 id="step-4">Step 4: mask before you write</h2>
+<p>Traces copy prompts and replies, and prompts carry whatever users typed. A trace store that keeps them is a second copy of your users' data, often kept longer and read by more people than the first. So mask before writing, not when displaying (<a href="observability.html#personal-data">chapter 45</a>). Two methods, one exact and one not:</p>
+<pre><code>SENSITIVE_KEYS = {<span class="s">"name"</span>, <span class="s">"full_name"</span>, <span class="s">"email"</span>, <span class="s">"phone"</span>, <span class="s">"address"</span>, <span class="s">"card_number"</span>,
+                  <span class="s">"password"</span>, <span class="s">"api_key"</span>, <span class="s">"token"</span>, <span class="s">"secret"</span>, <span class="s">"cookie"</span>}
+
+<span class="k">def</span> <span class="n">scrub</span>(value):
+    <span class="k">if</span> isinstance(value, str):
+        <span class="k">return</span> mask(value).text                  <span class="c"># Lab 7's detector</span>
+    <span class="k">if</span> isinstance(value, dict):
+        <span class="k">return</span> {k: <span class="s">"&lt;masked&gt;"</span> <span class="k">if</span> str(k).lower() <span class="k">in</span> SENSITIVE_KEYS <span class="k">else</span> scrub(v)
+                <span class="k">for</span> k, v <span class="k">in</span> value.items()}
+    <span class="k">if</span> isinstance(value, (list, tuple)):
+        <span class="k">return</span> [scrub(v) <span class="k">for</span> v <span class="k">in</span> value]
+    <span class="k">return</span> value</code></pre>
+<ul>
+<li><b>By key name, exact.</b> A value stored under <code>email</code> or <code>api_key</code> is replaced whole, whatever it looks like. The names are matched exactly. A rule such as "any key containing <code>token</code>" looks safer, and would also hide <code>input_tokens</code> and <code>output_tokens</code>, the counts you most need.</li>
+<li><b>By content, a detector.</b> Every other string goes through <code>mask</code>, which finds emails, phone numbers and card numbers in free text. It is only as good as Lab 7's harness says it is: a phone number written as <code>555-010-0142</code> will reach the trace in clear.</li>
+</ul>
+<p>The previews of a call's input and output are cut to 200 characters, and the order matters: mask first, then cut. Cut first, and an email address split at the 200th character leaves a fragment such as <code>sam.tay</code> that the masker no longer recognises. The demo's question holds an email and a phone number; the line in step 3 shows both as placeholders, and two tests read back the files they wrote and check that the raw values are absent.</p>
+
+<h2 id="step-5">Step 5: summarise a run</h2>
+<p><code>summary</code> reads a trace file back and prints the totals, the latency percentiles and the tree. Two ideas carry the weight.</p>
+<p><b>Percentiles.</b> An average latency hides the slow calls users notice. The p50 (median) says what a typical call takes and the p95 what the slowest one in twenty takes (<a href="observability.html#latency">chapter 45</a>). The code uses the nearest-rank method: sort, then take the value at rank &lceil;p/100 &times; n&rceil;, counting from 1.</p>
+<pre><code><span class="k">def</span> <span class="n">percentile</span>(values, p):
+    ordered = sorted(values)
+    rank = max(1, math.ceil(p / 100 * len(ordered)))
+    <span class="k">return</span> ordered[rank - 1]</code></pre>
+<p>Worked, on five latencies of 0.5, 0.1, 0.4, 0.2 and 0.3 seconds: sorted, 0.1, 0.2, 0.3, 0.4, 0.5. For p50 the rank is &lceil;0.5 &times; 5&rceil; = &lceil;2.5&rceil; = 3, so 0.3 s. For p95 it is &lceil;0.95 &times; 5&rceil; = &lceil;4.75&rceil; = 5, so 0.5 s, the slowest call. With 20 calls the p95 is the 19th smallest. With a handful of calls the p95 is simply the maximum, so do not read much into it until you have hundreds.</p>
+<p><b>Rolling costs up.</b> Each span in the tree shows the tokens and cost of every model call beneath it, added up through the parents, so the root shows the whole run and each step shows its share (<a class="g" href="glossary.html#cost-rollup">cost rollup</a>). That is where to look first when a run costs more than it should.</p>
+
+<h2 id="step-6">Step 6: a budget guard that fails closed</h2>
+<p>A loop that calls a model can run away: an agent that never decides it is done, a retry that retries forever. A spending cap turns that into an error (<a href="observability.html#budgets">chapter 45</a>). The guard has to decide <em>before</em> the call, when the cost is not yet known, so it uses the worst case:</p>
+<div class="out">worst case = estimated input tokens &times; input price + max_tokens &times; output price</div>
+<p>The input estimate is deliberately pessimistic, three characters per token rather than four, so the guard overcounts rather than under. The output side assumes the model writes all of <code>max_tokens</code>, which on Claude includes thinking. If the run's spend so far plus that worst case would pass the cap, the call is refused and never sent:</p>
+<pre><code><span class="k">def</span> <span class="n">check</span>(self, messages, system, max_tokens, model):
+    worst = self.worst_case(messages, system, max_tokens, model)
+    <span class="k">if</span> self.spent + worst &gt; self.cap:
+        <span class="k">raise</span> BudgetExceeded(f<span class="s">"spent ${self.spent:.6f} + this call at most ${worst:.6f} "</span>
+                             f<span class="s">"would pass the cap of ${self.cap:.6f}"</span>)
+    <span class="k">return</span> worst</code></pre>
+<p>Worked, from the capped demo below. Three calls have run, 236 input and 155 output tokens at Haiku's prices: 236 &times; 0.10 / 1,000,000 + 155 &times; 0.50 / 1,000,000 = $0.000101 spent. The last call's request is 521 characters, so the guard counts &lceil;521 / 3&rceil; = 174 input tokens, and it asks for up to 2,048 output tokens: 174 &times; 0.10 / 1,000,000 + 2,048 &times; 0.50 / 1,000,000 = $0.000017 + $0.001024 = $0.001041. Then $0.000101 + $0.001041 = $0.001142, more than the $0.001 cap, so the call is refused.</p>
+<p>The guard fails closed three ways, and each has a test:</p>
+<ul>
+<li>It refuses to start without a positive cap, or with a <code>price_model</code> missing from the price table, because it could not price a call. Calls on a model with no price, such as the fake backend or Ollama, are priced as <code>price_model</code> (Haiku by default), which is how you can test the guard offline.</li>
+<li>A refused call is never sent: the test checks that the fake backend received nothing.</li>
+<li>A call that raised after it was sent may still have been billed, so its worst case stays counted as spent.</li>
+</ul>
+<p>Note the contrast with step 3. When tracing fails, the run goes on, because a missing span hurts nobody. When the guard is unsure, the run stops, because an unchecked call can cost money. Decide which way each piece of your system should fail, and test that it does.</p>
+
+<h2 id="step-7">Step 7: trace a run</h2>
+<p>The demo is a small travel planner in four model calls: understand the request, research the train and the hotel, write the plan. Each step is a span, and the question carries an email address and a phone number.</p>
+<pre><code>$ LLM_BACKEND=fake python labs/09-tracing/tracing.py demo
+trace: labs/09-tracing/traces/20261102-205733-demo-415953.jsonl
+calls: 4 (fake); tokens: 366 in, 210 out
+cost: $0.000000 as run; on claude-haiku-5-5 these tokens cost $0.000142
+latency per call: p50 0.008 ms, p95 0.013 ms
+plan-trip  0.86 ms  (under it: 366 in / 210 out  $0.000000)
+├─ understand  0.23 ms  (under it: 48 in / 45 out  $0.000000)
+│  └─ llm fake  48 in / 45 out  $0.000000  0.01 ms  stop=end
+├─ research  0.33 ms  (under it: 188 in / 110 out  $0.000000)
+│  ├─ research-train  0.12 ms  (under it: 94 in / 55 out  $0.000000)
+│  │  └─ llm fake  94 in / 55 out  $0.000000  0.01 ms  stop=end
+│  └─ research-hotel  0.11 ms  (under it: 94 in / 55 out  $0.000000)
+│     └─ llm fake  94 in / 55 out  $0.000000  0.01 ms  stop=end
+└─ write  0.16 ms  (under it: 130 in / 55 out  $0.000000)
+   └─ llm fake  130 in / 55 out  $0.000000  0.01 ms  stop=end</code></pre>
+<p>Read it top down. Each model call hangs under the step that made it, and each step shows what the calls beneath it used. The fake backend costs nothing, so the cost column is zero; the second line prices the same tokens on <code>claude-haiku-5-5</code>. The latencies are hundredths of a millisecond: on a real model each call takes far longer, and the slowest step stands out. Now the same run with a cap:</p>
+<pre><code>$ LLM_BACKEND=fake python labs/09-tracing/tracing.py demo --cap 0.001
+stopped: spent $0.000101 + this call at most $0.001041 would pass the cap of $0.001000
+trace: labs/09-tracing/traces/20261102-205733-demo-76a881.jsonl
+calls: 3 (fake); tokens: 236 in, 155 out
+cost: $0.000000 as run; on claude-haiku-5-5 these tokens cost $0.000101
+latency per call: p50 0.007 ms, p95 0.007 ms
+refused by the budget guard: 1
+plan-trip  0.77 ms  (under it: 236 in / 155 out  $0.000000)  [error: BudgetExceeded]
+├─ understand  0.28 ms  (under it: 48 in / 45 out  $0.000000)
+│  └─ llm fake  48 in / 45 out  $0.000000  0.01 ms  stop=end
+├─ research  0.32 ms  (under it: 188 in / 110 out  $0.000000)
+│  ├─ research-train  0.12 ms  (under it: 94 in / 55 out  $0.000000)
+│  │  └─ llm fake  94 in / 55 out  $0.000000  0.01 ms  stop=end
+│  └─ research-hotel  0.12 ms  (under it: 94 in / 55 out  $0.000000)
+│     └─ llm fake  94 in / 55 out  $0.000000  0.01 ms  stop=end
+└─ write  0.05 ms  [error: BudgetExceeded]
+   └─ REFUSED  spent $0.000101 + this call at most $0.001041 would pass the cap of $0.001000
+guard: cap $0.001000, spent $0.000101 (priced as claude-haiku-5-5)</code></pre>
+<p>The refusal is in the trace too, under the step that asked, and the error marks every span it passed through on its way out. <code>summary</code> reads any trace back, the newest by default:</p>
+<pre><code>$ python labs/09-tracing/tracing.py summary
+trace: labs/09-tracing/traces/20261102-205733-demo-76a881.jsonl
+calls: 3 (fake); tokens: 236 in, 155 out
+cost: $0.000000 as run; on claude-haiku-5-5 these tokens cost $0.000101
+latency per call: p50 0.007 ms, p95 0.007 ms</code></pre>
+<p>(The tree that follows is the same as above.)</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-capstone.html">Lab 10</a> you put this tracer and budget guard around a small assistant of your own, together with Lab 7's guards and Lab 8's judge.</p></div>
+
+<h2 id="checklist">Checklist</h2>
+<ul class="checklist">
+<li data-check="lab-tracing:span">I opened nested spans and saw each one record its parent.</li>
+<li data-check="lab-tracing:listener">I can explain how a model call becomes a span without changing the code that makes it.</li>
+<li data-check="lab-tracing:jsonl">I read a trace file and found why children come before their parents.</li>
+<li data-check="lab-tracing:mask">I checked that no email or phone number from the demo reached the trace file.</li>
+<li data-check="lab-tracing:percentiles">I worked a p50 and a p95 by hand with the nearest-rank method.</li>
+<li data-check="lab-tracing:guard">I worked out by hand why the capped demo refused its last call.</li>
+<li data-check="lab-tracing:tests">The lab's tests pass.</li>
+</ul>
+
+<h2 id="run-it">Run it</h2>
+<p>The tests cover nesting, the model-call spans and their fields, the JSON lines, an error inside a span, removing the listener, masking by key and by content (and masking before cutting), dropped writes, the rollup, percentiles, the summary tree, and the budget guard: it refuses before sending, lets calls through under the cap, stops a run as spend builds up, refuses to start without a price, and keeps a failed call's worst case. Every test writes to a temporary folder. From <code class="path">labs/</code>:</p>
+<pre><code>$ python -m pytest 09-tracing
+...................                                                      [100%]
+19 passed in 0.04s</code></pre>
+<p>Then, from the repository root:</p>
+<pre><code>python labs/09-tracing/tracing.py demo
+python labs/09-tracing/tracing.py demo --cap 0.001
+python labs/09-tracing/tracing.py summary
+grep -c "example.com" labs/09-tracing/traces/*.jsonl     # 0 in every file</code></pre>
+<p><b>What it costs.</b> The demo makes four calls. On the fake backend the token counts are estimates at about four characters per token: 366 input and 210 output tokens, which on <code>claude-haiku-5-5</code> is 366 &times; 0.10 / 1,000,000 + 210 &times; 0.50 / 1,000,000 = $0.000142. Real replies are longer and include thinking, so take the ceiling too: three calls with <code>max_tokens</code> 1,024 and one with 2,048, 5,120 output tokens in all, give 366 &times; 0.10 / 1,000,000 + 5,120 &times; 0.50 / 1,000,000 = $0.0026 at most, about a quarter of a US cent. Ollama and the fake backend cost nothing.</p>
+
+<h2 id="experiments">Experiments</h2>
+<ol>
+<li><b>Trace a real model.</b> Run the demo on Claude or Ollama. Which step is slowest? How far apart are p50 and p95? Compare each call's output tokens with its <code>max_tokens</code>.</li>
+<li><b>Cut a reply off.</b> Set the write step's <code>max_tokens</code> to 64 and run on Claude. Find <code>stop=max_tokens</code> in the tree. How would you spot this across a thousand runs?</li>
+<li><b>Find the cap's edges.</b> Work out by hand the smallest cap that lets the whole demo finish on the fake backend, then check it. Then find a cap that refuses the very first call.</li>
+<li><b>Leak on purpose.</b> Change the demo's question to give the phone number as <code>555-010-0142</code>. Is it masked in the trace? What does that tell you about masking by detector?</li>
+<li><b>A bigger model.</b> Run with <code>LLM_MODEL=claude-sonnet-5-5</code> and the same cap. How many calls does the guard allow now, and why?</li>
+<li><b>Standard names.</b> Rename the attributes to OpenTelemetry's GenAI conventions (<code>gen_ai.request.model</code>, <code>gen_ai.usage.input_tokens</code>, and so on) and update <code>summary</code> to match (<a href="observability.html#otel">chapter 45</a>).</li>
+</ol>
+
+<h2 id="going-further">Going further</h2>
+<ul>
+<li><b>Send spans to a tracing tool.</b> Replace <code>_write</code> with an OpenTelemetry exporter and view your runs in a tool such as Langfuse or Arize Phoenix. Send in the background, so a slow collector never slows a request.</li>
+<li><b>Time to first token.</b> With streaming, record when the first token arrived as well as when the last did; users feel the first.</li>
+<li><b>Sampling.</b> At high volume, keep every trace with an error, a refusal or a high cost, and a random tenth of the rest (<a href="observability.html#sampling">chapter 45</a>).</li>
+<li><b>Reserve and settle.</b> With calls running in parallel, two calls can both pass the check before either has spent. Add each call's worst case to a "reserved" total at the check and release it when the call settles.</li>
+<li><b>Score the traces.</b> Run <a href="lab-judge.html">Lab 8</a>'s judge on a sample of traced answers and store the verdict on the trace.</li>
+</ul>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why is a model span's start time computed as now minus the latency?</summary><div><p>The listener runs after the call has finished, so "now" is the end of the call. The adapter measured how long it took, so the start is the end minus that.</p></div></details>
+<details><summary>In the trace file, the model call appears before the span that made it. Why, and how does the summary rebuild the tree?</summary><div><p>A span is written when it ends, and a child ends before its parent. The summary groups records by <code>parent_id</code>, sorts each group by start time and walks down from the span with no parent.</p></div></details>
+<details><summary>You have 20 latencies. Which one is the p95 with the nearest-rank method?</summary><div><p>Rank &lceil;0.95 &times; 20&rceil; = 19, so the 19th smallest: the second slowest call.</p></div></details>
+<details><summary>The cap is $0.001 and $0.0009 is spent. The next Haiku call has max_tokens 1,024. Does the guard allow it?</summary><div><p>No. Its output alone could cost 1,024 &times; 0.50 / 1,000,000 = $0.000512, and $0.0009 + $0.000512 is more than $0.001, before even counting the input.</p></div></details>
+<details><summary>A trace write fails, and separately the guard cannot price a model. What happens in each case, and why the difference?</summary><div><p>The failed write is dropped and counted, and the run goes on: a missing span harms nobody. The guard refuses to run: an unpriced call could spend money without limit. Tracing fails open; spending fails closed.</p></div></details>
+<details><summary>Why mask a preview before cutting it to 200 characters?</summary><div><p>Cutting first can split an email or phone number at the boundary, leaving a fragment the masker no longer recognises, which then reaches the trace in clear.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://opentelemetry.io/docs/languages/python/" target="_blank" rel="noopener noreferrer">OpenTelemetry for Python</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">The standard way to produce traces in Python; your spans map onto its spans one to one.</span></li>
+<li><a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/" target="_blank" rel="noopener noreferrer">Semantic conventions for generative AI</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Standard attribute names for model calls, for the sixth experiment.</span></li>
+<li><a href="https://langfuse.com/docs/observability/overview" target="_blank" rel="noopener noreferrer">Langfuse observability overview</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">An open-source tracing tool built for model applications: traces, generations, costs and scores.</span></li>
+<li><a href="https://langfuse.com/integrations/native/opentelemetry" target="_blank" rel="noopener noreferrer">OpenTelemetry in Langfuse</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">How standard OpenTelemetry spans land in a model-tracing tool.</span></li>
+<li><a href="https://platform.claude.com/docs/en/about-claude/pricing" target="_blank" rel="noopener noreferrer">Claude pricing</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">The prices behind the cost figures; check them before you set a cap.</span></li>
+</ul>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>
