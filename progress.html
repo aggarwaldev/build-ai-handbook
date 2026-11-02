@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your progress &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Start here</p>
+<h1>Your progress</h1>
+<p class="lead">What you have read, built and noted so far. There is no account and nothing is sent anywhere: the book keeps your progress in this browser, on this device.</p>
+
+<div class="callout note"><span class="title">Where your progress lives</span>
+<p>Everything on this page stays in this browser. Clearing this site&rsquo;s data, or your browsing data, deletes it. A different browser, a private window or another device starts empty. To keep a copy or to move to another device, use <a href="#backup">Export</a> and then Import on the other side.</p></div>
+
+<h2 id="overall">Overall</h2>
+<div id="pg-overall" class="pg-panel"><p class="pg-none">Reading your progress&hellip; If this message stays, the tracker could not start in this browser.</p></div>
+
+<h2 id="continue">Continue where you left off</h2>
+<div id="pg-continue"></div>
+
+<h2 id="by-part">By part</h2>
+<p>Each bar counts the pages in a part that you have marked done. A page counts as in progress from your first visit. Mark a page done with the box above its previous and next links; a lab is marked done for you when you tick every step of its checklist.</p>
+<div id="pg-parts" class="pg-parts"></div>
+
+<h2 id="labs">Labs</h2>
+<p>Each lab ends its steps with a checklist. Ticks are saved as you make them.</p>
+<div id="pg-labs"></div>
+
+<h2 id="activity">Recent activity</h2>
+<div id="pg-activity"></div>
+
+<h2 id="notes">Your notes</h2>
+<p>The first words of each note, newest first. Open the page to read or change the whole note.</p>
+<div id="pg-notes"></div>
+
+<h2 id="self-checks">Self-check answers opened</h2>
+<div id="pg-reveals"></div>
+
+<h2 id="backup">Back up, move or reset</h2>
+<p><b>Export</b> saves everything on this page (pages, ticks, notes, opened answers and the last 500 activity entries) as one JSON file. <b>Import</b> reads such a file and merges it with what is here: where both sides have a record for the same page, step or note, the newer one wins, so importing the same file twice changes nothing. <b>Reset</b> deletes everything in this browser.</p>
+<div class="pg-actions">
+<button type="button" class="btn primary" id="pg-export">Export my progress</button>
+<label class="btn pg-file" for="pg-import">Import a progress file<input type="file" id="pg-import" accept="application/json,.json"></label>
+<button type="button" class="btn danger" id="pg-reset">Reset all progress&hellip;</button>
+</div>
+<div id="pg-reset-confirm" class="pg-confirm" hidden>
+<p><b>Delete all your progress in this browser?</b> Every done mark, tick, note and activity entry goes, and it cannot be undone. Export first if you might want it back.</p>
+<button type="button" class="btn danger" id="pg-reset-yes">Yes, delete everything</button>
+<button type="button" class="btn" id="pg-reset-no">Cancel</button>
+</div>
+<p id="pg-backup-msg" class="pg-msg" role="status" aria-live="polite"></p>
+
+<h2 id="storage">Storage and privacy</h2>
+<div id="pg-store"></div>
+<ul>
+<li>The tracker uses your browser&rsquo;s IndexedDB storage, or its local storage when IndexedDB is not available. It uses no cookies, no account and no network.</li>
+<li>Progress belongs to the address the book was opened from. The book opened from disk and the same book served by <code class="path">tools/serve.py</code> on <code>http://127.0.0.1:8765/</code> keep separate progress; export from one and import into the other to join them.</li>
+<li>Chrome and Edge keep progress for pages opened from disk. Firefox and Safari may refuse storage for such pages, or keep each page separately. If ticks do not survive a reload, run <code>python3 tools/serve.py</code> in the book&rsquo;s folder and open <code>http://127.0.0.1:8765/</code>.</li>
+<li>If the browser refuses all storage, every page shows a notice saying that progress is not being kept.</li>
+</ul>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>
