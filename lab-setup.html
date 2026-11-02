@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 0: set up your workbench &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part V &middot; Build it</p>
+<h1>Lab 0: set up your workbench</h1>
+<p class="lead">Every lab in Part V runs on your own computer: Python, three packages and one small file that talks to a model. This lab installs them, chooses which model answers, and proves that everything works before you spend anything.</p>
+
+<div class="callout why"><span class="title">Why do this first</span><p>Each lab is written once and runs three ways: against Claude, against a free model on your own computer, or against a scripted stand-in that needs nothing at all. Setting up the switch now makes every later lab one command, and the stand-in lets you read and test any lab's code without a key or a bill.</p></div>
+
+<h2 id="what-you-will-build">What you will build</h2>
+<ul>
+<li>A Python virtual environment with the labs' packages.</li>
+<li>A choice of <b>backend</b>, the thing that answers when a lab calls a model: Claude, Ollama or the fake.</li>
+<li>Proof that it works: the test suite passes and a first call prints a reply.</li>
+</ul>
+
+<h2 id="before-you-start">Before you start</h2>
+<ul>
+<li>Python 3.10 or newer. Check with <code>python3 --version</code>; install it from <a href="https://www.python.org/downloads/" target="_blank" rel="noopener noreferrer">python.org</a> if it is older or missing.</li>
+<li>A terminal and a text editor.</li>
+<li>This book's repository on your computer: the folder that holds <code class="path">index.html</code> and <code class="path">labs/</code>. Every command below runs from that folder unless it says otherwise.</li>
+<li>For Claude: an Anthropic account. For Ollama: a few gigabytes of free disk and, ideally, 8 GB of memory or more.</li>
+</ul>
+
+<h2 id="python">Step 1: Python and a virtual environment</h2>
+<p>A <b>virtual environment</b> is a private copy of Python with its own packages. It keeps the labs' packages apart from everything else on your computer, so versions cannot clash, and deleting the folder undoes the whole install.</p>
+<pre><code><span class="c"># from the repository root</span>
+python3 --version                        <span class="c"># 3.10 or newer</span>
+python3 -m venv .venv
+source .venv/bin/activate                <span class="c"># Windows: .venv\Scripts\activate</span>
+python -m pip install -r labs/requirements.txt</code></pre>
+<p>Once the environment is active, <code>python</code> means its Python, and your prompt usually shows <code>(.venv)</code>. A new terminal starts outside it, so run the <code>source</code> line again in each one. The folder <code class="path">.venv/</code> is listed in <code class="path">.gitignore</code>, so it never reaches a commit.</p>
+<p><code class="path">labs/requirements.txt</code> lists three packages:</p>
+<ul>
+<li><code>anthropic</code>, the official Python SDK for the Claude API;</li>
+<li><code>numpy</code>, for vectors from Lab 3 on;</li>
+<li><code>pytest</code>, which runs every lab's tests.</li>
+</ul>
+<p>Everything else the labs use is in Python's standard library. The projects in chapters 15, 20, 30 and 41 list their own extra packages in their folders.</p>
+
+<h2 id="backend">Step 2: choose who answers</h2>
+<p>Every lab talks to a model through one function, <code>chat()</code> in <code class="path">labs/common/llm.py</code>. Which model answers is chosen by the environment variable <code>LLM_BACKEND</code>, so the same lab code runs three ways:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Backend</th><th><code>LLM_BACKEND</code></th><th>Needs</th><th>Costs</th><th>Good for</th></tr>
+<tr><td>Claude</td><td><code>anthropic</code></td><td>an API key</td><td>per token (<a href="#costs">table below</a>)</td><td>strong answers; tools and agents work well</td></tr>
+<tr><td>Ollama</td><td><code>ollama</code></td><td>Ollama installed and a model pulled</td><td>nothing</td><td>privacy, offline work, free experiments</td></tr>
+<tr><td>Fake</td><td><code>fake</code></td><td>nothing</td><td>nothing</td><td>reading a lab's code path, tests, checking a lab end to end before you pay</td></tr>
+</table></div>
+<p>You can switch at any time, even between two commands. If <code>LLM_BACKEND</code> is not set, the labs use Claude when <code>ANTHROPIC_API_KEY</code> is set, and the fake backend otherwise, with a one-line note so it is never a surprise:</p>
+<pre><code>$ LLM_BACKEND= ANTHROPIC_API_KEY= python labs/01-first-call/first_call.py "hi"
+llm: no ANTHROPIC_API_KEY and no LLM_BACKEND, so using the fake backend
+reply        [fake model] I received 1 message; no system prompt. You said: hi
+stop_reason  end
+tokens       8 in, 16 out
+latency      0.000 s
+model        fake (fake backend)
+cost         $0
+             the same tokens on claude-haiku-5-5 would cost $0.000009</code></pre>
+
+<h3 id="claude">Option A: Claude</h3>
+<ol>
+<li>Sign in to the Anthropic Console, the web dashboard for the Claude API, at <a href="https://platform.claude.com/" target="_blank" rel="noopener noreferrer">platform.claude.com</a>, and add billing.</li>
+<li><b>Set a spending limit first.</b> In the Console's settings, set a monthly spend limit you are comfortable with, such as $5. The labs cost cents (<a href="#costs">table below</a>), so a low limit costs you nothing, and it caps the damage if a loop runs away.</li>
+<li>Create an API key and give it a name you will recognise, such as <code>handbook-labs</code>. The Console shows the key once; copy it straight into the next step.</li>
+<li>Put the key in your shell, not in a file in the repository:
+<pre><code>export ANTHROPIC_API_KEY="paste-your-key-here"   <span class="c"># this terminal only</span>
+export LLM_BACKEND=anthropic                      <span class="c"># optional: the default when a key is set</span></code></pre>
+In Windows PowerShell the first line is <code>$env:ANTHROPIC_API_KEY = "paste-your-key-here"</code>. To keep it across terminals, put the <code>export</code> line in your shell's start-up file (<code class="path">~/.zshrc</code> or <code class="path">~/.bashrc</code>), which lives outside the repository.</li>
+</ol>
+<div class="callout warn"><span class="title">Never commit a key</span><p>The labs read the key from the environment and from nowhere else, so it never needs to be in a file in the repository. Anyone who has your key can spend your money. If a key ever reaches a commit, a chat, a screenshot or a shared file, delete it in the Console and create a new one; deleting the commit is not enough, because copies may already exist.</p></div>
+<p>The default model is <code>claude-haiku-5-5</code>, the smallest and cheapest. To use another, set <code>LLM_MODEL</code>, for example <code>export LLM_MODEL=claude-sonnet-5-5</code>. Three facts about current Claude models matter in the labs:</p>
+<ul>
+<li>They fix their own sampling and reject a <a class="g" href="glossary.html#temperature">temperature</a>, so the shared adapter leaves it out for Claude (<a href="llm-tokens.html#sampling">chapter 16</a>).</li>
+<li>They think before they answer. The thinking counts toward <code>max_tokens</code> and is billed as output (<a href="llm-tokens.html#reasoning">chapter 16</a>).</li>
+<li>An <code>effort</code> setting (<code>low</code>, <code>medium</code>, <code>high</code>) trades depth of thinking against time and cost.</li>
+</ul>
+
+<h3 id="ollama">Option B: Ollama</h3>
+<p><a class="g" href="glossary.html#ollama">Ollama</a> runs open-weight models on your own computer behind a small local API. It is free, and nothing you send leaves your machine.</p>
+<ol>
+<li>Install it from <a href="https://ollama.com/" target="_blank" rel="noopener noreferrer">ollama.com</a> (macOS, Windows and Linux).</li>
+<li>Download a model: <code>ollama pull llama3.2</code>. This is the labs' default, a model of about 3 billion parameters and a download of about 2 GB.</li>
+<li>Make sure the server is running. The desktop app runs it for you; otherwise start it with <code>ollama serve</code> in another terminal.</li>
+<li>Choose it: <code>export LLM_BACKEND=ollama</code>.</li>
+</ol>
+<p>A larger model answers better if your computer has the memory: <code>ollama pull llama3.1:8b</code>, then <code>export LLM_MODEL=llama3.1:8b</code>. If Ollama runs on another machine, set <code>OLLAMA_HOST</code> to its address. Expect small local models to be weaker than Claude: they follow an output format less reliably and are noticeably weaker at choosing and calling tools, which matters from Lab 5 on. Comparing the two on the same lab is a useful experiment in itself.</p>
+
+<h3 id="fake">Option C: the fake backend</h3>
+<p><code>export LLM_BACKEND=fake</code>, and nothing else. The fake backend answers with scripted replies: by default it repeats the start of your last message, and a lab can install its own rules that imitate a model's behaviour, as Lab 2 does. Every test in <code class="path">labs/</code> uses it (<code class="path">labs/conftest.py</code> sets it), so the tests need no key, no network and no money, and give the same result every time.</p>
+<p>Use it to read a lab's code path, to run its tests and to check a lab end to end before you pay for a real run. Do not read anything into its answers: it is not a model, and numbers it produces measure the plumbing only.</p>
+
+<h3 id="settings">The settings in one table</h3>
+<div class="tbl-wrap"><table>
+<tr><th>Variable</th><th>Example</th><th>What it does</th></tr>
+<tr><td><code>LLM_BACKEND</code></td><td><code>anthropic</code>, <code>ollama</code>, <code>fake</code></td><td>who answers</td></tr>
+<tr><td><code>LLM_MODEL</code></td><td><code>claude-sonnet-5-5</code>, <code>llama3.1:8b</code></td><td>which model inside the backend; the defaults are <code>claude-haiku-5-5</code> and <code>llama3.2</code></td></tr>
+<tr><td><code>ANTHROPIC_API_KEY</code></td><td>your key</td><td>the Claude backend's key</td></tr>
+<tr><td><code>OLLAMA_HOST</code></td><td><code>http://localhost:11434</code></td><td>where Ollama listens; this example is the default</td></tr>
+</table></div>
+
+<h2 id="prove">Step 3: prove it works</h2>
+<p>First the tests. They run on the fake backend whatever you chose, so this step costs nothing:</p>
+<pre><code>cd labs
+python -m pytest
+cd ..</code></pre>
+<p>The last line should say how many tests passed and none failed. Some tests in the chapter projects are skipped when PyTorch or the MCP SDK is not installed; that is expected.</p>
+<p>Then one real call through the backend you chose:</p>
+<pre><code>python labs/01-first-call/first_call.py "Say hello in five words"</code></pre>
+<p>On the fake backend the output is this:</p>
+<pre><code>reply        [fake model] I received 1 message; no system prompt. You said: Say hello in five words
+stop_reason  end
+tokens       14 in, 21 out
+latency      0.000 s
+model        fake (fake backend)
+cost         $0
+             the same tokens on claude-haiku-5-5 would cost $0.000012</code></pre>
+<p>On Claude or Ollama the <code>reply</code> line is a real greeting and the token counts, latency and model name are the model's own. They vary from run to run and from model to model, so yours will not match anyone else's. Check three things: <code>stop_reason</code> is <code>end</code>, the <code>model</code> line names the model you meant, and on Claude the <code>cost</code> line is a fraction of a cent. <a href="lab-first-call.html">Lab 1</a> explains every line.</p>
+
+<h3 id="troubleshooting">If it does not work</h3>
+<div class="tbl-wrap"><table>
+<tr><th>You see</th><th>What it means</th></tr>
+<tr><td><code>No module named 'anthropic'</code> or <code>'numpy'</code></td><td>The virtual environment is not active in this terminal, or the install did not run. Activate it and run the <code>pip install</code> line again.</td></tr>
+<tr><td><code>llm: no ANTHROPIC_API_KEY and no LLM_BACKEND, so using the fake backend</code></td><td>You meant to use Claude, but the key is not set in this terminal. Environment variables belong to one shell session.</td></tr>
+<tr><td><code>set ANTHROPIC_API_KEY, or use LLM_BACKEND=ollama or fake</code></td><td><code>LLM_BACKEND=anthropic</code> is set but there is no key.</td></tr>
+<tr><td><code>error: anthropic: ...</code> with a 401 code</td><td>The key is wrong or was deleted. Create a new one.</td></tr>
+<tr><td><code>ollama is not answering at http://localhost:11434</code></td><td>The Ollama server is not running. Start the app or run <code>ollama serve</code>.</td></tr>
+<tr><td><code>ollama 404: ... (did you `ollama pull llama3.2`?)</code></td><td>The model named by <code>LLM_MODEL</code> (or the default) has not been downloaded.</td></tr>
+</table></div>
+
+<h2 id="costs">What the labs cost</h2>
+<p>Model providers charge per <a class="g" href="glossary.html#token">token</a>, with one price for the tokens you send and a higher one for the tokens the model writes (<a href="llm-tokens.html#token-costs">chapter 16</a>). For <code>claude-haiku-5-5</code> the prices are $0.10 per million input tokens and $0.50 per million output tokens, and on Claude the output includes the model's thinking. A call that sends 1,000 tokens and gets 600 back costs</p>
+<p class="formula">1,000 &times; $0.10 / 1,000,000 + 600 &times; $0.50 / 1,000,000 = $0.0001 + $0.0003 = $0.0004</p>
+<p>Every lab prints the cost of its own calls from the token counts the provider reports. On Ollama and the fake backend it also prints what the same token counts would cost on <code>claude-haiku-5-5</code>, so you can budget before you switch. The estimates below assume the lab's steps are run once on Claude with the default model; each lab page says how its figure was worked out.</p>
+<div class="tbl-wrap"><table>
+<tr><th>Lab</th><th>Calls in the steps</th><th class="num">Estimated cost on claude-haiku-5-5</th></tr>
+<tr><td>Lab 0: set up your workbench</td><td>one check call</td><td class="num">under $0.001</td></tr>
+<tr><td><a href="lab-first-call.html">Lab 1: your first model call</a></td><td>about 20</td><td class="num">about $0.008</td></tr>
+<tr><td><a href="lab-prompt-bench.html">Lab 2: a prompt test bench</a></td><td>30 per run, six runs</td><td class="num">about $0.005 a run, $0.03 in all</td></tr>
+<tr><td><a href="lab-rag.html">Lab 3: RAG from scratch</a></td><td>one per question</td><td class="num">about $0.0003 a question, allowing for thinking</td></tr>
+<tr><td><a href="lab-retrieval-eval.html">Lab 4: measure your retrieval</a></td><td>none</td><td class="num">$0</td></tr>
+<tr><td><a href="lab-agent.html">Lab 5: tools and an agent loop</a></td><td>about 5 per run</td><td class="num">about $0.0013 a run, at most $0.011</td></tr>
+<tr><td><a href="lab-mcp.html">Lab 6: build an MCP server</a></td><td>none</td><td class="num">$0</td></tr>
+<tr><td><a href="lab-guardrails.html">Lab 7: guardrails you can test</a></td><td>one per question</td><td class="num">about $0.00004 a question, at most $0.001</td></tr>
+<tr><td><a href="lab-judge.html">Lab 8: an LLM judge you can trust</a></td><td>80 per run</td><td class="num">about $0.0035 a run, at most $0.085</td></tr>
+<tr><td><a href="lab-tracing.html">Lab 9: tracing and cost</a></td><td>4 in the demo</td><td class="num">about $0.00014 a run, at most $0.0026</td></tr>
+<tr><td><a href="lab-capstone.html">Lab 10: capstone, a small assistant</a></td><td>2 per question; 40 per evaluation</td><td class="num">about $0.00016 a question; about $0.0027 an evaluation, at most $0.043</td></tr>
+</table></div>
+<p>Ollama and the fake backend cost nothing. Larger Claude models cost more per token: <code>claude-sonnet-5-5</code> is $2 and $10 per million, 20 times Haiku's prices, and <code>claude-opus-5-5</code> is $4 and $20, 40 times. Prices change, so check the <a href="https://platform.claude.com/docs/en/about-claude/pricing" target="_blank" rel="noopener noreferrer">pricing page</a> before you budget.</p>
+
+<h2 id="checklist">Checklist</h2>
+<ul class="checklist">
+<li data-check="lab-setup:python">Python 3.10 or newer is installed.</li>
+<li data-check="lab-setup:venv">A virtual environment is created and active.</li>
+<li data-check="lab-setup:install">The packages in <code>labs/requirements.txt</code> are installed.</li>
+<li data-check="lab-setup:backend">I chose a backend and set <code>LLM_BACKEND</code>.</li>
+<li data-check="lab-setup:key-or-model">My Claude key is in my shell, not in a file, or my Ollama model is pulled.</li>
+<li data-check="lab-setup:limit">If I use Claude, a monthly spend limit is set in the Console.</li>
+<li data-check="lab-setup:tests"><code>python -m pytest</code> in <code>labs/</code> passes.</li>
+<li data-check="lab-setup:first-call">My first call printed a reply with <code>stop_reason end</code>.</li>
+</ul>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>You exported your key in one terminal, opened another, and the labs say they are using the fake backend. Why?</summary><div><p>Environment variables belong to the shell session that set them. Export the key again in the new terminal, or put the <code>export</code> line in your shell's start-up file.</p></div></details>
+<details><summary>Why do the tests use the fake backend even when a key is set?</summary><div><p>Tests must be free, offline and repeatable: the same input must give the same result every time. A real model costs money, needs the network and can answer differently on each run. <code class="path">labs/conftest.py</code> sets <code>LLM_BACKEND=fake</code> before any test runs.</p></div></details>
+<details><summary>A lab scores lower on Ollama than on Claude. Is the lab broken?</summary><div><p>Not necessarily. A 3-billion-parameter model on a laptop is far smaller than a hosted model and follows instructions and formats less reliably. Compare like with like: the same lab, the same cases, one backend changed.</p></div></details>
+<details><summary>Where should an API key live, and what do you do if it leaks?</summary><div><p>In an environment variable set by your shell, never in a file in the repository. If it leaks, delete it in the Console and create a new one; removing it from a commit does not remove the copies.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://docs.python.org/3/tutorial/venv.html" target="_blank" rel="noopener noreferrer">Virtual Environments and Packages (Python tutorial)</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">What a virtual environment is, and how to create, activate and install into one.</span></li>
+<li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener noreferrer">Models overview</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">The current Claude models, their names and what each is suited to.</span></li>
+<li><a href="https://platform.claude.com/docs/en/about-claude/pricing" target="_blank" rel="noopener noreferrer">Pricing</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Per-token prices for every Claude model, the figures behind the cost table above.</span></li>
+<li><a href="https://platform.claude.com/docs/en/api/errors" target="_blank" rel="noopener noreferrer">API errors</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">What each HTTP error code from the Claude API means and which ones are worth retrying.</span></li>
+<li><a href="https://docs.ollama.com/" target="_blank" rel="noopener noreferrer">Ollama documentation</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Installing Ollama, pulling models and the local API the labs call.</span></li>
+<li><a href="https://github.com/anthropics/anthropic-sdk-python" target="_blank" rel="noopener noreferrer">anthropics/anthropic-sdk-python</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">The official Python SDK that the Claude backend uses.</span></li>
+</ul>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{"id": "c01", "message": "Can I book my bike in for a full service next Tuesday morning?", "label": "booking"}
+{"id": "c02", "message": "I need to move my appointment on Friday to the following week, please.", "label": "booking"}
+{"id": "c03", "message": "Please cancel my service slot tomorrow, I'm away with work.", "label": "booking"}
+{"id": "c04", "message": "Do you have any time on Saturday to look at my gears? I can drop the bike off first thing.", "label": "booking"}
+{"id": "c05", "message": "Is there an appointment free this week for a brake bleed?", "label": "booking"}
+{"id": "c06", "message": "Is my bike ready yet? I dropped it off on Monday for a new chain.", "label": "status"}
+{"id": "c07", "message": "Hi, just checking how the wheel rebuild is going. Any news?", "label": "status"}
+{"id": "c08", "message": "When can I collect the red road bike I left with you?", "label": "status"}
+{"id": "c09", "message": "Has the mechanic finished with my daughter's bike? We'd like to pick it up after school.", "label": "status"}
+{"id": "c10", "message": "Any update on the cargo bike? You were waiting for a part to arrive.", "label": "status"}
+{"id": "c11", "message": "How much do you charge for a full service on a hybrid?", "label": "quote"}
+{"id": "c12", "message": "Roughly what would it cost to replace a cracked rear wheel?", "label": "quote"}
+{"id": "c13", "message": "Could you give me a price to fit new brake pads? I'd book it in if it's under 40 pounds.", "label": "quote"}
+{"id": "c14", "message": "Before I book anything, can you estimate the cost of servicing two children's bikes?", "label": "quote"}
+{"id": "c15", "message": "Is it worth repairing a 15-year-old mountain bike, or would the bill be more than the bike is worth?", "label": "quote"}
+{"id": "c16", "message": "Do you have 700x28 inner tubes in stock?", "label": "parts"}
+{"id": "c17", "message": "I'd like to buy a new helmet, medium size. Can I order one?", "label": "parts"}
+{"id": "c18", "message": "Do you sell tubeless sealant?", "label": "parts"}
+{"id": "c19", "message": "Can you get brake pads for hydraulic disc brakes? I'll fit them myself.", "label": "parts"}
+{"id": "c20", "message": "I'll pick up a new chain on Saturday if you have one for an 11-speed cassette.", "label": "parts"}
+{"id": "c21", "message": "I collected my bike yesterday and the gears are slipping again. Not happy.", "label": "complaint"}
+{"id": "c22", "message": "I was overcharged for my service: the invoice says 95 pounds but you quoted 60.", "label": "complaint"}
+{"id": "c23", "message": "The mechanic was rude to my partner when they dropped the bike off.", "label": "complaint"}
+{"id": "c24", "message": "It's been three weeks and my bike still isn't ready. This is ridiculous.", "label": "complaint"}
+{"id": "c25", "message": "I want a refund. The puncture you fixed went flat the same day.", "label": "complaint"}
+{"id": "c26", "message": "What time do you open on Sundays?", "label": "other"}
+{"id": "c27", "message": "Are you hiring mechanics? I can start next week and I'm available on weekdays.", "label": "other"}
+{"id": "c28", "message": "I think I left my bike lights in your shop on Wednesday.", "label": "other"}
+{"id": "c29", "message": "Thanks so much for sorting my bike out so quickly, it rides like new!", "label": "other"}
+{"id": "c30", "message": "Where can I park when I bring my bike in?", "label": "other"}

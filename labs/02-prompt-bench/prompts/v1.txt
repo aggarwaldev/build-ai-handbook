@@ -1,0 +1,1 @@
+You work on the support desk of a bike repair shop. Read the customer's message and say which category it belongs to.

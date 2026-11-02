@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 1: your first model call &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part V &middot; Build it</p>
+<h1>Lab 1: your first model call</h1>
+<p class="lead">Send one message to a language model and read everything that comes back: the words, why the model stopped, how many tokens it read and wrote, how long it took and what it cost. Then give it standing instructions, hold a conversation, and see why every turn of a conversation costs more than the one before.</p>
+
+<div class="callout why"><span class="title">Why do this</span><p>Every application in this book, from retrieval to agents, is this one call repeated with different inputs. Knowing exactly what goes in, what comes out and what each part costs is what lets you debug those applications later, and estimate their bills before you run them.</p></div>
+
+<h2 id="what-you-will-build">What you will build</h2>
+<p>A command-line tool, <code class="path">labs/01-first-call/first_call.py</code>, of about 230 lines, and its tests in <code class="path">test_first_call.py</code>. It can:</p>
+<ul>
+<li>send one message and print every field of the reply;</li>
+<li>send a system prompt beside the message, and show the request before it goes;</li>
+<li>hold a conversation (<code>--chat</code>), printing tokens and cost after each turn;</li>
+<li>set <code>--max-tokens</code>, <code>--effort</code> (Claude) and <code>--temperature</code> (Ollama).</li>
+</ul>
+
+<h2 id="before-you-start">Before you start</h2>
+<p>Finish <a href="lab-setup.html">Lab 0</a>. Any backend works. The outputs on this page come from the fake backend, so you can follow along for free and compare your screen with the page:</p>
+<pre><code>export LLM_BACKEND=fake</code></pre>
+<p>Then run each step again on Claude or Ollama, where the replies are real and will differ from run to run.</p>
+
+<h2 id="step-1">Step 1: send one message</h2>
+<p>A model call is a function call over the network. You send a list of messages; the model reads them as <a class="g" href="glossary.html#token">tokens</a>, writes its reply one token at a time and sends it back (<a href="llm-tokens.html#next-token">chapter 16</a>). With the shared adapter from Lab 0, a one-message conversation is a list of one dictionary:</p>
+<pre><code>def ask(
+    prompt: str,
+    *,
+    system: str | None = None,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    effort: str | None = None,
+    temperature: float | None = None,
+) -&gt; llm.Reply:
+    """Send one user message and return the reply. The whole conversation is one turn."""
+    messages = [{"role": "user", "content": prompt}]
+    return llm.chat(messages, system=system, max_tokens=max_tokens, effort=effort,
+                    temperature=temperature)</code></pre>
+<p>Run it:</p>
+<pre><code>$ python labs/01-first-call/first_call.py "Say hello in five words"
+reply        [fake model] I received 1 message; no system prompt. You said: Say hello in five words
+stop_reason  end
+tokens       14 in, 21 out
+latency      0.000 s
+model        fake (fake backend)
+cost         $0
+             the same tokens on claude-haiku-5-5 would cost $0.000012</code></pre>
+<p>The fake backend repeats what it received, which proves the message travelled. On Claude the <code>reply</code> line is a real greeting.</p>
+
+<h2 id="step-2">Step 2: read the reply</h2>
+<p><code>chat()</code> returns a <code>Reply</code>, the same shape whichever backend answered. Each field answers a question you will ask of every call you ever make:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Field</th><th>What it tells you</th></tr>
+<tr><td><code>text</code></td><td>The words of the answer. On Claude, the model's thinking is not part of it.</td></tr>
+<tr><td><code>stop_reason</code></td><td>Why the model stopped: <code>end</code> (it finished), <code>max_tokens</code> (it hit your limit, <a href="#step-5">step 5</a>), <code>tool_use</code> (it wants to call a tool, <a href="lab-agent.html">Lab 5</a>) or <code>refusal</code> (it declined). Check it before you trust <code>text</code>.</td></tr>
+<tr><td><code>input_tokens</code></td><td>Everything the model read: the system prompt, every message in the list and any tool definitions.</td></tr>
+<tr><td><code>output_tokens</code></td><td>Everything the model wrote, including, on Claude, the tokens it spent thinking.</td></tr>
+<tr><td><code>latency_s</code></td><td>Seconds from sending to the whole reply arriving: the network, the reading, any thinking and the writing.</td></tr>
+<tr><td><code>model</code>, <code>backend</code></td><td>Which model actually answered. Log it: answers can change when the model does.</td></tr>
+<tr><td><code>cost_usd</code></td><td>input tokens &times; input price + output tokens &times; output price, from the price table in <code class="path">llm.py</code>; 0 for local and fake models.</td></tr>
+<tr><td><code>tool_calls</code></td><td>Empty here. In <a href="lab-agent.html">Lab 5</a> it carries the tools the model asks you to run.</td></tr>
+</table></div>
+<p>The extra line under <code>cost</code> is this lab's own: what the same token counts would cost on <code>claude-haiku-5-5</code>, whatever answered. On the fake backend the counts are estimates, about four characters per token; a real tokeniser counts differently, and Claude adds its thinking to the output (<a href="llm-tokens.html#token-costs">chapter 16</a>). So read the fake's figure as a sketch of the order of magnitude, not a quote.</p>
+<p>Latency on the fake backend is close to zero because nothing leaves your computer. On a real model, most of the wait for a long answer is the writing, one token at a time, which is why streaming the answer as it is written feels faster (<a href="production.html#latency">chapter 42</a>).</p>
+
+<h2 id="step-3">Step 3: add a system prompt</h2>
+<p>A <a class="g" href="glossary.html#system-prompt">system prompt</a> holds standing instructions: who the model is working for, the rules and the shape of the answer (<a href="prompt-engineering.html#anatomy">chapter 21</a>). It travels beside the conversation, not inside it, and applies to every turn. <code>--show-request</code> prints what is sent before sending it:</p>
+<pre><code>$ python labs/01-first-call/first_call.py --show-request --system "Answer in one sentence." "What is a token?"
+request {
+  "system": "Answer in one sentence.",
+  "max_tokens": 1024,
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is a token?"
+    }
+  ]
+}
+reply        [fake model] I received 1 message; system prompt: "Answer in one sentence." You said: What is a token?
+stop_reason  end
+tokens       18 in, 25 out
+latency      0.000 s
+model        fake (fake backend)
+cost         $0
+             the same tokens on claude-haiku-5-5 would cost $0.000014</code></pre>
+<p>Two things to notice. The <code>messages</code> list still holds only your question; the instruction sits in its own field. And the input is 18 tokens, where the same question without <code>--system</code> counts 12 on the fake backend: the system prompt is sent, and paid for, on every call. A long system prompt on a busy service is a real cost, which is what prompt caching addresses (<a href="context-engineering.html#caching">chapter 22</a>).</p>
+
+<h2 id="step-4">Step 4: hold a conversation</h2>
+<p>A model remembers nothing between calls. A conversation is a list that <em>you</em> keep: you append the user's turn, send the whole list, and append the model's reply before the next turn.</p>
+<pre><code>def send(self, text: str) -&gt; llm.Reply:
+    self.messages.append({"role": "user", "content": text})
+    # Send a copy, so a record of this request is not changed by later turns.
+    reply = llm.chat(list(self.messages), system=self.system, max_tokens=self.max_tokens,
+                     effort=self.effort, temperature=self.temperature)
+    self.messages.append(reply.message())
+    self.turns += 1
+    self.input_tokens += reply.input_tokens
+    self.output_tokens += reply.output_tokens
+    self.cost_usd += reply.cost_usd
+    return reply</code></pre>
+<p><code>reply.message()</code> gives the assistant's turn in the shared format. On Claude it also carries the provider's own content blocks, including thinking, which must go back unchanged on the next call; the adapter does that for you. Hold a three-turn chat:</p>
+<pre><code>$ python labs/01-first-call/first_call.py --chat --system "You are a friendly travel planner."
+Chatting with fake (fake backend). Empty line or /quit to stop, /reset to start again, /history to see what is sent.
+you&gt; I am planning a three-day cycling trip.
+model&gt; [fake model] I received 1 message; system prompt: "You are a friendly travel planner." You said: I am planning a three-day cycling trip.
+(turn 1: 26 in + 34 out tokens, 0.000 s, $0; so far 60 tokens, $0; on claude-haiku-5-5 about $0.000020)
+you&gt; What should I pack?
+model&gt; [fake model] I received 3 messages; system prompt: "You are a friendly travel planner." You said: What should I pack?
+(turn 2: 83 in + 29 out tokens, 0.000 s, $0; so far 172 tokens, $0; on claude-haiku-5-5 about $0.000042)
+you&gt; What did I say I was planning?
+model&gt; [fake model] I received 5 messages; system prompt: "You are a friendly travel planner." You said: What did I say I was planning?
+(turn 3: 138 in + 32 out tokens, 0.000 s, $0; so far 342 tokens, $0; on claude-haiku-5-5 about $0.000072)
+you&gt; /quit</code></pre>
+<p>The fake model counts 1, 3 and 5 messages: each call carries every earlier turn. That is why the input tokens climb from 26 to 83 to 138 although each question was short. With real answers, which are longer, the climb is steeper. Worked through: if every turn adds 100 tokens to the history, turn <var>n</var> sends about 100<var>n</var> input tokens, so ten turns send 100 + 200 + &hellip; + 1,000 = 5,500 input tokens in all, not 1,000. The cost of a conversation grows with the square of its length, and a long one eventually fills the <a class="g" href="glossary.html#context-window">context window</a> (<a href="context-engineering.html#what">chapter 22</a>). In the chat, <code>/history</code> prints the list being sent and <code>/reset</code> starts again.</p>
+
+<h2 id="step-5">Step 5: when max_tokens is too small</h2>
+<p><code>max_tokens</code> is a hard ceiling on the tokens the model may write. The model does not plan around it: when the ceiling is reached, the reply simply stops, mid-word if need be, and <code>stop_reason</code> says <code>max_tokens</code>. The fake backend imitates that, so you can see the code path:</p>
+<pre><code>$ python labs/01-first-call/first_call.py --max-tokens 8 "Explain tokens in three paragraphs"
+reply        [fake model] I received 1 messag
+stop_reason  max_tokens
+tokens       16 in, 8 out
+latency      0.000 s
+model        fake (fake backend)
+cost         $0
+             the same tokens on claude-haiku-5-5 would cost $0.000006
+note         the reply hit max_tokens and was cut off; raise --max-tokens. On Claude, thinking counts toward max_tokens, so the text can even be empty.</code></pre>
+<p>On Claude there is a second trap. The model thinks before it answers, and the thinking counts toward <code>max_tokens</code> (<a href="llm-tokens.html#reasoning">chapter 16</a>). With a small limit the whole budget can go on thinking, and the reply comes back with empty <code>text</code> and <code>stop_reason</code> <code>max_tokens</code>. Three habits follow:</p>
+<ul>
+<li>Check <code>stop_reason</code> before you use <code>text</code>. A cut-off answer can look complete.</li>
+<li>Leave room. This lab's default is 1,024 and the shared adapter's is 2,048. Control the length of the answer with instructions ("in one sentence"), not with the ceiling.</li>
+<li>On Claude, use <code>--effort low</code> for simple tasks: less thinking, so fewer output tokens, a lower cost and a faster reply.</li>
+</ul>
+
+<h2 id="step-6">Step 6: compare backends</h2>
+<p>The same command runs on every backend; only the environment changes:</p>
+<pre><code>LLM_BACKEND=ollama python labs/01-first-call/first_call.py "Say hello in five words"
+LLM_BACKEND=anthropic python labs/01-first-call/first_call.py "Say hello in five words"
+LLM_BACKEND=anthropic LLM_MODEL=claude-sonnet-5-5 python labs/01-first-call/first_call.py "Say hello in five words"</code></pre>
+<p>Real replies vary, so there is no output to copy here. Compare four things:</p>
+<ul>
+<li><b>The words.</b> Did each model keep to five words? Small models often do not.</li>
+<li><b>The token counts.</b> Each model family has its own <a class="g" href="glossary.html#tokeniser">tokeniser</a>, so the same sentence counts differently, and Claude's output includes its thinking.</li>
+<li><b>The latency.</b> A local model's speed depends on your hardware; a hosted model's includes the network and the thinking.</li>
+<li><b>The cost.</b> Sonnet 5.5 is 20 times Haiku 5.5's price per token. Whether a stronger model is worth it depends on the task; <a href="context-engineering.html#choosing">chapter 22</a> covers how to choose, and <a href="lab-prompt-bench.html">Lab 2</a> builds the tool that measures it.</li>
+</ul>
+<p><code>--temperature</code> changes Ollama's answers (<a href="llm-tokens.html#sampling">chapter 16</a>). Claude ignores it, because current Claude models fix their own sampling and reject a temperature, so the adapter leaves it out.</p>
+
+<h2 id="checklist">Checklist</h2>
+<ul class="checklist">
+<li data-check="lab-first-call:one-message">I sent one message and read the reply.</li>
+<li data-check="lab-first-call:fields">I can say what each field of the reply means.</li>
+<li data-check="lab-first-call:system">I added a system prompt and saw where it goes in the request.</li>
+<li data-check="lab-first-call:chat">I held a three-turn chat and watched the input tokens grow.</li>
+<li data-check="lab-first-call:max-tokens">I made a reply stop at <code>max_tokens</code>.</li>
+<li data-check="lab-first-call:backends">I ran the same prompt on two backends and compared them.</li>
+<li data-check="lab-first-call:tests">The lab's tests pass.</li>
+</ul>
+
+<h2 id="run-it">Run it</h2>
+<p>The tests check the offline logic with the fake backend: the request carries the system prompt in its own field, a conversation resends its whole history, a small <code>max_tokens</code> stops a reply, and the costs use Haiku's prices. Run them from <code class="path">labs/</code>:</p>
+<pre><code>$ python -m pytest 01-first-call
+.............                                                            [100%]
+13 passed in 0.02s</code></pre>
+<p>Then the whole lab, in order, from the repository root:</p>
+<pre><code>python labs/01-first-call/first_call.py "Say hello in five words"
+python labs/01-first-call/first_call.py --show-request --system "Answer in one sentence." "What is a token?"
+python labs/01-first-call/first_call.py --chat --system "You are a friendly travel planner."
+python labs/01-first-call/first_call.py --max-tokens 8 "Explain tokens in three paragraphs"</code></pre>
+<p><b>What it costs.</b> Nothing on Ollama or the fake backend. On <code>claude-haiku-5-5</code>, the steps make about 20 calls. Allowing each call up to 1,000 input tokens (the chat's history grows) and 600 output tokens (an answer plus its thinking), the lab costs at most 20 &times; (1,000 &times; $0.10 + 600 &times; $0.50) / 1,000,000 = $0.008, under one US cent. Your own runs print their real cost after every call.</p>
+
+<h2 id="experiments">Experiments</h2>
+<ol>
+<li><b>Temperature, on Ollama.</b> Ask "Name a colour." three times with <code>--temperature 0</code>, then three times with <code>--temperature 1.5</code>. How much do the answers vary? Why might you want each setting?</li>
+<li><b>Effort, on Claude.</b> Ask a small puzzle, such as "A bat and a ball cost 1.10 in total. The bat costs 1.00 more than the ball. How much is the ball?", with <code>--effort low</code> and then <code>--effort high</code>. Compare output tokens, latency and whether the answer is right.</li>
+<li><b>Find the cliff.</b> On Claude, ask for a three-paragraph explanation with <code>--max-tokens</code> 16, 64, 256 and 1024. At which limits does the text come back empty, cut off or whole?</li>
+<li><b>Count tokens.</b> Send the same sentence in English and in another language, then a line of code and a long number. Compare the input token counts (<a href="llm-tokens.html#token-costs">chapter 16</a>).</li>
+<li><b>A long chat.</b> Hold ten turns and write down the input tokens for each. Do they grow as step 4 predicts? Then type <code>/reset</code> and ask a follow-up question: what does the model know now?</li>
+<li><b>Where instructions live.</b> Put "Answer in French." in the system prompt for one chat, and in the first user message for another. Which one does the model still follow after five turns?</li>
+</ol>
+
+<h2 id="going-further">Going further</h2>
+<ul>
+<li><b>Stream the answer.</b> Print tokens as they arrive instead of waiting for the whole reply, and time the first one (<a class="g" href="glossary.html#ttft">time to first token</a>). The Claude SDK's streaming guide is in the further reading.</li>
+<li><b>Retry politely.</b> Wrap <code>chat()</code> so that it waits and tries again after a rate-limit error, a little longer each time (<a href="production.html#limits">chapter 42</a>).</li>
+<li><b>Save a conversation.</b> Write <code>messages</code> to a JSON file when the chat ends and load it at the start of the next. That is the first step towards memory (<a href="memory.html">chapter 37</a>).</li>
+<li><b>Measure, do not guess.</b> <a href="lab-prompt-bench.html">Lab 2</a> turns single calls into a test bench that scores a prompt over thirty cases.</li>
+</ul>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Your second question was shorter than your first, yet the second call read more input tokens. Why?</summary><div><p>The model keeps no memory, so the second call sends the first question, the first answer and the second question. Input tokens grow with the whole history, not with the newest message.</p></div></details>
+<details><summary>On Claude, a reply comes back with empty text and stop_reason max_tokens. What happened, and what are two fixes?</summary><div><p>The model spent the whole <code>max_tokens</code> budget thinking before it wrote any answer. Raise <code>max_tokens</code>, or lower <code>effort</code> so it thinks less.</p></div></details>
+<details><summary>Why is the system prompt not one of the messages?</summary><div><p>It is standing instructions for the whole conversation, sent in its own field on every call. Keeping it apart from the turns lets the instructions stay fixed while the conversation grows, and keeps instructions apart from what users write.</p></div></details>
+<details><summary>You set temperature 0 for Claude and still get different answers. Why?</summary><div><p>Current Claude models fix their own sampling and reject a temperature, so the adapter does not send one. Variation between runs is normal; test for it rather than trying to switch it off.</p></div></details>
+<details><summary>The fake backend says a call would cost $0.000012 on Haiku. Why might the real cost differ?</summary><div><p>The fake estimates tokens at about four characters each and writes a short, made-up reply. Claude counts with its own tokeniser, writes its own answer and adds thinking tokens to the output.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices" target="_blank" rel="noopener noreferrer">Claude prompting best practices</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">How to write system prompts and messages that Claude follows, from the people who train it.</span></li>
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/context-windows" target="_blank" rel="noopener noreferrer">Context windows</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">What counts toward the window on each call, and how thinking fits into it.</span></li>
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/streaming" target="_blank" rel="noopener noreferrer">Streaming messages</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Receiving a reply token by token, for the first "going further" idea.</span></li>
+<li><a href="https://platform.claude.com/docs/en/about-claude/models/overview" target="_blank" rel="noopener noreferrer">Models overview</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">The Claude models you can set with <code>LLM_MODEL</code>, and how they differ.</span></li>
+<li><a href="https://docs.ollama.com/" target="_blank" rel="noopener noreferrer">Ollama documentation</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">The local API behind the Ollama backend, including its sampling options.</span></li>
+</ul>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>
