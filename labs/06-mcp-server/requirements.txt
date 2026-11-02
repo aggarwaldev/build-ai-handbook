@@ -1,0 +1,5 @@
+# server.py and client.py need the official MCP Python SDK, version 2 (Python 3.10 or newer):
+#   pip install -r labs/06-mcp-server/requirements.txt
+# wire.py and deposits.py use only the standard library, but wire.py starts server.py, which
+# needs the SDK.
+mcp==2.3.0

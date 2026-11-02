@@ -1,0 +1,287 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 5: tools and an agent loop &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part V &middot; Build it</p>
+<h1>Lab 5: tools and an agent loop</h1>
+<p class="lead">Give a model four tools and a loop, and it can answer a question no single call could: look up two parts, add their prices exactly, work out a delivery date and, once a person says yes, place an order. In this lab you write the tools, the checks around them and the loop itself in plain Python, and watch every step go by.</p>
+
+<div class="callout why"><span class="title">Why do this</span><p>Agent frameworks run this loop for you and hide where it goes wrong. Writing it once by hand shows the four places an agent needs code it can trust: the tool definitions the model reads, the checks on what it asks for, the approval in front of anything that changes the world, and the limit that stops it. Every framework, and every harness in <a href="harness.html">chapter 33</a>, is these four things with more around them.</p></div>
+
+<h2 id="what-you-will-build">What you will build</h2>
+<ul>
+<li>Four <a class="g" href="glossary.html#tool">tools</a> over an invented bike shop's catalogue, each described by a <a class="g" href="glossary.html#json-schema">JSON Schema</a> the model reads.</li>
+<li>A calculator that does exact decimal arithmetic and cannot be talked into running code.</li>
+<li>A check on every tool request, with every failure sent back as an error result the model can act on.</li>
+<li>An approval step: the order tool runs only after a person types <kbd>y</kbd>.</li>
+<li>The <a class="g" href="glossary.html#tool-loop">tool loop</a>: call the model, run the tools it asks for, send the results back, repeat, and stop at a step limit.</li>
+<li>A scripted stand-in model, so the whole run works offline and in tests.</li>
+</ul>
+
+<h2 id="before-you-start">Before you start</h2>
+<ul>
+<li>Your workbench from <a href="lab-setup.html">Lab 0</a>. <a href="lab-first-call.html">Lab 1</a> explains the fields of a single reply (<code>stop_reason</code>, token counts, cost), which this lab reads at every step.</li>
+<li>The ideas: <a href="tools.html">chapter 28</a> (tools and function calling) and <a href="agents.html">chapter 29</a> (agents). Steps 3 and 4 lean on <a href="harness.html">chapter 33</a> (harness), <a href="guardrails.html">chapter 34</a> (guardrails) and <a href="security.html">chapter 35</a> (security).</li>
+<li>The files, in <code class="path">labs/05-agent/</code>: <code class="path">agent.py</code> (the tools, the checks, the loop and the stand-in model, about 500 lines), <code class="path">catalogue.json</code> (twelve invented parts with prices in GBP) and <code class="path">test_agent.py</code>.</li>
+<li>Cost: nothing on the fake backend or Ollama; about a tenth of a cent a run on <code>claude-haiku-5-5</code> (<a href="#cost">worked out below</a>).</li>
+</ul>
+
+<h2 id="tools">Step 1: describe the tools</h2>
+<p>A tool is two halves. The model sees a <b>name</b>, a <b>description</b> and an <b>input schema</b>; your code holds the <b>function</b>, which the model never sees. In <code class="path">agent.py</code> each tool is a small <code>Tool</code> record that keeps the two halves together:</p>
+<pre><code><span class="k">@dataclass</span>
+<span class="k">class</span> <span class="n">Tool</span>:
+    name: str
+    description: str                 <span class="c"># the only manual the model gets</span>
+    input_schema: dict[str, Any]     <span class="c"># JSON Schema; checked by check_input before the tool runs</span>
+    run: Callable[..., dict[str, Any]]
+    side_effect: bool = False        <span class="c"># True means a person must approve every call</span>
+
+    <span class="k">def</span> <span class="n">spec</span>(self):
+        <span class="c">"""The definition sent to the model with every call."""</span>
+        <span class="k">return</span> {"name": self.name, "description": self.description, "input_schema": self.input_schema}</code></pre>
+<div class="tbl-wrap"><table>
+<tr><th>Tool</th><th>What it does</th><th>Side effect</th></tr>
+<tr><td><code>lookup_part</code></td><td>Searches the catalogue by words in a part's name, category or SKU; returns up to five matches with price and stock</td><td>none</td></tr>
+<tr><td><code>calculate</code></td><td>Exact decimal arithmetic on one expression, such as <code>2 * 6.49 + 18.50</code></td><td>none</td></tr>
+<tr><td><code>add_working_days</code></td><td>The date a number of working days after a start date, skipping Saturdays and Sundays</td><td>none</td></tr>
+<tr><td><code>place_order</code></td><td>A pretend order: prints what it would do and returns a reference</td><td>yes: a person approves it first</td></tr>
+</table></div>
+<p>Three habits from <a href="tools.html#schemas">chapter 28</a> show up in the definitions. Each description says what the tool returns and when to use it, and names its limits: <code>add_working_days</code> says "It does not know about public holidays", so the model can warn the customer. Prices travel as decimal strings such as <code>"6.49"</code>, never as JSON numbers. And every schema sets <code>"additionalProperties": false</code>, so a made-up argument is an error, not something silently ignored.</p>
+<p>The definitions are not free. The program's first line estimates them at about 495 tokens, using the rough rule of four characters per token, and they go with every call: a five-call run sends them five times.</p>
+
+<h2 id="calculator">Step 2: a calculator that cannot run code</h2>
+<p>The tempting calculator is one line: <code>eval(expression)</code>. Do not write it. <code>eval</code> runs any Python, and the expression is written by a model that may have read text planted by someone else (<a href="security.html#injection">chapter 35</a>). <code>__import__('os').system(...)</code> is a valid "expression" that runs a shell command with your permissions.</p>
+<p>Instead, <code>calculate</code> asks Python's <code>ast</code> module to parse the text into a syntax tree, without running it, and then walks the tree itself, accepting only three kinds of node: a number, an arithmetic operator from a fixed table, and a leading plus or minus. Anything else, a name, a function call, an attribute, a piece of text, is refused with a message saying which piece:</p>
+<pre><code><span class="k">def</span> <span class="n">_evaluate</span>(node, source):
+    <span class="k">if</span> isinstance(node, ast.Constant) <span class="k">and</span> type(node.value) <span class="k">in</span> (int, float):
+        <span class="c"># Read the digits as written, so 6.49 stays exactly 6.49.</span>
+        <span class="k">return</span> Decimal(node.value) <span class="k">if</span> type(node.value) <span class="k">is</span> int <span class="k">else</span> Decimal(ast.get_source_segment(source, node))
+    <span class="k">if</span> isinstance(node, ast.BinOp) <span class="k">and</span> type(node.op) <span class="k">in</span> _BINARY:
+        left, right = _evaluate(node.left, source), _evaluate(node.right, source)
+        <span class="k">if</span> isinstance(node.op, ast.Pow) <span class="k">and</span> (right != right.to_integral_value() <span class="k">or</span> abs(right) &gt; MAX_EXPONENT):
+            <span class="k">raise</span> ToolInputError(f"a power must be a whole number no bigger than {MAX_EXPONENT}")
+        <span class="k">return</span> _BINARY[type(node.op)](left, right)
+    <span class="k">if</span> isinstance(node, ast.UnaryOp) <span class="k">and</span> type(node.op) <span class="k">in</span> _UNARY:
+        <span class="k">return</span> _UNARY[type(node.op)](_evaluate(node.operand, source))
+    <span class="k">raise</span> ToolInputError(f"only numbers and + - * / // % ** are allowed, and {ast.unparse(node)!r} is neither")</code></pre>
+<p>The numbers are Python <code>Decimal</code>s built from the digits as written. A binary float cannot hold 0.1 exactly, so in plain Python <code>0.1 + 0.2</code> prints <code>0.30000000000000004</code>; this calculator returns <code>0.3</code>. These are real results from the module:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Expression</th><th>Result</th></tr>
+<tr><td><code>2 * 6.49 + 18.50</code></td><td><code>31.48</code></td></tr>
+<tr><td><code>0.1 + 0.2</code></td><td><code>0.3</code></td></tr>
+<tr><td><code>2 x 6.49 + 18.50</code></td><td>error: <code>'2 x 6.49 + 18.50' is not arithmetic: use numbers, + - * / // % ** and brackets</code></td></tr>
+<tr><td><code>__import__('os').system('echo hi')</code></td><td>error: <code>only numbers and + - * / // % ** are allowed, and "__import__('os').system('echo hi')" is neither</code></td></tr>
+<tr><td><code>pi * 2</code></td><td>error: <code>... and 'pi' is neither</code></td></tr>
+<tr><td><code>1 / 0</code></td><td>error: <code>'1 / 0' divides by zero</code></td></tr>
+<tr><td><code>2 ** 1000</code></td><td>error: <code>a power must be a whole number no bigger than 100</code></td></tr>
+</table></div>
+<p>Two limits keep the work small whatever the model sends: an expression of at most 200 characters, and whole powers no bigger than 100. <a href="tools.html#calculators">Chapter 28</a> explains why arithmetic belongs in code at all.</p>
+
+<h2 id="check">Step 3: check every request before it runs</h2>
+<p>The model writes the arguments, so they are untrusted input, however well it usually does. <code>check_input</code> checks them against the tool's schema: types, required fields, unknown fields, lengths and number ranges, the parts of JSON Schema these four tools use. Its messages name the field and the problem, such as <code>input.items[0].quantity must be at most 10</code>, but never repeat the value, which in a real system could be someone's details. (Claude can also be asked to keep its arguments schema-valid, but a check in your own code costs nothing and protects every backend.)</p>
+<p><code>run_tool</code> is where a request becomes a result. Every way it can fail becomes a result marked <code>is_error</code>, so one bad call never ends the loop:</p>
+<pre><code><span class="k">def</span> <span class="n">run_tool</span>(call, approve=ask_person):
+    ...
+    tool = REGISTRY.get(call.name)
+    <span class="k">if</span> tool <span class="k">is</span> None:
+        <span class="k">return</span> result(f"there is no tool called {call.name!r}; the tools are {', '.join(REGISTRY)}", True)
+    <span class="k">try</span>:
+        check_input(tool.input_schema, call.input)
+    <span class="k">except</span> ToolInputError <span class="k">as</span> exc:
+        <span class="k">return</span> result(f"invalid input for {call.name}: {exc}", True)
+    <span class="k">if</span> tool.side_effect <span class="k">and</span> <span class="k">not</span> approve(call):
+        <span class="k">return</span> result("the person did not approve this, so it did not run. Do not try again; "
+                      "ask what they would like to change.", True)
+    <span class="k">try</span>:
+        output = tool.run(**call.input)
+    <span class="k">except</span> ToolInputError <span class="k">as</span> exc:   <span class="c"># a mistake the model can fix</span>
+        <span class="k">return</span> result(str(exc), True)
+    <span class="k">except</span> Exception <span class="k">as</span> exc:        <span class="c"># a bug in the tool: report it and keep the loop alive</span>
+        <span class="k">return</span> result(f"{call.name} failed: {type(exc).__name__}: {exc}", True)
+    <span class="k">return</span> result(json.dumps(output, ensure_ascii=False))</code></pre>
+<p>Two kinds of failure are kept apart. A <code>ToolInputError</code> is a mistake the model made and can fix, so its message is written for the model. Any other exception is a bug in your tool; the model still gets a result, so it can tell the customer something went wrong, and you get the exception's type in the trace. MCP servers draw the same line (<a href="lab-mcp.html">Lab 6</a>). <a href="tools.html#loop">Chapter 28</a> and <a href="harness.html#loop-guards">chapter 33</a> describe these guards in general.</p>
+
+<h2 id="approval">Step 4: a person approves side effects</h2>
+<p><code>place_order</code> is marked <code>side_effect=True</code>. Before it runs, the loop, not the tool and not the model, shows the exact request and asks:</p>
+<pre><code><span class="k">def</span> <span class="n">ask_person</span>(call):
+    <span class="c">"""Show the exact request and let a person decide. Anything but y or yes means no."""</span>
+    print(f"   ?? the model wants to run {call.name} with {json.dumps(call.input)}")
+    <span class="k">try</span>:
+        answer = input("   ?? allow it? [y/N] ")
+    <span class="k">except</span> EOFError:  <span class="c"># no one at the keyboard: the safe answer is no</span>
+        answer = ""
+    <span class="k">return</span> answer.strip().lower() <span class="k">in</span> ("y", "yes")</code></pre>
+<p>Three choices matter. The default is no: Enter alone, a typo, or a run with no keyboard at all does not place an order. A refusal goes back to the model as an error result that says not to try again, so it asks the customer instead of retrying. And <code>--auto-approve</code> exists only for tests and demos, where nobody is there to ask.</p>
+<p>The approval lives in code because a description is only advice. "Use it only when the customer asks you to order" steers a model that is working well; a model that misread the question, or was steered by injected text, can still ask for an order, but it cannot type <kbd>y</kbd>. This is "the model proposes, code disposes" from <a href="agents.html#limits">chapter 29</a>, and the permissions part of a harness (<a href="harness.html#permissions">chapter 33</a>).</p>
+
+<h2 id="loop">Step 5: the loop</h2>
+<p>This is the whole agent. Everything else in the file is tools, checks and the offline stand-in:</p>
+<pre><code><span class="k">for</span> step <span class="k">in</span> range(1, max_steps + 1):
+    reply = llm.chat(messages, system=system, tools=specs, max_tokens=max_tokens, effort=effort)
+    ...  <span class="c"># add up calls, tokens and cost, print the step</span>
+
+    <span class="k">if</span> reply.stop_reason != "tool_use" <span class="k">or</span> <span class="k">not</span> reply.tool_calls:
+        <span class="c"># The model answered (end), ran out of room (max_tokens) or declined (refusal).</span>
+        run.answer, run.stop = reply.text, reply.stop_reason
+        <span class="k">return</span> run
+    <span class="k">if</span> step == max_steps:
+        <span class="c"># No call is left to read the results, so do not run anything, side effects least.</span>
+        <span class="k">break</span>
+
+    <span class="c"># The assistant turn goes back exactly as it came, then one turn with every result.</span>
+    messages.append(reply.message())
+    results = [run_tool(call, approve) <span class="k">for</span> call <span class="k">in</span> reply.tool_calls]   <span class="c"># printed as they run</span>
+    messages.append(llm.tool_results(results))
+
+run.stop = "step_limit"
+run.answer = f"I stopped after {max_steps} model calls without finishing, ..."</code></pre>
+<ul>
+<li><b>How it ends.</b> Any <code>stop_reason</code> other than <code>tool_use</code> ends the loop. <code>end</code> is an answer. <code>max_tokens</code> means the reply was cut off; on Claude the model's thinking counts toward <code>max_tokens</code>, which is why the loop asks for 4,096 rather than the adapter's default of 2,048.</li>
+<li><b>One turn of results.</b> A reply can ask for several tools at once; step 1 of the demo asks for two lookups. They all run, and all their results go back together in one turn.</li>
+<li><b>The step limit.</b> <code>max_steps</code> (8 by default) counts model calls. When the last allowed call still asks for tools, the loop does not run them: no call is left to read their results, and a side effect that nobody reads is the worst kind. It stops with <code>stop</code> set to <code>step_limit</code> and a plain message for the customer. <a href="tools.html#loop">Chapter 28</a> describes another choice, one last call that must answer from what it has; it is in <a href="#going-further">Going further</a>.</li>
+<li><b>Growing input.</b> The model keeps nothing between calls, so each call resends the whole conversation. In the demo run below, the fake backend's input counts go 156, 484, 564, 640, 729: the arithmetic series of <a href="tools.html#loop">chapter 28</a>, which is why the step limit is also a cost limit.</li>
+</ul>
+<p>This is the observe, decide, act loop of <a href="agents.html#loop">chapter 29</a>, with the model doing the deciding and your code doing everything else.</p>
+
+<h3 id="replay">Why the adapter replays the provider's raw reply</h3>
+<p>The loop appends <code>reply.message()</code>, not a turn it builds itself from <code>reply.text</code> and <code>reply.tool_calls</code>. For Claude, <code>reply.message()</code> carries the reply's content blocks exactly as they arrived (the <code>_raw</code> field), and the adapter sends those blocks back on the next call instead of rebuilding them.</p>
+<p>The reason is thinking. Current Claude models think before they answer, and a reply can open with <b>thinking blocks</b> before the tool calls. Each carries a signature, and under the default setting its text comes back empty, so it is easy to think it can be dropped. It cannot. When you send tool results, the assistant turn that asked for the tools must go back with its thinking blocks unchanged: the API rejects thinking blocks whose content was modified, and dropping them breaks the turn, because they carry the model's reasoning across the tool call. Rebuilding the turn from text and tool calls would drop them. The Ollama and fake backends keep no raw content, so their turns are rebuilt from the shared format, which is all they need. The test <code>test_the_assistant_turn_is_replayed_as_it_came</code> checks that the loop passes the raw content through untouched.</p>
+
+<h2 id="fake">Step 6: a stand-in model for offline runs</h2>
+<p>The fake backend has two ways to play a model. <code>llm.fake.script(...)</code> queues fixed replies, which suits tests:</p>
+<pre><code>llm.fake.script(llm.ToolCall("x1", "weather", {"city": "York"}), "I cannot check the weather.")
+run = agent.run_agent("Will it rain?", say=quiet)
+<span class="k">assert</span> results_sent(run)[0]["is_error"]          <span class="c"># an unknown tool came back as an error result</span></code></pre>
+<p><code>llm.fake.responder</code> takes a function that chooses each reply from the request. <code>pretend_model</code> is one: for the two demo questions it decides each step from the conversation so far, reading the prices from the lookup results and today's date from the system prompt, as a real model would. It is a script, not a model, and its first sum has a deliberate slip (<code>x</code> for times) so you can watch an error result go back and be corrected. <code>main()</code> installs it only when the backend is the fake one; any other question gets a note saying to use a real model.</p>
+
+<h2 id="checklist">Checklist</h2>
+<ul class="checklist">
+<li data-check="lab-agent:run-demo">I ran the demo on the fake backend and read every step.</li>
+<li data-check="lab-agent:tools">I can say what the model sees of a tool and what it never sees.</li>
+<li data-check="lab-agent:calculator">I tried to make <code>calculate</code> run code, and it refused.</li>
+<li data-check="lab-agent:errors">I watched an error result go back to the model and be corrected.</li>
+<li data-check="lab-agent:approval">I declined an order and saw that it did not run.</li>
+<li data-check="lab-agent:cap">I ran with <code>--max-steps 2</code> and saw what happens at the limit.</li>
+<li data-check="lab-agent:replay">I can explain why the assistant turn goes back to Claude unchanged.</li>
+<li data-check="lab-agent:tests"><code>python -m pytest 05-agent</code> passes in <code>labs/</code>.</li>
+<li data-check="lab-agent:real-model">I asked a question of my own on Claude or Ollama.</li>
+</ul>
+
+<h2 id="run-it">Run it</h2>
+<pre><code><span class="c"># from the repository root</span>
+python labs/05-agent/agent.py --today 2026-11-02      <span class="c"># the demo question</span>
+python labs/05-agent/agent.py --demo order             <span class="c"># an order: you are asked y/N</span>
+python labs/05-agent/agent.py --max-steps 2            <span class="c"># the step limit</span>
+cd labs &amp;&amp; python -m pytest 05-agent &amp;&amp; cd ..</code></pre>
+<p><code>--today</code> fixes the date so your run matches this one; leave it out and the agent uses your clock. On the fake backend the demo prints exactly this:</p>
+<pre><code>backend: fake; 4 tools, about 495 tokens of definitions sent with every call
+question: I need two inner tubes for 700x28c tyres and a pair of disc brake pads. What do they cost altogether, and if I order today, when would they arrive?
+
+step 1: 156 tokens in, 1 out, stop: tool_use
+   -&gt; lookup_part {"query": "inner tube 700x28"}
+   &lt;- {"query": "inner tube 700x28", "currency": "GBP", "matches": [{"sku": "TUB-700-28", "name": "Inner tube 700x28-32c, Presta valve", "price": "6.49",...
+   -&gt; lookup_part {"query": "disc brake pads"}
+   &lt;- {"query": "disc brake pads", "currency": "GBP", "matches": [{"sku": "PAD-DISC-R", "name": "Disc brake pads, resin, one pair", "price": "18.50", "st...
+step 2: 484 tokens in, 1 out, stop: tool_use
+   -&gt; calculate {"expression": "2 x 6.49 + 18.50"}
+   &lt;- ERROR '2 x 6.49 + 18.50' is not arithmetic: use numbers, + - * / // % ** and brackets
+step 3: 564 tokens in, 1 out, stop: tool_use
+   -&gt; calculate {"expression": "2 * 6.49 + 18.50"}
+   &lt;- {"expression": "2 * 6.49 + 18.50", "value": "31.48"}
+step 4: 640 tokens in, 1 out, stop: tool_use
+   -&gt; add_working_days {"start": "2026-11-02", "days": 3}
+   &lt;- {"start": "2026-11-02", "working_days": 3, "date": "2026-11-05", "weekday": "Thursday"}
+step 5: 729 tokens in, 41 out, stop: end
+
+answer (end): Two inner tubes (TUB-700-28, 6.49 each) and a pair of disc brake pads (PAD-DISC-R, 18.50) come to 31.48 GBP. Ordered today, they would arrive on Thursday 2026-11-05.
+total: 5 model calls, 2573 input and 45 output tokens, $0.000000
+the same tokens on claude-haiku-5-5 (adding 5 x 495 tokens of tool definitions) would cost $0.000527, plus the thinking a real model writes</code></pre>
+<p>Read it as the model would. Step 1 asks for two lookups at once. Step 2's sum is not Python, comes back as an error, and step 3 fixes it. Step 4 gets the date from code rather than from the model's sense of the calendar. Every figure in the answer appears in a tool result above it. The fake's token counts come from the four-characters-per-token rule and leave out the tool definitions; its "1 out" for a tool request is not what a real model writes.</p>
+<p>With <code>--max-steps 2</code> the run ends after the second call, and the sum it asked for is reported but not run:</p>
+<pre><code>step 2: 484 tokens in, 1 out, stop: tool_use
+   not run: calculate {"expression": "2 x 6.49 + 18.50"}
+
+answer (step_limit): I stopped after 2 model calls without finishing, so I have no answer yet. Try a narrower question, or allow more steps.</code></pre>
+<p>With <code>--demo order</code> the loop stops to ask. Typing <kbd>n</kbd> gave this (the first lines are left out):</p>
+<pre><code>step 2: 324 tokens in, 1 out, stop: tool_use
+   -&gt; place_order {"items": [{"sku": "TUB-700-28", "quantity": 2}]}
+   ?? the model wants to run place_order with {"items": [{"sku": "TUB-700-28", "quantity": 2}]}
+   ?? allow it? [y/N] n
+   &lt;- ERROR the person did not approve this, so it did not run. Do not try again; ask what they would like to change.
+step 3: 415 tokens in, 22 out, stop: end
+
+answer (end): I have not placed the order, because it was not approved. What would you like to change?</code></pre>
+<p>Typing <kbd>y</kbd> instead prints <code>[side effect] pretend order ORD-7565EF: 1 line(s), 12.98 GBP</code> and the answer names that reference. The tests run in well under a second: <code>48 passed</code>.</p>
+
+<h3 id="real-model">On a real model</h3>
+<pre><code>LLM_BACKEND=anthropic python labs/05-agent/agent.py
+LLM_BACKEND=anthropic python labs/05-agent/agent.py "Do you have an 11-speed chain, and what would two cost?"
+LLM_BACKEND=ollama python labs/05-agent/agent.py "Do you have an 11-speed chain, and what would two cost?"</code></pre>
+<p>A real model's run differs from the scripted one, and from one run to the next: it usually writes the sum correctly the first time, so the demo often takes four calls, and its wording and token counts are its own. The output tokens include its thinking, so expect far more than the fake's handful. What to check is the same every time: each price in the answer appears in a lookup result, each total is a <code>calculate</code> value, and each date came from <code>add_working_days</code>. Small local models call tools less reliably; watch for an answer that skips the tools and guesses.</p>
+
+<h2 id="cost">What it costs</h2>
+<p>Nothing on the fake backend or Ollama. For <code>claude-haiku-5-5</code> ($0.10 per million input tokens, $0.50 per million output), worked out from the fake run above:</p>
+<ul>
+<li><b>Input.</b> The fake counted 2,573 tokens of messages over 5 calls. Each call also carries the tool definitions, about 495 tokens, which the fake does not count: 5 &times; 495 = 2,475. Together, 5,048 input tokens.</li>
+<li><b>Output.</b> The fake writes almost nothing. A real model writes its thinking as well as each tool request; allow 300 tokens a call, 1,500 in all.</li>
+</ul>
+<p class="formula">5,048 &times; $0.10 / 1,000,000 + 1,500 &times; $0.50 / 1,000,000 = $0.000505 + $0.000750 &asymp; $0.0013 a run</p>
+<p>So a hundred runs of the demo cost about 13 cents. The ceiling is every call using its whole <code>max_tokens</code> of 4,096: 20,480 output tokens, about $0.011 a run. Anthropic also adds a short system prompt of its own whenever tools are sent, which this estimate leaves out; on the anthropic backend the totals the program prints are the provider's own counts, so trust those over this estimate. The order demo makes three calls and costs less.</p>
+
+<h2 id="experiments">Experiments</h2>
+<ol>
+<li><b>Count the limit.</b> Predict which request is left unrun with <code>--max-steps 3</code>, then run it. Then find the smallest limit at which the demo finishes.</li>
+<li><b>Attack the calculator.</b> In a Python shell, import the module (<code>import sys; sys.path.insert(0, "labs/05-agent"); import agent</code>) and try to make <code>agent.calculate</code> read a file or print something. Then, in a scratch copy only, replace it with <code>eval</code> and try <code>__import__('os').getcwd()</code>. That one line is why Step 2 exists.</li>
+<li><b>Remove the approval.</b> Set <code>side_effect=False</code> on <code>place_order</code> and run <code>--demo order</code>. The order goes through with no question asked. Put it back, and run the tests: <code>test_a_side_effect_waits_for_a_yes</code> would have caught it.</li>
+<li><b>Descriptions steer.</b> On a real model, delete "Use it for every sum instead of working it out yourself" from <code>calculate</code>'s description and ask the demo question a few times. Does the model still call it, or add up in its head?</li>
+<li><b>Effort.</b> On Claude, run the demo with <code>--effort low</code> and <code>--effort high</code>. Compare the output tokens, the cost line and the number of steps.</li>
+<li><b>A fifth tool.</b> Add one, such as converting kilometres to miles for a customer planning a ride. Write its schema, add it to <code>TOOLS</code> and a test, and watch the definitions estimate on the first line grow.</li>
+</ol>
+
+<h2 id="going-further">Going further</h2>
+<ul>
+<li><b>One last call at the limit.</b> Instead of a fixed message, make one more call that asks the model to answer from what it has already read (<a href="tools.html#loop">chapter 28</a>). Decide how you will stop that call from asking for tools again.</li>
+<li><b>Repeated calls.</b> Answer a <a class="g" href="glossary.html#repeated-tool-call">repeated tool call</a>, the same tool with the same arguments, with the earlier result and a note to answer now, so a stuck model is pushed on.</li>
+<li><b>Run requests in parallel.</b> Step 1's two lookups are independent. Run them in threads and keep their results in request order.</li>
+<li><b>Trace it.</b> <a href="lab-tracing.html">Lab 9</a> uses <code>llm.add_listener</code> to record every call with its tokens and cost; point it at this loop.</li>
+<li><b>Serve the tools over MCP.</b> <a href="lab-mcp.html">Lab 6</a> builds an MCP server, the standard way to offer tools like these to any host.</li>
+<li><b>Guard the answer too.</b> <a href="lab-guardrails.html">Lab 7</a> adds tested checks on what goes in and out.</li>
+</ul>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>The model asks <code>calculate</code> for <code>2 x 6.49 + 18.50</code>. What happens, and why does the run not crash?</summary><div><p>The input passes the schema (it is a string), <code>calculate</code> fails to parse it and raises <code>ToolInputError</code>, and <code>run_tool</code> turns that into a result marked <code>is_error</code> with a message saying what is allowed. The model reads it on the next call and writes <code>2 * 6.49 + 18.50</code>.</p></div></details>
+<details><summary>Why not just tell the model, in the tool description, to order only when asked?</summary><div><p>The description is advice; it steers a model that is working well. A model that misreads the question, or was steered by injected text, can still ask for the tool. A person's yes, asked for by your code, cannot be talked around. Keep the description too: it makes bad requests rarer.</p></div></details>
+<details><summary>At the step limit the last reply asked for tools. Why does the loop not run them?</summary><div><p>No call is left to read their results, so the work would be wasted, and a side effect would happen with no model or person checking what came of it. Stopping cleanly with a clear message is safer.</p></div></details>
+<details><summary>Why does the adapter send Claude's original content blocks back, instead of rebuilding the turn from the text and tool calls?</summary><div><p>A Claude reply can open with thinking blocks, signed and often with empty text. They must go back unchanged with the tool results: the API rejects modified thinking blocks, and dropping them breaks the turn. Rebuilding from text and tool calls would lose them.</p></div></details>
+<details><summary>Why is each step's input larger than the last?</summary><div><p>The model keeps no state between calls, so every call resends the whole conversation, including all earlier requests and results, plus the tool definitions.</p></div></details>
+<details><summary>Why does the calculator build its numbers from the digits as written?</summary><div><p>A Python float is binary and cannot hold most decimal fractions exactly: <code>0.1 + 0.2</code> gives <code>0.30000000000000004</code>. Building a <code>Decimal</code> from the text "6.49" keeps money to the exact cent.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview" target="_blank" rel="noopener noreferrer">Tool use with Claude</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Defining tools with JSON schemas, the tool-use stop reason, and sending results and errors back.</span></li>
+<li><a href="https://www.anthropic.com/research/writing-tools-for-agents" target="_blank" rel="noopener noreferrer">Writing effective tools for AI agents</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Naming, scoping and describing tools, and testing them against real tasks.</span></li>
+<li><a href="https://www.anthropic.com/research/building-effective-agents" target="_blank" rel="noopener noreferrer">Building effective AI agents</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">When a fixed workflow is enough and when a model-driven loop like this one earns its cost.</span></li>
+<li><a href="https://docs.python.org/3/library/ast.html" target="_blank" rel="noopener noreferrer">ast: Abstract Syntax Trees (Python documentation)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">The module the calculator uses to read an expression without running it.</span></li>
+<li><a href="https://docs.python.org/3/library/decimal.html" target="_blank" rel="noopener noreferrer">decimal: Decimal fixed-point and floating-point arithmetic (Python documentation)</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Why decimal arithmetic keeps money exact, and how contexts set precision.</span></li>
+</ul>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

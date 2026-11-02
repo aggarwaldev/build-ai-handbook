@@ -1,0 +1,18 @@
+{
+  "about": "An invented parts catalogue for a small bike shop. Every name, price and stock figure is made up for teaching.",
+  "currency": "GBP",
+  "parts": [
+    {"sku": "TUB-700-28", "name": "Inner tube 700x28-32c, Presta valve", "category": "tubes", "price": "6.49", "stock": 40},
+    {"sku": "TUB-650-47", "name": "Inner tube 650bx47c, Presta valve", "category": "tubes", "price": "6.99", "stock": 12},
+    {"sku": "TUB-26-21", "name": "Inner tube 26x1.9-2.125, Schrader valve", "category": "tubes", "price": "5.99", "stock": 0},
+    {"sku": "TYR-700-28", "name": "Road tyre 700x28c, folding bead", "category": "tyres", "price": "34.00", "stock": 8},
+    {"sku": "PAD-DISC-R", "name": "Disc brake pads, resin, one pair", "category": "brakes", "price": "18.50", "stock": 15},
+    {"sku": "PAD-RIM-R", "name": "Rim brake pads, road, one pair", "category": "brakes", "price": "9.99", "stock": 22},
+    {"sku": "CBL-BRK", "name": "Brake cable and housing kit", "category": "brakes", "price": "7.25", "stock": 30},
+    {"sku": "CHN-11", "name": "Chain, 11-speed, 116 links", "category": "drivetrain", "price": "29.99", "stock": 6},
+    {"sku": "CST-11-32", "name": "Cassette, 11-speed, 11-32 teeth", "category": "drivetrain", "price": "54.00", "stock": 3},
+    {"sku": "LGT-SET", "name": "Light set, front and rear, USB rechargeable", "category": "lights", "price": "39.95", "stock": 10},
+    {"sku": "PMP-FLR", "name": "Floor pump with pressure gauge", "category": "tools", "price": "32.50", "stock": 4},
+    {"sku": "SDL-CMF", "name": "Saddle, comfort, gel padded", "category": "saddles", "price": "27.00", "stock": 5}
+  ]
+}
