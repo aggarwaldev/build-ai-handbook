@@ -1,0 +1,25 @@
+{"id": "q01", "kind": "direct", "question": "How much is the late charge on an adult card?", "relevant": ["fines#late-returns"]}
+{"id": "q02", "kind": "direct", "question": "How many items can I borrow at once?", "relevant": ["loans#how-many-items"]}
+{"id": "q03", "kind": "direct", "question": "When is Riverside Library open?", "relevant": ["opening-hours#riverside-library"]}
+{"id": "q04", "kind": "direct", "question": "How do I reset my PIN for the e-library?", "relevant": ["ebooks#forgotten-pin"]}
+{"id": "q05", "kind": "direct", "question": "How much does it cost a charity to book the Garden Room?", "relevant": ["room-booking#prices"]}
+{"id": "q06", "kind": "direct", "question": "How much does colour printing cost?", "relevant": ["computers-wifi#printing-and-copying"]}
+{"id": "q07", "kind": "direct", "question": "When does Code Club meet?", "relevant": ["events#code-club"]}
+{"id": "q08", "kind": "direct", "question": "What documents do I need to bring to join the library?", "relevant": ["membership#what-to-bring"]}
+{"id": "q09", "kind": "direct", "question": "How long does an interlibrary loan take?", "relevant": ["reservations#books-we-do-not-own"]}
+{"id": "q10", "kind": "direct", "question": "Can I take photographs in the Local Studies room?", "relevant": ["local-history#photographs-and-copies"]}
+{"id": "q11", "kind": "direct", "question": "What happens if I lose my library card?", "relevant": ["membership#lost-cards"]}
+{"id": "q12", "kind": "direct", "question": "How many times can I renew a book?", "relevant": ["loans#renewing"]}
+{"id": "q13", "kind": "direct", "question": "Do children pay late charges?", "relevant": ["fines#late-returns", "membership#childrens-cards"]}
+{"id": "q14", "kind": "paraphrase", "question": "How long can I keep a book?", "relevant": ["loans#loan-periods"]}
+{"id": "q15", "kind": "paraphrase", "question": "Is there a penalty if I bring things back late?", "relevant": ["fines#late-returns"]}
+{"id": "q16", "kind": "paraphrase", "question": "I was in hospital and my books are overdue. Do I still have to pay?", "relevant": ["fines#having-a-charge-removed"]}
+{"id": "q17", "kind": "paraphrase", "question": "Can someone drop books round to my house? I hardly go out these days.", "relevant": ["accessibility#home-library-service"]}
+{"id": "q18", "kind": "paraphrase", "question": "My granddaughter is seven. Can she get her own card?", "relevant": ["membership#childrens-cards"]}
+{"id": "q19", "kind": "paraphrase", "question": "I'm only in town for the summer. Can I still borrow?", "relevant": ["membership#visitor-cards"]}
+{"id": "q20", "kind": "paraphrase", "question": "Do you keep a record of everything I've read?", "relevant": ["privacy#your-borrowing-history"]}
+{"id": "q21", "kind": "paraphrase", "question": "What time do you shut on Christmas Eve?", "relevant": ["opening-hours#bank-holidays-and-christmas"]}
+{"id": "q22", "kind": "paraphrase", "question": "I want to get rid of some old paperbacks. Will you take them?", "relevant": ["donations#what-we-accept", "donations#what-we-cannot-take"]}
+{"id": "q23", "kind": "paraphrase", "question": "My nan is hard of hearing. Is there anything to help her at the counter?", "relevant": ["accessibility#hearing-and-sight"]}
+{"id": "q24", "kind": "paraphrase", "question": "I left my umbrella behind on Tuesday. Have you got it?", "relevant": ["contact#lost-property"]}
+{"id": "q25", "kind": "paraphrase", "question": "Where can four of us sit and work together quietly?", "relevant": ["room-booking#rooms-you-can-book"]}

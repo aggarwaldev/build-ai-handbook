@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lab 4: measure your retrieval &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part V &middot; Build it</p>
+<h1>Lab 4: measure your retrieval</h1>
+<p class="lead">Score the retriever you built in Lab 3 on 25 labelled questions, with the ranking metrics of <a href="rag-eval.html">chapter 26</a>. Add a keyword retriever, BM25, and fuse the two; compare chunk sizes; and put an error bar on every score, so you can see how much 25 questions can tell you. No model is called, so the lab costs nothing and gives the same numbers on every run.</p>
+
+<div class="callout why"><span class="title">Why build it</span><p>In Lab 3, one question missed and a dozen others worked. That is an anecdote, not a measurement. Every change you might make next, a smaller chunk, a different retriever, headings in or out, fixes some questions and breaks others. A small labelled set and a few metrics turn "it feels better" into a number, and the error bar tells you whether the number moved more than chance would move it.</p></div>
+
+<h2 id="build">What you will build</h2>
+<p>One file, <code class="path">labs/04-retrieval-eval/retrieval_eval.py</code>, and a question set, <code class="path">questions.jsonl</code>. It imports Lab 3's <code>rag</code> module for the chunks, the tokens and the TF-IDF index.</p>
+<div class="tbl-wrap"><table>
+<tr><th>Piece</th><th>What it does</th><th>Chapter</th></tr>
+<tr><td><code class="path">questions.jsonl</code></td><td>25 invented questions about Lab 3's pages, each labelled with the section or sections that answer it.</td><td><a href="rag-eval.html#setup">26</a></td></tr>
+<tr><td><code>hit_at_k</code>, <code>recall_at_k</code>, <code>reciprocal_rank</code>, <code>ndcg_at_k</code></td><td>The ranking metrics, one short function each.</td><td><a href="rag-eval.html#metrics">26</a></td></tr>
+<tr><td><code>BM25</code></td><td>Keyword scoring in pure Python.</td><td><a href="vector-search.html#bm25">25</a></td></tr>
+<tr><td><code>rrf</code></td><td>Reciprocal rank fusion of two ranked lists.</td><td><a href="vector-search.html#hybrid">25</a></td></tr>
+<tr><td><code>sections</code>, <code>evaluate</code></td><td>Turn each retriever's chunks into a ranked list of sections and score it.</td><td></td></tr>
+<tr><td><code>bootstrap_ci</code>, <code>paired_difference</code></td><td>How far each score could move with a different sample of questions.</td><td><a href="rag-eval.html#uncertainty">26</a></td></tr>
+</table></div>
+
+<h2 id="before">Before you start</h2>
+<ul>
+<li>Do <a href="lab-rag.html">Lab 3</a> first: this lab scores its chunks and its TF-IDF index, and imports its module by adding <code class="path">labs/03-rag</code> to <code>sys.path</code>.</li>
+<li>Python and NumPy as in <a href="lab-setup.html">Lab 0</a>. No key, no backend setting, no network: nothing here calls a model. (The optional <code>--ollama</code> flag calls a local embedding model, which is also free.)</li>
+<li>Run the tests from the <code class="path">labs/</code> folder:</li>
+</ul>
+<pre><code>cd labs &amp;&amp; python -m pytest 04-retrieval-eval
+.............                                                            [100%]
+13 passed in 0.08s</code></pre>
+
+<h2 id="questions">Step 1: labelled questions</h2>
+<p>For each question, write down which passages answer it. That is the whole labelling job, and it is the expensive part (<a href="rag-eval.html#setup">chapter 26</a>). Each line of <code class="path">questions.jsonl</code> is one question:</p>
+<pre><code>{"id": "q13", "kind": "direct", "question": "Do children pay late charges?", "relevant": ["fines#late-returns", "membership#childrens-cards"]}
+{"id": "q14", "kind": "paraphrase", "question": "How long can I keep a book?", "relevant": ["loans#loan-periods"]}</code></pre>
+<p>Three choices matter:</p>
+<ul>
+<li><b>Labels name sections, not chunks.</b> A section keeps its id whatever the chunk size, so the same labels score a 20-word index and a 120-word one. A chunk counts as relevant when its section is.</li>
+<li><b>Two kinds of question.</b> 13 are <i>direct</i>: they use the pages' own words, as people do after reading the site. 12 are <i>paraphrases</i>, written the way people actually ask: "My nan is hard of hearing. Is there anything to help her at the counter?" shares one word with the section that answers it. Scoring the kinds separately shows what a word-based retriever cannot do.</li>
+<li><b>Some questions have two right answers.</b> q13 and q22 are each answered by two sections, so recall@3 can be &frac12;.</li>
+</ul>
+<p>A label that names a section which does not exist would quietly score as a miss forever. <code>test_every_label_names_a_real_section</code> checks every label against Lab 3's chunks, and fails the moment a heading is renamed.</p>
+
+<h2 id="metrics">Step 2: the metrics</h2>
+<p>Each metric takes a ranked list of section ids, best first, and the set of relevant ones (<a href="rag-eval.html#metrics">chapter 26</a>):</p>
+<pre><code><span class="k">def</span> <span class="n">hit_at_k</span>(ranked, relevant, k):
+    <span class="k">return</span> 1.0 <span class="k">if</span> any(r <span class="k">in</span> relevant <span class="k">for</span> r <span class="k">in</span> ranked[:k]) <span class="k">else</span> 0.0
+
+<span class="k">def</span> <span class="n">recall_at_k</span>(ranked, relevant, k):
+    <span class="k">return</span> sum(r <span class="k">in</span> relevant <span class="k">for</span> r <span class="k">in</span> ranked[:k]) / len(relevant)
+
+<span class="k">def</span> <span class="n">reciprocal_rank</span>(ranked, relevant):
+    <span class="k">for</span> rank, r <span class="k">in</span> enumerate(ranked, start=1):
+        <span class="k">if</span> r <span class="k">in</span> relevant:
+            <span class="k">return</span> 1.0 / rank
+    <span class="k">return</span> 0.0
+
+<span class="k">def</span> <span class="n">ndcg_at_k</span>(ranked, relevant, k):
+    dcg = sum(1 / math.log2(rank + 1) <span class="k">for</span> rank, r <span class="k">in</span> enumerate(ranked[:k], start=1) <span class="k">if</span> r <span class="k">in</span> relevant)
+    ideal = sum(1 / math.log2(rank + 1) <span class="k">for</span> rank <span class="k">in</span> range(1, min(len(relevant), k) + 1))
+    <span class="k">return</span> dcg / ideal</code></pre>
+<p>The tests use chapter 26's worked examples as fixtures. For relevance 0 1 0 1 0 with three relevant passages, they expect recall@5 = 0.667, a reciprocal rank of 0.5 and nDCG@5 = 0.498; for first relevant ranks of 1, 3, none and 2, an <a class="g" href="glossary.html#mrr">MRR</a> of 0.458. If you change a metric and a test fails, compare your code with the hand calculation in the chapter. Every relevant section counts with a gain of 1, because the labels have no grades. <code>precision_at_k</code> is in the file too, but not in the table: with one relevant section per question, precision@3 can never exceed &#8531;, so it says little here.</p>
+
+<h2 id="bm25">Step 3: a keyword retriever, BM25</h2>
+<p>TF-IDF and <a class="g" href="glossary.html#bm25">BM25</a> both count shared words, but BM25 gives repeated words diminishing returns and corrects for passage length (<a href="vector-search.html#bm25">chapter 25</a>):</p>
+<pre><code><span class="k">def</span> <span class="n">scores</span>(self, query):
+    words = self.tokenize(query)
+    out = []
+    <span class="k">for</span> counts, length <span class="k">in</span> zip(self.counts, self.lengths):
+        norm = self.k1 * (1 - self.b + self.b * length / self.avglen)
+        out.append(sum(self.idf[w] * counts[w] * (self.k1 + 1) / (counts[w] + norm)
+                       <span class="k">for</span> w <span class="k">in</span> words <span class="k">if</span> counts[w]))
+    <span class="k">return</span> out</code></pre>
+<p>with idf = ln(1 + (<var>N</var> &minus; <var>n</var> + 0.5) / (<var>n</var> + 0.5)), <var>k</var><sub>1</sub> = 1.2 and <var>b</var> = 0.75. It uses Lab 3's <code>tokens</code>, so both retrievers see the same words. <code>test_bm25_on_the_chapter_25_example</code> feeds it the chapter's three documents with plain whitespace splitting and expects the chapter's scores for "fixed deposit": 0.894, 0.482 and 0.482.</p>
+
+<h2 id="rrf">Step 4: fuse the two</h2>
+<p>TF-IDF scores are cosines between 0 and 1; BM25 scores have no upper limit. Rather than rescale them, <a class="g" href="glossary.html#rrf">reciprocal rank fusion</a> ignores the scores and adds 1 / (60 + rank) from each list (<a href="vector-search.html#hybrid">chapter 25</a>):</p>
+<pre><code><span class="k">def</span> <span class="n">rrf</span>(rankings, k=60):
+    total = defaultdict(float)
+    <span class="k">for</span> ranking <span class="k">in</span> rankings:
+        <span class="k">for</span> rank, item <span class="k">in</span> enumerate(ranking, start=1):
+            total[item] += 1 / (k + rank)
+    <span class="k">return</span> sorted(total.items(), key=<span class="k">lambda</span> kv: -kv[1])</code></pre>
+<p>The tests check the chapter's worked numbers: a passage 1st by vectors and 3rd by keywords scores 1/61 + 1/63 = 0.03227, and loses to one 2nd and 1st, at 0.03252.</p>
+
+<h2 id="sections">Step 5: from chunks to sections</h2>
+<p>Each retriever returns its top 10 chunks that share at least one word with the question. <code>sections</code> replaces each chunk by its section and keeps each section once, at its best rank. Without that, two pieces of the same long section would fill two of the top three places and could count twice. A question whose relevant section is not in the top 10 gets a reciprocal rank of 0, so the MRR here is MRR@10.</p>
+
+<h2 id="bootstrap">Step 6: how sure can you be?</h2>
+<p>Twenty-five questions are a small sample of the questions people will ask. If you had written 25 different ones, every score would come out a little different. The <b>bootstrap</b> estimates by how much, from the 25 you have. Draw 25 questions from your set at random, <i>with replacement</i>, so some appear twice and some not at all, and average their reciprocal ranks. Do that 2,000 times. Sort the 2,000 averages and drop the lowest 50 and the highest 50: what remains spans the middle 95%, a <a class="g" href="glossary.html#confidence-interval">confidence interval</a> for the MRR.</p>
+<pre><code><span class="k">def</span> <span class="n">bootstrap_ci</span>(values, n=2000, seed=0, level=0.95):
+    rng = random.Random(seed)
+    m = len(values)
+    means = sorted(mean([values[rng.randrange(m)] <span class="k">for</span> _ <span class="k">in</span> range(m)]) <span class="k">for</span> _ <span class="k">in</span> range(n))
+    tail = (1 - level) / 2
+    <span class="k">return</span> means[int(n * tail)], means[int(n * (1 - tail)) - 1]</code></pre>
+<p>Comparing two retrievers on the <i>same</i> questions is sharper than comparing their two intervals, because questions differ in difficulty far more than retrievers do (<a href="rag-eval.html#uncertainty">chapter 26</a>). <code>paired_difference</code> takes the difference in reciprocal rank question by question and bootstraps that list. If its interval contains 0, these questions cannot tell the two apart. The seed is fixed, so the intervals below come out the same on every run; change <code>--seed</code> and they move in the second decimal place.</p>
+
+<h2 id="checkpoints">Checkpoints</h2>
+<ul class="checklist">
+<li data-check="lab-retrieval-eval:tests">Run the tests: 13 pass.</li>
+<li data-check="lab-retrieval-eval:labels">Read <code>questions.jsonl</code> and find a direct and a paraphrase question about the same section.</li>
+<li data-check="lab-retrieval-eval:metrics">Compute hit@3, recall@3, the reciprocal rank and nDCG@5 for one question by hand.</li>
+<li data-check="lab-retrieval-eval:bm25">Match BM25's 0.894 for chapter 25's example by hand.</li>
+<li data-check="lab-retrieval-eval:table">Run the report and say which retriever and chunk size you would choose, and how sure you are.</li>
+<li data-check="lab-retrieval-eval:per-question">Find the questions every retriever misses with <code>--per-question</code>.</li>
+<li data-check="lab-retrieval-eval:experiments">Try at least two of the experiments.</li>
+</ul>
+
+<h2 id="run">Run it</h2>
+<p>From the repository root. This is the whole output of a real run:</p>
+<pre><code>$ python labs/04-retrieval-eval/retrieval_eval.py
+25 questions (13 direct, 12 paraphrase), heading paths on, overlap 0. No model is called.
+
+retriever  max words  chunks  hit@1  hit@3  recall@3    MRR  MRR 95% CI     nDCG@5
+tfidf             20     137   0.64   0.80      0.78   0.73  [0.59, 0.87]     0.74
+bm25              20     137   0.64   0.80      0.78   0.74  [0.59, 0.88]     0.77
+rrf               20     137   0.64   0.76      0.74   0.72  [0.57, 0.87]     0.72
+tfidf             40      79   0.68   0.80      0.78   0.77  [0.63, 0.90]     0.78
+bm25              40      79   0.72   0.84      0.82   0.80  [0.66, 0.92]     0.81
+rrf               40      79   0.72   0.80      0.78   0.80  [0.66, 0.92]     0.81
+tfidf            120      59   0.68   0.80      0.76   0.77  [0.63, 0.90]     0.78
+bm25             120      59   0.72   0.88      0.86   0.79  [0.66, 0.92]     0.80
+rrf              120      59   0.68   0.80      0.76   0.77  [0.63, 0.90]     0.79
+
+hit@3 by kind of question, max words 120
+retriever    direct  paraphrase
+tfidf          1.00        0.58
+bm25           1.00        0.75
+rrf            1.00        0.58
+
+MRR difference from tfidf, same 25 questions, max words 120, 2000 resamples
+  bm25 - tfidf: +0.027, 95% CI [-0.007, +0.077]
+  rrf - tfidf: +0.004, 95% CI [-0.008, +0.020]</code></pre>
+
+<h3 id="reading">Reading the table</h3>
+<ul>
+<li><b>The <a class="g" href="glossary.html#hit-rate">hit rate</a> at 3 is 0.80 for Lab 3's own setup</b> (TF-IDF, 120 words): 20 of 25 questions have a right section in the top 3, the passages <code>rag.py</code> sends by default. The five misses are what a model would see as the wrong passages.</li>
+<li><b>Direct questions are solved; paraphrases are not.</b> Every retriever finds all 13 direct questions in its top 3, and only 7 to 9 of the 12 paraphrases. All three retrievers count shared words, so a question in other words defeats them. This is the gap a trained embedding model is for.</li>
+<li><b>BM25 looks best, and the evidence is thin.</b> At 120 words its hit@3 is 0.88 against 0.80, a difference of two questions (q14 and q16, both third for BM25 and fourth for TF-IDF). The paired MRR difference is +0.027 with an interval from &minus;0.007 to +0.077: it contains 0, so these 25 questions cannot show that BM25 is better.</li>
+<li><b>Fusion did not help.</b> RRF scores at or below its better input. Both lists fail on the same paraphrases, and fusion cannot add a passage that neither list ranks highly. <a href="vector-search.html#hybrid">Chapter 25</a> found the same when both lists were weak. Fusion pays off when the two retrievers fail on <i>different</i> questions, such as keywords and a trained embedding model.</li>
+<li><b>Smaller chunks did not help either.</b> At 20 words, TF-IDF's hit@1 falls from 0.68 to 0.64 and its MRR from 0.77 to 0.73. A 20-word window loses words that the rest of its section supplied.</li>
+<li><b>Every MRR interval is 0.26 to 0.30 wide.</b> TF-IDF's MRR of 0.77 could plausibly be anything from 0.63 to 0.90 on another 25 questions of the same kind. Differences of 0.03 between rows are well inside that.</li>
+</ul>
+<p><code>--per-question</code> adds the rank of each question's first relevant section. The paraphrases, from the same run:</p>
+<pre><code>$ python labs/04-retrieval-eval/retrieval_eval.py --per-question
+...
+rank of the first relevant section (- = not in the top 10), max words 120
+id   kind              tfidf       bm25        rrf  question
+...
+q14  paraphrase            4          3          4  How long can I keep a book?
+q15  paraphrase            1          1          1  Is there a penalty if I bring things back late?
+q16  paraphrase            4          3          4  I was in hospital and my books are overdue. Do I still have to pay?
+q17  paraphrase            3          2          2  Can someone drop books round to my house? I hardly go out these days.
+q18  paraphrase            6          -         10  My granddaughter is seven. Can she get her own card?
+q19  paraphrase            9          9          9  I'm only in town for the summer. Can I still borrow?
+q20  paraphrase            1          1          1  Do you keep a record of everything I've read?
+q21  paraphrase            1          1          1  What time do you shut on Christmas Eve?
+q22  paraphrase            1          1          1  I want to get rid of some old paperbacks. Will you take them?
+q23  paraphrase            1          1          1  My nan is hard of hearing. Is there anything to help her at the counter?
+q24  paraphrase            1          1          1  I left my umbrella behind on Tuesday. Have you got it?
+q25  paraphrase            4          4          4  Where can four of us sit and work together quietly?</code></pre>
+<p>q14 is Lab 3's miss, fourth for TF-IDF exactly as <code>-k 5</code> showed. q18 asks about a seven-year-old; the answer says "Children under 16", and no retriever links "granddaughter" or "seven" to "children". q19 says "only in town for the summer", while the answer says "staying &hellip; for less than three months", and "summer" pulls in the Summer Reading Challenge instead, first for TF-IDF and second for BM25. These are the questions to read first when you try a new retriever.</p>
+
+<h3 id="cost">What it costs</h3>
+<p>Nothing. The report makes no model call: it counts words, multiplies small matrices and resamples lists, and finishes in well under a second on a laptop. <code>test_the_report_runs_without_calling_a_model</code> replaces the adapter's <code>chat</code> with a function that fails, and the report still runs. With <code>--ollama</code>, the embeddings come from a model on your own computer, which is also free.</p>
+
+<h2 id="experiments">Experiments</h2>
+<ol>
+<li><b>Headings out.</b> Run with <code>--no-headings</code>. In the run here, at 120 words, TF-IDF's hit@1 fell from 0.68 to 0.60 and its MRR from 0.77 to 0.73, while its hit@3 rose from 0.80 to 0.84 and its paraphrase hit@3 from 0.58 to 0.75. Headings helped questions that use the pages' words (q10, "Local Studies room", went from 8th to 3rd with them) and hurt paraphrases that share a word with another page's heading: q14 went from 2nd without them to 4th with them, lured by "How long we keep your account". Which metric decides depends on how many passages you send.</li>
+<li><b>Overlap.</b> Run <code>--sizes 20 40 --overlap 10</code>. In the run here, at 20 words TF-IDF's hit@3 rose from 0.80 to 0.84 and its MRR from 0.73 to 0.77, the same MRR as the 120-word index: overlap gave the small windows back some of the words their neighbours held. It cost 187 chunks instead of 137.</li>
+<li><b>Pair the heading runs.</b> The report pairs retrievers within one run. Write a short script that runs <code>evaluate</code> twice, with heading paths on and off, and passes the two lists of reciprocal ranks to <code>paired_difference</code>. Is the MRR change in experiment 1 bigger than chance?</li>
+<li><b>More questions.</b> Write 25 more questions, half of them paraphrases, or better, ask someone who has not read the pages to write them and label them yourself. Watch the intervals narrow. Four times as many questions should roughly halve their width.</li>
+<li><b>Tune BM25.</b> Set <code>b=0</code> to turn off the length correction, or <code>k1=0</code> to make one occurrence count as much as ten. Which questions change rank?</li>
+<li><b>Change the fusion constant.</b> Try <code>rrf(..., k=1)</code>. With a small constant, first place in either list dominates. Does it help or hurt here?</li>
+<li><b>Real embeddings.</b> With Ollama running and <code>nomic-embed-text</code> pulled, add <code>--ollama</code>. Watch the paraphrase column: if a trained model closes the gap, then fusing it with BM25, the <code>rrf-ollama</code> row, is where fusion can finally help. These runs were not made for this page; your numbers are your own.</li>
+</ol>
+
+<h2 id="further">Going further</h2>
+<ul>
+<li><b>Graded labels.</b> Mark each relevant section 2 (answers it) or 1 (related), and use the grade as the gain in nDCG (<a href="rag-eval.html#ndcg">chapter 26</a>). It is the only metric here that can use them.</li>
+<li><b>Questions with no answer.</b> Retrieval metrics are undefined when nothing is relevant, so score those questions on the answer instead: does the model say the passages do not answer it?</li>
+<li><b>The generation half.</b> Good retrieval does not guarantee a good answer. <a href="lab-judge.html">Lab 8</a> builds a judge for faithfulness and citation support, and checks it against people.</li>
+<li><b>Guard against regressions.</b> Run this report in your test suite and fail the build if hit@3 drops below a floor you choose. With 25 questions, set the floor a few questions below today's score, or ordinary noise will fail it.</li>
+</ul>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>BM25 scores hit@3 0.88 and TF-IDF 0.80. Is BM25 the better retriever for these pages?</summary><div><p>Not shown. The gap is two questions out of 25, and the paired MRR difference has an interval from &minus;0.007 to +0.077, which contains 0. It may be better; these questions cannot tell.</p></div></details>
+<details><summary>Why do all three retrievers find every direct question and miss several paraphrases?</summary><div><p>All three score shared words. A direct question uses the page's words; a paraphrase uses others ("shut" for "close", "granddaughter" for "child"), and word counting cannot connect them. A trained embedding model can.</p></div></details>
+<details><summary>Why did fusing TF-IDF and BM25 not help?</summary><div><p>They fail on the same questions, because both count the same words. Fusion can only promote a passage that at least one list ranks highly. It helps when the two retrievers make different mistakes.</p></div></details>
+<details><summary>Why resample the questions, not the chunks, in the bootstrap?</summary><div><p>The questions are the sample: they stand in for all the questions people will ask. The chunks are fixed. The interval answers "how different would the score be with other questions like these?"</p></div></details>
+<details><summary>Why turn chunks into sections, once each, before scoring?</summary><div><p>Labels name sections. Without the merge, two pieces of one section could take two of the top three places and count twice in recall, and a long section would look more relevant than a short one just for being cut into more pieces.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-of-ranked-retrieval-results-1.html" target="_blank" rel="noopener noreferrer">Evaluation of ranked retrieval results (Introduction to Information Retrieval, ch. 8)</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Free textbook section defining precision at k, average precision and NDCG precisely.</span></li>
+<li><a href="https://nlp.stanford.edu/IR-book/html/htmledition/okapi-bm25-a-non-binary-model-1.html" target="_blank" rel="noopener noreferrer">Okapi BM25: a non-binary model (Introduction to Information Retrieval)</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Where the BM25 formula comes from, and what its two parameters do.</span></li>
+<li><a href="https://plg.uwaterloo.ca/~gvcormac/cormacksigir09-rrf.pdf" target="_blank" rel="noopener noreferrer">Reciprocal Rank Fusion outperforms Condorcet and individual rank learning methods (2009)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Cormack, Clarke and Buettcher's short paper that introduced RRF and its constant of 60.</span></li>
+<li><a href="https://www.elastic.co/docs/reference/elasticsearch/rest-apis/reciprocal-rank-fusion" target="_blank" rel="noopener noreferrer">Reciprocal rank fusion (Elasticsearch reference)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">How a production search engine exposes RRF, with its rank constant and window size.</span></li>
+<li><a href="https://www.pinecone.io/learn/offline-evaluation/" target="_blank" rel="noopener noreferrer">Evaluation Measures in Information Retrieval</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Worked examples of recall@k, precision@k, MRR, MAP and nDCG with small code snippets.</span></li>
+</ul>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>
