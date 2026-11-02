@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>13. Training deep networks well &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part II &middot; ML foundations &middot; Chapter 13</p>
+<h1>Training deep networks well</h1>
+<p class="lead">Plain gradient descent works on small networks. Deep ones need a handful of extra techniques: careful starting weights, smarter optimisers, normalisation layers, dropout, residual connections and a learning-rate schedule. Each was invented to remove a specific bottleneck.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>When you fine-tune a model (<a href="fine-tuning.html">chapter 40</a>) you will set "AdamW, learning rate 2e-4, warmup 3%, cosine schedule, weight decay 0.01, gradient clipping 1.0". Every word of that line is explained in this chapter, along with the problem it solves.</p></div>
+
+<h2 id="init">Initialisation</h2>
+<p><b>Bottleneck:</b> with bad starting weights, signals either explode or fade away as they pass through many layers, before any learning has happened.</p>
+<p>A neuron with 100 inputs adds up 100 products. If the inputs and weights each have a standard deviation of 1, the sum's standard deviation is about &radic;100 = 10 (variances add, <a href="maths-statistics.html#spread">chapter 8</a>). A tanh or sigmoid fed numbers of size 10 sits on its flat part, where the slope is nearly zero. Ten layers later the signal is nonsense. If instead the weights have standard deviation 1/&radic;100 = 0.1, the sum's standard deviation is about 1, and it stays about 1 layer after layer.</p>
+<ul>
+<li><b>Xavier (Glorot) initialisation</b>: draw weights uniformly between &plusmn;&radic;(6 / (<var>n</var><sub>in</sub> + <var>n</var><sub>out</sub>)). For a 100 &rarr; 100 layer that is &plusmn;0.173. Suited to tanh and sigmoid. The trainer in <a href="ml-neural-networks.html#trainer">chapter 12</a> uses it.</li>
+<li><b>He initialisation</b>: standard deviation &radic;(2 / <var>n</var><sub>in</sub>), here 0.141. The extra factor of 2 makes up for ReLU zeroing half its inputs.</li>
+<li>Never start all weights at the same value: every neuron in a layer would compute the same thing and receive the same update forever. Random starts break the symmetry.</li>
+</ul>
+
+<h2 id="optimisers">Optimisers</h2>
+<p><b>Bottleneck:</b> a single learning rate is too big for steep directions and too small for shallow ones (<a href="maths-gradient-descent.html#many-params">chapter 6</a>), and full-batch gradients are too expensive.</p>
+
+<h3 id="sgd">Mini-batch SGD</h3>
+<p>Estimate the gradient on a random batch of, say, 32 or 512 examples instead of the whole training set (<a href="maths-gradient-descent.html#stochastic">chapter 6</a>). Cheaper steps, with noise that averages out.</p>
+
+<h3 id="momentum">Momentum</h3>
+<p>Keep a running "velocity" that adds up past gradients with a decay factor &beta;, usually 0.9, and step along the velocity:</p>
+<div class="formula"><var>v</var> &larr; &beta;<var>v</var> + <var>g</var> &nbsp;&nbsp;&nbsp; <var>w</var> &larr; <var>w</var> &minus; &eta;<var>v</var></div>
+<p>Worked with a constant gradient of 1: the velocity goes 1, 1.9, 2.71, 3.44, 4.10, and settles at 1 / (1 &minus; 0.9) = 10. Along a long gentle slope, steps grow up to ten times larger. Across a narrow valley, gradients flip sign each step and cancel in the velocity, so the zig-zag is damped. A heavy ball rolling down the valley, rather than a ball with no mass.</p>
+
+<h3 id="adam">Adam and AdamW</h3>
+<p><a class="g" href="glossary.html#adam">Adam</a> keeps two running averages per parameter: of the gradient (<var>m</var>, like momentum) and of the squared gradient (<var>s</var>). It divides one by the square root of the other, so every parameter takes steps of roughly the same size whatever the scale of its gradient.</p>
+<div class="formula"><var>m</var> &larr; &beta;<sub>1</sub><var>m</var> + (1 &minus; &beta;<sub>1</sub>)<var>g</var> &nbsp;&nbsp; <var>s</var> &larr; &beta;<sub>2</sub><var>s</var> + (1 &minus; &beta;<sub>2</sub>)<var>g</var><sup>2</sup> &nbsp;&nbsp; <var>w</var> &larr; <var>w</var> &minus; &eta; <span class="frac"><span><var>m&#770;</var></span><span>&radic;<var>s&#770;</var> + &epsilon;</span></span><span class="cap">m&#770; and s&#770; are m and s divided by (1 &minus; &beta;<sup>t</sup>) after t steps, which corrects for both starting at zero. Usual values: &beta;<sub>1</sub> = 0.9, &beta;<sub>2</sub> = 0.999, &epsilon; = 10<sup>&minus;8</sup>.</span></div>
+<p>Worked first step, gradient 0.5, &eta; = 0.001:</p>
+<ol>
+<li><var>m</var> = 0.1 &times; 0.5 = 0.05; <var>s</var> = 0.001 &times; 0.25 = 0.00025.</li>
+<li>Corrected: <var>m&#770;</var> = 0.05 / (1 &minus; 0.9) = 0.5; <var>s&#770;</var> = 0.00025 / (1 &minus; 0.999) = 0.25.</li>
+<li>Step: 0.001 &times; 0.5 / &radic;0.25 = 0.001 &times; 0.5 / 0.5 = 0.001.</li>
+</ol>
+<p>Try it with a gradient of 50 instead: the step is still 0.001. That scale-independence is why Adam is the default for neural networks. <b>AdamW</b> is Adam with weight decay applied directly to the weights rather than through the gradient (<a href="ml-generalisation.html#l2">chapter 11</a>); almost all language models are trained with it.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Three optimisers in a narrow valley</h4></div>
+<p class="hint">The valley is 24 times steeper across (b) than along (a). Press Run 25 steps a few times. Plain gradient descent creeps along a; momentum and Adam get there sooner. Then raise the learning rate to 0.09: plain gradient descent blows up, because its safe step size is set by the steepest direction.</p>
+<div id="w-optim"></div>
+</div>
+
+<h3 id="schedules">Learning-rate schedules</h3>
+<ul>
+<li><b>Warmup</b>: start with a tiny learning rate and raise it over the first few hundred or thousand steps. Adam's averages are unreliable at the start, and big early steps can wreck a large model.</li>
+<li><b>Cosine decay</b>: then lower it smoothly: &eta;<sub><var>t</var></sub> = &eta;<sub>max</sub> &times; &frac12;(1 + cos(&pi;<var>t</var>/<var>T</var>)). At 0%, 25%, 50%, 75% and 100% of training the multiplier is 1, 0.854, 0.5, 0.146 and 0. Big steps early to make progress, small steps late to settle into the bottom of the valley.</li>
+</ul>
+
+<h3 id="clipping">Gradient clipping</h3>
+<p>One bad batch can produce a huge gradient and undo hours of training. Clipping caps the gradient's length: if ‖<var>g</var>‖ is larger than a limit <var>c</var>, rescale it to length <var>c</var>. Worked: <var>g</var> = (3, 4) has length 5; clipped to 1 it becomes (0.6, 0.8), same direction, smaller step.</p>
+
+<h2 id="norms">Normalisation layers</h2>
+<p><b>Bottleneck:</b> as earlier layers change during training, the numbers each later layer receives drift in scale, so every layer is chasing a moving target.</p>
+<ul>
+<li><a class="g" href="glossary.html#batch-norm">Batch normalisation</a> normalises each feature across the examples in a batch (to mean 0, standard deviation 1), then rescales with two learned numbers &gamma; and &beta;. It made deep image networks much easier to train, but depends on batch statistics, which is awkward for text of varying length and for small batches.</li>
+<li><a class="g" href="glossary.html#layer-norm">Layer normalisation</a> normalises across the features of one example instead. For the vector (2, 4, 6) it gives (&minus;1.225, 0, 1.225), exactly the z-scores of <a href="maths-statistics.html#z-score">chapter 8</a>; then with &gamma; = 2 and &beta; = 0.5 the output is (&minus;1.949, 0.5, 2.949). It needs no batch, so transformers use it, or its cheaper cousin RMSNorm, which skips subtracting the mean.</li>
+</ul>
+
+<h2 id="dropout">Dropout</h2>
+<p><b>Bottleneck:</b> big networks overfit, with neurons that only work in fragile combinations.</p>
+<p><a class="g" href="glossary.html#dropout">Dropout</a> switches off a random fraction <var>p</var> of a layer's outputs at each training step and scales the survivors by 1/(1 &minus; <var>p</var>) so the expected total is unchanged. Worked with <var>p</var> = 0.5: outputs (2, 4, 6, 8) with the random mask (1, 0, 1, 0) become (4, 0, 12, 0). At test time nothing is dropped and nothing is scaled. Each neuron learns to be useful without relying on any particular partner, a cheap way to train many overlapping networks at once.</p>
+
+<h2 id="residuals">Residual connections</h2>
+<p><b>Bottleneck:</b> in very deep networks the gradient reaching the early layers is a product of many small factors (<a href="maths-derivatives.html#chain-rule">chapter 5</a>) and vanishes.</p>
+<p>A residual connection adds a layer's input to its output: <span class="math"><var>y</var> = <var>x</var> + <var>F</var>(<var>x</var>)</span>. The layer only has to learn a correction to its input. By the chain rule the slope of <var>y</var> with respect to <var>x</var> is 1 + <var>F</var>&prime;(<var>x</var>): even if the layer's own slope is tiny, the 1 passes the gradient straight through. A stack of residual layers has a gradient "highway" from the loss back to the first layer. Residual networks of more than 100 layers trained easily once this was added, and every transformer block uses two residual connections (<a href="llm-transformer.html">chapter 18</a>).</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A gradient (6, 8) is clipped to a maximum length of 2. What is it afterwards? And what does dropout with p = 0.25 do to (4, 4, 4, 4) with mask (1, 1, 0, 1)?</p></div>
+<details><summary>Answer</summary><div><p>Length 10, so scale by 2/10: (1.2, 1.6). Dropout keeps three and scales by 1/0.75: (5.33, 5.33, 0, 5.33).</p></div></details>
+
+<h2 id="mixed-precision">Lower precision</h2>
+<p>Training in 16-bit numbers (bf16) instead of 32-bit halves memory and roughly doubles speed on modern GPUs. bf16 keeps fp32's range but fewer digits of precision; <a href="quantisation.html#formats">chapter 39</a> shows the bit layouts and why that trade suits training.</p>
+
+<h2 id="calling-models">If you only call trained models</h2>
+<p>If you only call trained models, none of this runs in your code, but it still matters in two practical places. When you compare embedding or language models, their model cards describe training in exactly these terms. And the fine-tuning projects in <a href="project-finetune-distil.html">chapter 41</a> train with this chapter's Adam and a fixed learning rate (the <code>Adam</code> class in <code class="path">labs/finetune-distil/ftcommon.py</code>), while the real-model libraries they point to take AdamW, warmup and weight decay as training arguments, with these meanings.</p>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why not start every weight at zero?</summary><div><p>Every neuron in a layer would compute the same output and get the same gradient, so they would stay identical forever. Random starts break the symmetry.</p></div></details>
+<details><summary>Adam's step is about the same size whether the gradient is 0.5 or 50. Why?</summary><div><p>It divides the averaged gradient by the square root of the averaged squared gradient, which cancels the gradient's scale.</p></div></details>
+<details><summary>Why do transformers use layer norm rather than batch norm?</summary><div><p>Layer norm normalises within one example, so it does not depend on the batch or on sequence lengths, and behaves the same in training and use.</p></div></details>
+<details><summary>How does a residual connection help gradients reach early layers?</summary><div><p>y = x + F(x) has slope 1 + F&prime;(x) with respect to x, so the 1 carries the gradient straight through even when F&prime; is tiny.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.ruder.io/optimizing-gradient-descent/" target="_blank" rel="noopener noreferrer">An overview of gradient descent optimization algorithms</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Readable survey of SGD, momentum, RMSprop and Adam with the update rules side by side.</span></li>
+<li><a href="https://www.youtube.com/watch?v=P6sfmUTpUmc" target="_blank" rel="noopener noreferrer">Building makemore Part 3: Activations &amp; Gradients, BatchNorm</a> <span class="pill">video</span> <span class="pill">intermediate</span><br><span class="res-note">Karpathy diagnoses bad initialisation and dead activations in code and motivates batch normalisation.</span></li>
+<li><a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener noreferrer">Adam: A Method for Stochastic Optimization (2014)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">The original Adam optimiser paper, still the default optimiser for most deep models.</span></li>
+<li><a href="https://arxiv.org/abs/1502.01852" target="_blank" rel="noopener noreferrer">Delving Deep into Rectifiers: Surpassing Human-Level Performance on ImageNet Classification (2015)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Introduces the He (Kaiming) initialisation scheme suited to ReLU networks.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-ml-training-deep">All resources for this chapter</a> and 4 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/optim.js"></script>
+</body>
+</html>

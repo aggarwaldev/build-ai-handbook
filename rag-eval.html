@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>26. Evaluating RAG &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 26</p>
+<h1>Evaluating RAG</h1>
+<p class="lead">A RAG system can fail in two places: retrieval can miss the passage, or the model can misuse the passage it was given. Evaluating it means measuring the two halves separately, with labelled questions, a handful of ranking metrics you can compute by hand, and honest error bars.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Without numbers, every change to chunking, embedding model or <var>k</var> is a guess, and a change that fixes one question quietly breaks two others. A small labelled set and five metrics turn "it feels better" into "hit@3 went from 5 to 9 out of 10 on the same questions".</p></div>
+
+<h2 id="setup">What you need: labelled questions</h2>
+<p>For each question, write down which passages answer it. That is the whole labelling job, and it is the expensive part. Good sets include:</p>
+<ul>
+<li>questions phrased the way real users phrase them, not copied from the documents' headings;</li>
+<li>questions whose answer spans two passages, and questions with no answer in the corpus;</li>
+<li>near misses: a question about one fund where five other funds have similar sections.</li>
+</ul>
+
+<h2 id="metrics">Five ranking metrics by hand</h2>
+<p>Take one question with 3 relevant passages in the corpus. Retrieval returns 5 passages, and the 2nd and 4th are relevant; the third relevant passage was not retrieved at all. Write relevance as 0 1 0 1 0.</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Metric</th><th>Definition</th><th>This example</th></tr>
+<tr><td>Precision@<var>k</var></td><td>relevant in the top <var>k</var> &divide; <var>k</var></td><td class="num">P@3 = 1/3 = 0.333; P@5 = 2/5 = 0.4</td></tr>
+<tr><td>Recall@<var>k</var></td><td>relevant in the top <var>k</var> &divide; all relevant</td><td class="num">R@3 = 1/3 = 0.333; R@5 = 2/3 = 0.667</td></tr>
+<tr><td>Hit@<var>k</var></td><td>1 if any relevant passage is in the top <var>k</var>, else 0</td><td class="num">hit@1 = 0; hit@3 = 1</td></tr>
+<tr><td>Reciprocal rank</td><td>1 &divide; rank of the first relevant passage</td><td class="num">1/2 = 0.5</td></tr>
+<tr><td>nDCG@<var>k</var></td><td>discounted gain &divide; the best possible</td><td class="num">nDCG@5 = 0.498</td></tr>
+</table></div>
+<p>Averages over many questions give the headline numbers. The <b>hit rate</b> is the average hit@<var>k</var>. The <b>mean reciprocal rank</b> (MRR) is the average reciprocal rank, counting 0 when nothing relevant was retrieved: for four questions whose first relevant passage sits at ranks 1, 3, nowhere and 2, MRR = (1 + 1/3 + 0 + 1/2) / 4 = 0.458.</p>
+
+<h3 id="ndcg">nDCG step by step</h3>
+<p>Discounted cumulative gain adds up the relevance of each result, divided by log<sub>2</sub>(rank + 1), so a relevant passage at rank 1 counts in full and lower ranks count less:</p>
+<ul>
+<li>DCG@5 for 0 1 0 1 0 = 1 / log<sub>2</sub>3 + 1 / log<sub>2</sub>5 = 0.631 + 0.431 = 1.062.</li>
+<li>The ideal ranking puts all 3 relevant passages first: 1 / log<sub>2</sub>2 + 1 / log<sub>2</sub>3 + 1 / log<sub>2</sub>4 = 1 + 0.631 + 0.5 = 2.131.</li>
+<li>nDCG@5 = 1.062 / 2.131 = 0.498.</li>
+</ul>
+<p>nDCG is the only one of the five that uses grades of relevance ("answers it" versus "related") and the only one that rewards putting the best passage first among several relevant ones. Some definitions use 2<sup>grade</sup> &minus; 1 as the gain instead of the grade; the widget uses the grade.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Reorder a ranking and watch the metrics</h4></div>
+<p class="hint">The list is the real top six for one question over the demo corpus of <a href="rag.html">chapter 24</a>, with the body-only index. The section that answers the question is fourth. The cover section starts at grade 1 (related); a strict eval counts only the waiting-period section, so set the cover to 0 to see the question as a strict eval scores it, a miss at k = 3. Then move the answer to the top, change grades, and compare how each metric reacts. Which metrics do not notice when you swap two irrelevant passages?</p>
+<div id="w-rankeval"></div>
+</div>
+
+<h2 id="which">Which metric when</h2>
+<ul>
+<li><b>Hit@<var>k</var></b> when the model only needs one good passage and you pass it the top <var>k</var>. It matches how most RAG answers are built, and it is the easiest to explain.</li>
+<li><b>Recall@<var>k</var></b> when the answer needs several passages, such as a question about two policies.</li>
+<li><b>MRR</b> when the position of the first good passage matters, because you pass few passages or the model trusts the first one most.</li>
+<li><b>nDCG</b> when you have graded labels and care about the whole ordering, for example when tuning a reranker.</li>
+<li><b>Precision@<var>k</var></b> when irrelevant passages are costly: many tokens each, or likely to mislead.</li>
+</ul>
+
+<h2 id="uncertainty">How sure can you be?</h2>
+<p>Ten questions is a small sample. With 5 hits out of 10, the 95% Wilson interval for the true hit rate runs from 0.237 to 0.763; with 10 out of 10 it runs from 0.722 to 1. The intervals overlap, so by themselves they do not prove the second system is better (<a href="hallucination.html#measuring">chapter 36</a> works these intervals by hand).</p>
+<p>Comparing two systems on the same questions is stronger than comparing two separate scores. Count only the questions where they disagree: if the new system wins 5 and loses none, then, were the two systems equally good, each disagreement would be a coin toss, and 5 wins out of 5 happens with probability 2 &times; 0.5<sup>5</sup> = 0.0625 in either direction. Suggestive, not conclusive. More questions, especially hard ones, are the only real cure.</p>
+
+<h2 id="script">A retrieval eval script</h2>
+<p>One small script can do the whole retrieval measurement. Keep the labelled set as a plain file with an id, the question and the expected (document, section) pairs. For each question the script runs your retrieval function on its own, with no answer-writing model, takes the top five and marks a HIT at 3 and at 5 when an expected pair appears among them (comparing sections by their last heading is enough). It prints each question's top results with HIT or MISS, the totals, the p50 and p95 latency (nearest-rank percentiles) and how many embedding and rerank calls it made. Because no answer model is involved, a change in the score can only come from retrieval.</p>
+<p>Two habits keep the run honest. Index the evaluation corpus into a store of its own, so a run can never change real data. And rebuild the index with the same corpus folder and settings the questions were written for. The hit@3 scores in <a href="rag.html#context">chapter 24</a> (5 out of 10, then 10 out of 10) came from a run of this kind.</p>
+
+<h2 id="generation">Evaluating the generation half</h2>
+<p>Good retrieval does not guarantee a good answer. For the answer, measure:</p>
+<ul>
+<li><b>Faithfulness</b> (groundedness): is every claim supported by the passages given? An answer can be true and still unfaithful, if it came from the model's memory.</li>
+<li><b>Citation correctness</b>: does each cited source exist, and does it say what the answer claims? The first half can be checked by code; the second needs a person or a judge model.</li>
+<li><b>Answer relevance</b>: does it answer the question asked?</li>
+<li><b>Honest gaps</b>: on questions with no answer in the corpus, does it say so instead of inventing one?</li>
+</ul>
+<p>These are usually scored by a judge model against a rubric, with its agreement with people checked on a sample (<a href="evals.html">chapter 44</a>). Citation checks are code: refuse an answer whose cited source was never retrieved for it, or whose cited section does not exist.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A question has 2 relevant passages. Retrieval returns relevance 1 0 0 1 0. Compute P@3, R@3, the reciprocal rank and nDCG@5 (gain = 1 for relevant).</p></div>
+<details><summary>Answer</summary><div><p>P@3 = 1/3 = 0.333. R@3 = 1/2 = 0.5. Reciprocal rank = 1/1 = 1. DCG@5 = 1/log<sub>2</sub>2 + 1/log<sub>2</sub>5 = 1 + 0.431 = 1.431; the ideal is 1 + 1/log<sub>2</sub>3 = 1.631; nDCG@5 = 1.431 / 1.631 = 0.877.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-retrieval-eval.html">Lab 4</a> you score retrievers on 25 labelled questions: hit@<var>k</var>, recall@<var>k</var>, MRR and nDCG@<var>k</var>, at several chunk sizes, with a bootstrap interval that shows how much 25 questions can and cannot tell you.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why measure retrieval separately from the final answer?</summary><div><p>So you know which half failed. A wrong answer with the right passage retrieved needs a prompt or model fix; a wrong answer without it needs a retrieval fix.</p></div></details>
+<details><summary>Two rankings both have hit@3 = 1. How could MRR tell them apart?</summary><div><p>If one has the relevant passage at rank 1 and the other at rank 3, their reciprocal ranks are 1 and 0.333.</p></div></details>
+<details><summary>Why is a paired comparison on the same questions stronger than two separate scores?</summary><div><p>Questions differ in difficulty. Pairing removes that variation and leaves only the questions where the systems disagree.</p></div></details>
+<details><summary>What should a retrieval eval script measure, and why run retrieval without the answer model?</summary><div><p>Hit@3 and hit@5 over the labelled questions, with p50 and p95 latency and the number of embedding and rerank calls. With no answer model in the loop, a change in the score can only come from retrieval.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.pinecone.io/learn/offline-evaluation/" target="_blank" rel="noopener noreferrer">Evaluation Measures in Information Retrieval</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Worked examples of recall@k, precision@k, MRR, MAP and nDCG with small code snippets.</span></li>
+<li><a href="https://nlp.stanford.edu/IR-book/html/htmledition/evaluation-of-ranked-retrieval-results-1.html" target="_blank" rel="noopener noreferrer">Evaluation of ranked retrieval results (Introduction to Information Retrieval, ch. 8)</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Free textbook section defining precision at k, average precision and NDCG precisely.</span></li>
+<li><a href="https://arxiv.org/abs/2309.15217" target="_blank" rel="noopener noreferrer">Ragas: Automated Evaluation of Retrieval Augmented Generation (2023)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Proposes reference-free RAG metrics such as faithfulness and answer and context relevance.</span></li>
+<li><a href="https://docs.ragas.io/en/stable/" target="_blank" rel="noopener noreferrer">Ragas documentation</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Docs for the Ragas library, to run those metrics on your own RAG pipeline.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-rag-eval">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/rankeval.js"></script>
+</body>
+</html>

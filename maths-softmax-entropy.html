@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>9. Softmax, cross-entropy and KL divergence &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part I &middot; Maths &middot; Chapter 9</p>
+<h1>Softmax, cross-entropy and KL divergence</h1>
+<p class="lead">Softmax turns a list of raw scores into probabilities. Cross-entropy measures how surprised those probabilities were by the right answer, and it is the loss every language model is trained to reduce. Entropy and KL divergence complete the set.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>The last step of a language model is a softmax over its whole vocabulary; its training loss is cross-entropy; the "temperature" setting you see in every model API is a knob inside the softmax; and distillation (<a href="fine-tuning.html#distillation">chapter 40</a>) trains a small model by minimising a KL divergence. One chapter of maths covers all four.</p></div>
+
+<h2 id="softmax">Softmax: scores to probabilities</h2>
+<p>A model's final layer produces one raw score, called a <a class="g" href="glossary.html#logit">logit</a>, per possible answer. Scores can be any number, negative or positive, and they do not add up to anything in particular. Say the scores for cat, dog and bird are 2, 1 and 0.1. To turn them into probabilities:</p>
+<ol>
+<li>Make every score positive with exp (<a href="maths-exp-log.html#e">chapter 3</a>): <var>e</var><sup>2</sup> = 7.389, <var>e</var><sup>1</sup> = 2.718, <var>e</var><sup>0.1</sup> = 1.105.</li>
+<li>Add them: 7.389 + 2.718 + 1.105 = 11.212.</li>
+<li>Divide each by the total: 7.389 / 11.212 = 0.659, 2.718 / 11.212 = 0.242, 1.105 / 11.212 = 0.099.</li>
+</ol>
+<p>The results are positive, add up to 1 and keep the order of the scores. That is <a class="g" href="glossary.html#softmax">softmax</a>:</p>
+<div class="formula">softmax(<var>z</var>)<sub><var>i</var></sub> = <span class="frac"><span><var>e</var><sup><var>z</var><sub><var>i</var></sub></sup></span><span><span class="big">&Sigma;</span><sub><var>j</var></sub> <var>e</var><sup><var>z</var><sub><var>j</var></sub></sup></span></span></div>
+<p>Because exp grows so fast, softmax exaggerates differences: a score only 1 higher gets <var>e</var> &asymp; 2.7 times the weight. The name says what it does: a soft version of "pick the maximum".</p>
+
+<h3 id="stable">A practical trick: subtract the maximum</h3>
+<p>Scores of 1,000, 999 and 998 would make exp overflow, since <var>e</var><sup>1000</sup> is far too big for a computer. Subtracting the largest score from all of them first (giving 0, &minus;1, &minus;2) leaves the answer unchanged, because the common factor cancels between the top and bottom of the fraction. Every real implementation does this.</p>
+
+<h2 id="temperature">Temperature</h2>
+<p>Divide every score by a number <var>T</var> before the softmax. That number is the <a class="g" href="glossary.html#temperature">temperature</a>.</p>
+<ul>
+<li><var>T</var> = 1: the plain softmax, 0.659 / 0.242 / 0.099.</li>
+<li><var>T</var> = 0.5: the scores double to 4, 2, 0.2, and the distribution sharpens to 0.864 / 0.117 / 0.019. As <var>T</var> approaches 0, all the probability goes to the top score.</li>
+<li><var>T</var> = 2: the scores halve to 1, 0.5, 0.05, and the distribution flattens to 0.502 / 0.304 / 0.194. As <var>T</var> grows, it approaches equal odds.</li>
+</ul>
+<p>When a language model samples its next token, low temperature makes it pick the likeliest token nearly every time (predictable, repetitive); high temperature lets unlikely tokens through (varied, sometimes nonsensical).</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Softmax, temperature and the loss</h4></div>
+<p class="hint">Move the temperature and watch the bars sharpen or flatten. Change the correct answer to bird and see the loss jump. Make the cat score huge: its probability approaches 1 and its loss approaches 0.</p>
+<div class="w-softmax" data-labels="cat,dog,bird" data-logits="2,1,0.1" data-target="0" data-mode="loss"></div>
+</div>
+
+<h2 id="cross-entropy">Cross-entropy: the training loss</h2>
+<p>The model said cat 0.659, dog 0.242, bird 0.099. The picture really was a cat. How wrong was it? Use the "surprise" from <a href="maths-exp-log.html#log-negative">chapter 3</a>: minus the log of the probability given to the right answer.</p>
+<ul>
+<li>Right answer cat: &minus;ln 0.659 = 0.417. A modest loss: the model favoured the right answer but was not sure.</li>
+<li>Right answer bird: &minus;ln 0.099 = 2.317. A big loss: the model thought bird unlikely.</li>
+<li>A perfect model gives the right answer probability 1, and &minus;ln 1 = 0.</li>
+</ul>
+<div class="formula">loss = &minus;ln <var>p</var><sub>correct</sub><span class="cap">This is cross-entropy against a one-hot target (1 for the right answer, 0 for the rest). It is also called log loss or negative log-likelihood.</span></div>
+<p>Why the log, rather than, say, 1 &minus; <var>p</var>? Three reasons. Being confidently wrong is punished without limit: &minus;ln 0.001 = 6.9 and &minus;ln 0.000001 = 13.8. Losses of independent examples add up the way their log probabilities do, so the loss of a whole sentence is the sum of the losses of its tokens. And the gradient comes out beautifully simple.</p>
+
+<h3 id="ce-gradient">The gradient of softmax plus cross-entropy</h3>
+<p>Chain the softmax and the loss together and take the slope with respect to each score. After the algebra, which is a good chain-rule exercise, the answer is just</p>
+<div class="formula"><span class="frac"><span>&part; loss</span><span>&part; <var>z</var><sub><var>i</var></sub></span></span> = <var>p</var><sub><var>i</var></sub> &minus; <var>y</var><sub><var>i</var></sub><span class="cap">y<sub>i</sub> is 1 for the correct answer and 0 otherwise.</span></div>
+<p>For the cat example: (0.659 &minus; 1, 0.242 &minus; 0, 0.099 &minus; 0) = (&minus;0.341, 0.242, 0.099). Gradient descent subtracts these, so the cat score goes up and the others go down, each in proportion to how wrong it was. Every language model's training starts its backward pass with this vector.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>Scores (0, 0, 0, 0) for four answers. What are the probabilities, and what is the loss whichever answer is correct?</p></div>
+<details><summary>Answer</summary><div><p>Each gets <var>e</var><sup>0</sup> = 1, total 4, so 0.25 each. The loss is &minus;ln 0.25 = ln 4 = 1.386. An untrained language model with a vocabulary of 50,000 starts near ln 50,000 &asymp; 10.8, which is a useful sanity check on a first training step.</p></div></details>
+
+<h2 id="entropy">Entropy: how uncertain is a distribution?</h2>
+<p><a class="g" href="glossary.html#entropy">Entropy</a> is the average surprise you expect from a distribution, if you draw from it and are surprised by &minus;ln of what came up:</p>
+<div class="formula"><var>H</var>(<var>p</var>) = &minus; <span class="big">&Sigma;</span><sub><var>i</var></sub> <var>p</var><sub><var>i</var></sub> ln <var>p</var><sub><var>i</var></sub></div>
+<p>Worked for (0.659, 0.242, 0.099): 0.659 &times; 0.417 + 0.242 &times; 1.418 + 0.099 &times; 2.317 = 0.275 + 0.343 + 0.229 = 0.847. Measured with ln the unit is the "nat"; with log<sub>2</sub> it is the "bit" (here 1.22 bits).</p>
+<ul>
+<li>A fair coin: 1 bit, the most uncertain a two-way choice can be.</li>
+<li>A coin that lands heads 90% of the time: 0.47 bits. At 99%: 0.08 bits.</li>
+<li>A certain outcome: 0. The most uncertain a <var>k</var>-way choice can be is ln <var>k</var>, when all are equally likely.</li>
+</ul>
+<p>Entropy of a model's next-token distribution is a rough signal of how sure it is. It is one ingredient, not a reliable hallucination detector on its own (<a href="hallucination.html">chapter 36</a>).</p>
+
+<h2 id="kl">Cross-entropy and KL divergence between two distributions</h2>
+<p>The target need not be one-hot. Suppose a large "teacher" model gives (0.7, 0.2, 0.1) and a small "student" gives (0.5, 0.3, 0.2). Cross-entropy of the student <var>q</var> measured against the teacher <var>p</var> is</p>
+<div class="formula"><var>H</var>(<var>p</var>, <var>q</var>) = &minus; <span class="big">&Sigma;</span><sub><var>i</var></sub> <var>p</var><sub><var>i</var></sub> ln <var>q</var><sub><var>i</var></sub> = &minus;(0.7 ln 0.5 + 0.2 ln 0.3 + 0.1 ln 0.2) = 0.887</div>
+<p>The teacher's own entropy is <var>H</var>(<var>p</var>) = 0.802. The difference, 0.887 &minus; 0.802 = 0.085, is the <a class="g" href="glossary.html#kl-divergence">KL divergence</a>: the extra surprise caused by using <var>q</var> when the truth is <var>p</var>.</p>
+<div class="formula">KL(<var>p</var> &Vert; <var>q</var>) = <span class="big">&Sigma;</span><sub><var>i</var></sub> <var>p</var><sub><var>i</var></sub> ln <span class="frac"><span><var>p</var><sub><var>i</var></sub></span><span><var>q</var><sub><var>i</var></sub></span></span> = 0.7 ln 1.4 + 0.2 ln 0.667 + 0.1 ln 0.5 = 0.236 &minus; 0.081 &minus; 0.069 = 0.085</div>
+<ul>
+<li>KL is zero only when the two distributions are identical, and never negative.</li>
+<li>It is not symmetric: KL(<var>q</var> &Vert; <var>p</var>) here is 0.092, not 0.085. It is a "divergence", not a distance.</li>
+<li>With a one-hot target, the entropy term is 0, so cross-entropy and KL are the same number. Minimising cross-entropy on real text is the same as pulling the model's distribution towards the data's.</li>
+</ul>
+<p>KL turns up in two places later: distillation, where the student minimises KL to the teacher's softened distribution, and RLHF and DPO (<a href="llm-training.html#rlhf">chapter 19</a>), where a KL penalty stops the tuned model drifting too far from the original.</p>
+
+<h2 id="in-apis">Softmax behind an API</h2>
+<p>Every hosted language model ends in a softmax, but most APIs never show you the logits or probabilities: you receive text and structured output. Some APIs also let you set a temperature, and some current models do not accept one at all. Where a system needs a fixed, repeatable answer, it should not lean on low temperature. It can remove the choice from the model entirely, with fixed replies for certain cases and plain calculators for every number. That is a design choice worth noticing: temperature 0 reduces variation but does not make a model correct.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="project-tiny-lm.html">chapter 20</a> you train a tiny language model whose loss is the cross-entropy from this chapter, and <a href="project-tiny-lm.html#sampling">sample from its softmax</a> at different temperatures.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Scores (3, 3) for two answers. What does softmax give, and what if you add 100 to both?</summary><div><p>(0.5, 0.5) both times. Softmax depends only on the differences between scores, which is why subtracting the maximum is safe.</p></div></details>
+<details><summary>A model gives the right token probability 0.05. What is its cross-entropy loss on that token?</summary><div><p>&minus;ln 0.05 = 3.0.</p></div></details>
+<details><summary>What happens to the next-token distribution as temperature goes towards 0?</summary><div><p>It becomes one-hot on the highest-scoring token, so sampling always picks that token ("greedy" decoding).</p></div></details>
+<details><summary>Why is KL divergence not a distance?</summary><div><p>It is not symmetric: KL(p &Vert; q) and KL(q &Vert; p) usually differ. A distance must be the same in both directions.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://colah.github.io/posts/2015-09-Visual-Information/" target="_blank" rel="noopener noreferrer">Visual Information Theory</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Builds entropy, cross-entropy and KL divergence from pictures of message lengths; the clearest long-form read on the topic.</span></li>
+<li><a href="https://www.youtube.com/watch?v=KpKog-L9veg" target="_blank" rel="noopener noreferrer">Neural Networks Part 5: ArgMax and SoftMax</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Shows how softmax turns raw scores into probabilities and why it is preferred to argmax for training.</span></li>
+<li><a href="https://www.youtube.com/watch?v=6ArSys5qHAU" target="_blank" rel="noopener noreferrer">Neural Networks Part 6: Cross Entropy</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Explains cross-entropy as the loss paired with softmax, with a worked numeric example.</span></li>
+<li><a href="https://www.youtube.com/watch?v=KHVR587oW8I" target="_blank" rel="noopener noreferrer">The Key Equation Behind Probability</a> <span class="pill">video</span> <span class="pill">intermediate</span><br><span class="res-note">Artem Kirsanov connects surprise, entropy, cross-entropy and KL divergence and why minimising cross-entropy trains models.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-maths-softmax-entropy">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/softmax.js"></script>
+</body>
+</html>

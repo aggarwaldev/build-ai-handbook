@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>39. Quantisation &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 39</p>
+<h1>Quantisation</h1>
+<p class="lead">A trained model is billions of numbers, usually stored with 16 bits each. Quantisation stores them with fewer bits, 8 or 4, so the model takes less memory and often runs faster, at the price of small rounding errors. This chapter shows exactly how a weight is rounded, why one large weight can spoil its neighbours, and how much memory each choice saves.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Whether a model fits on a laptop, a phone or one GPU is mostly a question of bits per weight. Knowing the arithmetic lets you read a model card, predict the memory bill and know what quality checks to run.</p></div>
+
+<h2 id="formats">Number formats</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Format</th><th>Bits</th><th>How the bits are used</th><th>Notes</th></tr>
+<tr><td>fp32</td><td class="num">32</td><td>1 sign, 8 exponent, 23 fraction</td><td>Training default for decades</td></tr>
+<tr><td>fp16</td><td class="num">16</td><td>1 sign, 5 exponent, 10 fraction</td><td>Largest value 65,504, so big values can overflow</td></tr>
+<tr><td>bf16</td><td class="num">16</td><td>1 sign, 8 exponent, 7 fraction</td><td>fp32's range with less precision; common for training</td></tr>
+<tr><td>int8</td><td class="num">8</td><td>256 whole numbers plus a shared scale</td><td>Close to 16-bit quality for many models</td></tr>
+<tr><td>int4</td><td class="num">4</td><td>16 whole numbers plus a shared scale</td><td>Needs care: per-group scales, smarter methods</td></tr>
+<tr><td>NF4</td><td class="num">4</td><td>16 levels placed to suit bell-shaped weights</td><td>Introduced with QLoRA (2023)</td></tr>
+</table></div>
+<p>Floating-point formats (fp, bf) keep their own exponent per number. Integer formats store whole numbers and one shared <b>scale</b> that turns them back into real values; that shared scale is where both the savings and the errors come from.</p>
+
+<h2 id="how">How a weight is quantised</h2>
+<p><b>Symmetric:</b> pick a scale so the largest weight maps to the largest integer, divide, round, store the integer. To use it, multiply back.</p>
+<p>Worked: weights &minus;0.62, 0.10, 0.31, 1.27. For 8 bits the integers run from &minus;127 to 127, so the scale is 1.27 / 127 = 0.01. Dividing gives &minus;62, 10, 31, 127, all whole already, so nothing is lost. For 4 bits the integers run from &minus;7 to 7 and the scale is 1.27 / 7 &asymp; 0.1814:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>weight</th><th>weight / scale</th><th>stored integer</th><th>scaled back</th><th>error</th></tr>
+<tr><td class="num">&minus;0.62</td><td class="num">&minus;3.42</td><td class="num">&minus;3</td><td class="num">&minus;0.5443</td><td class="num">0.0757</td></tr>
+<tr><td class="num">0.10</td><td class="num">0.55</td><td class="num">1</td><td class="num">0.1814</td><td class="num">0.0814</td></tr>
+<tr><td class="num">0.31</td><td class="num">1.71</td><td class="num">2</td><td class="num">0.3629</td><td class="num">0.0529</td></tr>
+<tr><td class="num">1.27</td><td class="num">7.00</td><td class="num">7</td><td class="num">1.2700</td><td class="num">0</td></tr>
+</table></div>
+<p>Rounding is never off by more than half a step, so the worst possible error is scale / 2 &asymp; 0.091.</p>
+<p><b>Asymmetric:</b> when the weights are not centred on zero, map the smallest weight to 0 and the largest to the top integer, and store a <b>zero point</b> as well. For the same four weights at 4 bits (integers 0 to 15): scale = (1.27 &minus; (&minus;0.62)) / 15 = 0.126, zero point = round(0.62 / 0.126) = 5, and the errors fall to 0.010, 0.026, 0.058 and 0.010: a mean of 0.026 instead of 0.053, because no levels are wasted below &minus;0.62.</p>
+<p>In symbols, symmetric with <i>b</i> bits: <i>q</i><sub>max</sub> = 2<sup><i>b</i>&minus;1</sup> &minus; 1, <i>s</i> = max|<i>w</i>| / <i>q</i><sub>max</sub>, <i>q</i> = round(<i>w</i> / <i>s</i>), <i>&#373;</i> = <i>q</i> &middot; <i>s</i>, and |<i>w</i> &minus; <i>&#373;</i>| &le; <i>s</i> / 2.</p>
+
+<h2 id="outliers">Outliers and groups</h2>
+<p>The scale is set by the largest weight. Put one outlier of 6.0 among the four weights above and the 4-bit scale becomes 6 / 7 &asymp; 0.857: now 0.10 and 0.31 both round to 0 and &minus;0.62 becomes &minus;0.857. One large value has erased its neighbours. Real models do have such outliers, which is why practical methods:</p>
+<ul>
+<li>use a separate scale per small <b>group</b> of weights (often 32 to 128), so an outlier spoils only its own group;</li>
+<li>keep the few outlier features in 16 bits (the idea behind LLM.int8(), 2022);</li>
+<li>choose rounding to minimise the error of each layer's output, not each weight (GPTQ, 2022), or protect the weights that matter most for the activations (AWQ, 2023).</li>
+</ul>
+
+<div class="widget" id="w-quantiser">
+<div class="widget-head"><span class="tag">Try it</span><h4>Quantise sixteen weights</h4></div>
+<p class="hint">Start at 4 bits, one scale for all. Tick the outlier and watch the small weights collapse to zero; then switch to groups of 4. With only sixteen weights, groups of 4 make the scales expensive (16 bits shared by 4 weights); real systems use groups of 32 to 128, where a scale costs 0.5 to 0.125 bits per weight.</p>
+</div>
+
+<h2 id="memory">Memory arithmetic</h2>
+<p>Memory for weights = parameters &times; bits per weight / 8 bytes. For a 7-billion-parameter model:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Format</th><th>Sum</th><th>Weights</th></tr>
+<tr><td>fp32</td><td class="num">7 &times; 10<sup>9</sup> &times; 4 bytes</td><td class="num">28 GB</td></tr>
+<tr><td>fp16 or bf16</td><td class="num">7 &times; 10<sup>9</sup> &times; 2 bytes</td><td class="num">14 GB</td></tr>
+<tr><td>int8</td><td class="num">7 &times; 10<sup>9</sup> &times; 1 byte</td><td class="num">7 GB</td></tr>
+<tr><td>int4</td><td class="num">7 &times; 10<sup>9</sup> &times; 0.5 bytes</td><td class="num">3.5 GB</td></tr>
+<tr><td>int4, one 16-bit scale per 128 weights</td><td class="num">4 + 16/128 = 4.125 bits</td><td class="num">3.6 GB</td></tr>
+</table></div>
+<p>Running the model needs more than the weights: the key and value cache grows with context length and with the number of requests in flight. Fewer bits also mean less data to move from memory for every token, which is often what limits speed.</p>
+
+<h2 id="quality">Checking quality</h2>
+<p>Quantisation is a trade, so measure it: compare the quantised model against the original on your own tasks, not only on a general score such as perplexity. Small models and low bit counts lose more. A model quantised during training (quantisation-aware training) usually holds up better than one rounded afterwards.</p>
+<p><b>Check the label against the file.</b> A model name with "Q" or "int8" in it is a claim, not a measurement. Read the data type of the weight tensors and count bytes: the number of weights times the bits per weight, divided by 8, should match the file size. Worked: a file called "Q8" holds 100 million weights and is 200 MB. That is 2 bytes, or 16 bits, per weight; a true 8-bit file would be close to 100 MB. Check again whenever the library or the download source changes.</p>
+<p><b>Ask what precision serves a hosted model.</b> When you call a model through a provider, the provider decides how it is stored unless you say otherwise. Some gateways let you restrict a request to providers that serve at least a given precision (say 8-bit floating point or integer, or higher) and to refuse "unknown". A direct call to the model's maker usually carries no such setting, so there the provider decides.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>Quantise 0.45, &minus;0.25, 0.10, &minus;1.0 to 4 bits, symmetric. Give the scale, the stored integers and the largest error.</p></div>
+<details><summary>Answer</summary><div><p>Scale = 1.0 / 7 &asymp; 0.1429. Divided: 3.15, &minus;1.75, 0.70, &minus;7, rounded to 3, &minus;2, 1, &minus;7. Scaled back: 0.4286, &minus;0.2857, 0.1429, &minus;1.0. Errors 0.0214, 0.0357, 0.0429, 0; the largest is 0.0429, within the bound 0.1429 / 2 &asymp; 0.071.</p></div></details>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why does bf16 suit training better than fp16?</summary><div><p>It keeps fp32's 8 exponent bits, so large and small values do not overflow or vanish; it gives up fraction precision instead.</p></div></details>
+<details><summary>At 8 bits symmetric, the largest weight is 2.54. What is the scale?</summary><div><p>2.54 / 127 = 0.02.</p></div></details>
+<details><summary>Why do per-group scales help with outliers?</summary><div><p>An outlier sets the scale only for its own small group, so the other groups keep fine steps.</p></div></details>
+<details><summary>How much memory do the weights of a 70-billion-parameter model need at 4 bits?</summary><div><p>70 &times; 10<sup>9</sup> &times; 0.5 bytes = 35 GB, plus a little for the scales.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://newsletter.maartengrootendorst.com/p/a-visual-guide-to-quantization" target="_blank" rel="noopener noreferrer">A Visual Guide to Quantization</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Maarten Grootendorst&#x27;s illustrated tour of number formats, int8/int4, GPTQ, GGUF and more.</span></li>
+<li><a href="https://huggingface.co/docs/transformers/quantization/overview" target="_blank" rel="noopener noreferrer">Overview (Hugging Face Transformers quantization docs)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Compares the quantisation backends Transformers supports and when to pick each.</span></li>
+<li><a href="https://arxiv.org/abs/2208.07339" target="_blank" rel="noopener noreferrer">LLM.int8(): 8-bit Matrix Multiplication for Transformers at Scale (2022)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Shows outlier features break naive int8 and handles them separately to keep accuracy.</span></li>
+<li><a href="https://arxiv.org/abs/2210.17323" target="_blank" rel="noopener noreferrer">GPTQ: Accurate Post-Training Quantization for Generative Pre-trained Transformers (2022)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">One-shot 3 to 4-bit weight quantisation using approximate second-order information.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-quantisation">All resources for this chapter</a> and 4 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/quantiser.js"></script>
+</body>
+</html>

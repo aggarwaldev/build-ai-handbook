@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>19. How LLMs are trained &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part III &middot; How LLMs work &middot; Chapter 19</p>
+<h1>How LLMs are trained</h1>
+<p class="lead">A chat model is made in stages. Pretraining teaches a transformer to predict the next token on a vast amount of text. Supervised fine-tuning teaches it the shape of a helpful reply. Preference training (RLHF, DPO and their relatives) teaches it which of two replies people prefer. Evaluation runs throughout. This chapter works through each stage with numbers, including the compute bill.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>You will never pretrain a frontier model, but you will choose between models, read their cards, fine-tune small ones (<a href="fine-tuning.html">chapter 40</a>) and build evals for your own application. All of that uses the vocabulary of this chapter. It also explains behaviour you will see: confident wrong answers, a pull towards agreeing with the user, and knowledge that stops at a cutoff date.</p></div>
+
+<h2 id="objective">The objective: predict the next token</h2>
+<p>Pretraining uses one loss everywhere: at every position in a text, the <a class="g" href="glossary.html#cross-entropy">cross-entropy</a> between the model's predicted distribution and the token that actually came next (<a href="maths-softmax-entropy.html#cross-entropy">chapter 9</a>). The text supplies its own labels, so no human labelling is needed. With a causal mask (<a href="llm-transformer.html#causal">chapter 18</a>), one pass over a 2,048-token sequence yields 2,047 predictions and 2,047 loss terms at once.</p>
+<p>Worked: the model gives the true next tokens of a short text probabilities 0.5, 0.25, 0.8 and 0.1.</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>position</th><th>p(true token)</th><th>&minus;ln p</th></tr>
+<tr><td class="num">1</td><td class="num">0.50</td><td class="num">0.693</td></tr>
+<tr><td class="num">2</td><td class="num">0.25</td><td class="num">1.386</td></tr>
+<tr><td class="num">3</td><td class="num">0.80</td><td class="num">0.223</td></tr>
+<tr><td class="num">4</td><td class="num">0.10</td><td class="num">2.303</td></tr>
+<tr><td colspan="2">mean loss</td><td class="num">1.151</td></tr>
+</table></div>
+<p>The <a class="g" href="glossary.html#perplexity">perplexity</a> is e<sup>1.151</sup> = 3.16: on average the model was as unsure as if it were choosing uniformly among about 3 tokens. A model that knew nothing, spreading probability evenly over a 50,000-token vocabulary, would score ln 50,000 = 10.8 and a perplexity of 50,000.</p>
+<p>Why does predicting the next token produce something that seems to understand? Because doing it well on varied text needs it. To continue "The capital of Australia is" you need a fact; to continue a proof you need the logic; to continue a dialogue you need to model the speakers. The loss rewards whatever internal machinery helps, and nothing else. It also rewards confident continuations whether or not they are true, which is one root of <a href="hallucination.html">hallucination</a> (chapter 36).</p>
+
+<h2 id="data">Data</h2>
+<p>Pretraining data is mostly public web text, plus books, code, scientific papers and other curated sources, measured in trillions of tokens. Raw web text is noisy, so most of the work is in preparation:</p>
+<ul>
+<li><b>Filtering</b> for quality, with rules and with small classifiers trained to recognise good text.</li>
+<li><b>Deduplication</b>, exact and near-exact. Repeated text wastes compute and makes models memorise.</li>
+<li><b>Removing unwanted content</b>, such as personal data and toxic material.</li>
+<li><b>Mixing</b>: deciding what share of training comes from code, maths, other languages and so on. The mix shapes what the model is good at.</li>
+<li><b>Holding out</b> evaluation sets, and checking that benchmark questions did not leak into training data (contamination), which would inflate scores.</li>
+</ul>
+<p>The data also sets the knowledge cutoff: the model knows nothing after its newest training text. That is why an application that needs current facts, such as today's market rates, must supply them in the prompt (<a href="rag.html">chapter 24</a>).</p>
+
+<h2 id="compute">Compute: C &asymp; 6ND</h2>
+<p>Training compute is well approximated by</p>
+<div class="formula"><var>C</var> &asymp; 6 &times; <var>N</var> &times; <var>D</var><span class="cap">C in arithmetic operations, N the number of parameters, D the number of training tokens.</span></div>
+<p>Where does 6 come from? In the forward pass each parameter takes part in one multiply and one add per token: 2 operations. The backward pass needs about twice as many, because it computes gradients both for the weights and for the inputs of each layer: 4 more. 2 + 4 = 6 per parameter per token. (Attention's square term adds a little on top, small unless sequences are very long.)</p>
+<p>Worked: a 7-billion-parameter model on 2 trillion tokens.</p>
+<ol>
+<li><var>C</var> = 6 &times; 7 &times; 10<sup>9</sup> &times; 2 &times; 10<sup>12</sup> = 8.4 &times; 10<sup>22</sup> operations.</li>
+<li>Suppose each accelerator chip peaks at 3 &times; 10<sup>14</sup> operations per second and you keep it 40% busy (real training rarely gets close to peak): 1.2 &times; 10<sup>14</sup> useful operations per second.</li>
+<li>8.4 &times; 10<sup>22</sup> / 1.2 &times; 10<sup>14</sup> = 7 &times; 10<sup>8</sup> chip-seconds &asymp; 194,000 chip-hours.</li>
+<li>On 1,024 chips: 7 &times; 10<sup>8</sup> / 1,024 &asymp; 684,000 seconds &asymp; <b>7.9 days</b>, if everything scales perfectly, which it never quite does.</li>
+</ol>
+
+<h3 id="chinchilla">How to split a budget between N and D</h3>
+<p>For a fixed compute budget, a bigger model sees fewer tokens. "Training Compute-Optimal Large Language Models" (2022) found that for the lowest loss per unit of compute, parameters and tokens should grow together, at roughly 20 training tokens per parameter. For the budget above, <var>D</var> = 20<var>N</var> gives 6 &times; <var>N</var> &times; 20<var>N</var> = 8.4 &times; 10<sup>22</sup>, so <var>N</var> &asymp; 26 billion parameters and <var>D</var> &asymp; 530 billion tokens.</p>
+<p>Yet the worked model uses 286 tokens per parameter, far past 20. That is deliberate and common: compute-optimal means cheapest to train, but a model is trained once and used millions of times. A smaller model trained for longer costs more to make and less to run.</p>
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Training compute calculator</h4></div>
+<p class="hint">The defaults are the worked example. Then set N to about 200 thousand, D to about 4 million and the chip to "a laptop CPU" with 1 chip: that is roughly the tiny model of <a href="project-tiny-lm.html">chapter 20</a>, a matter of minutes. Watch the training memory as N grows: it is why big models are trained across many chips.</p>
+<div id="w-scaling"></div>
+</div>
+<p>The memory lines use common rules of thumb. Training with Adam in mixed precision keeps about 16 bytes per parameter: 16-bit weights and gradients (2 + 2), a 32-bit master copy of the weights (4) and Adam's two running averages (4 + 4), the accounting used in "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models" (2019). Activations come on top. Just running a model in 16-bit numbers needs 2 bytes per parameter, less with <a href="quantisation.html">quantisation</a> (chapter 39).</p>
+
+<h2 id="sft">Supervised fine-tuning</h2>
+<p>A pretrained "base" model continues text; ask it a question and it may continue with three more questions, as if writing a quiz. <a class="g" href="glossary.html#sft">Supervised fine-tuning</a> (SFT) trains it further on examples of conversations: an instruction and a good reply, often tens of thousands of them, written or checked by people. The loss is the same next-token cross-entropy, with one change: only the reply's tokens count. If an example has 6 prompt tokens and 4 reply tokens, the loss is the mean over the 4 reply positions; the prompt is context, not something to learn to write.</p>
+<p>SFT also teaches the chat format: special tokens that mark where the system prompt, the user's turn and the assistant's turn begin, and how a tool call is written. After SFT the model answers questions, but it imitates its examples, including their mistakes, and has no notion of which of two plausible replies is better.</p>
+
+<h2 id="rlhf">Learning from preferences: RLHF</h2>
+<p>People find it much easier to compare two replies than to write a perfect one. "Training language models to follow instructions with human feedback" (2022) described the recipe usually called <a class="g" href="glossary.html#rlhf">RLHF</a>, reinforcement learning from human feedback:</p>
+<ol>
+<li><b>Collect comparisons.</b> For many prompts, sample two or more replies and ask people which is better.</li>
+<li><b>Train a reward model</b>: a copy of the language model with a single number as output, trained so that the preferred reply scores higher. The usual loss treats the probability that reply A beats reply B as &sigma;(<var>r</var><sub>A</sub> &minus; <var>r</var><sub>B</sub>), the sigmoid of the score gap. Worked: <var>r</var><sub>A</sub> = 1.2, <var>r</var><sub>B</sub> = 0.4 gives &sigma;(0.8) = 0.690; if people chose A, the loss is &minus;ln 0.690 = 0.371, and training widens the gap.</li>
+<li><b>Optimise the model against the reward model</b> with reinforcement learning, typically the algorithm from "Proximal Policy Optimization Algorithms" (2017). The model generates replies, the reward model scores them, and the model is nudged towards higher-scoring replies, with a penalty on drifting too far from the SFT model, measured by <a class="g" href="glossary.html#kl-divergence">KL divergence</a> (<a href="maths-softmax-entropy.html">chapter 9</a>).</li>
+</ol>
+<div class="formula">maximise &nbsp; average reward(reply) &minus; &beta; &times; KL(new model &Vert; SFT model)</div>
+<p>The KL penalty matters. A reward model is only an imperfect stand-in for human judgement, and a model optimised hard against it learns to exploit its blind spots, for example by writing longer or more flattering replies that score well without being better. This "reward hacking" is one source of the familiar tendency of assistants to agree with the user. A related approach, "Constitutional AI: Harmlessness from AI Feedback" (2022), has a model produce the comparisons by following written principles, reducing the human labelling needed.</p>
+
+<h2 id="dpo">DPO: preferences without a reward model</h2>
+<p>"Direct Preference Optimization: Your Language Model is Secretly a Reward Model" (2023) showed that the same goal can be reached with a simple classification-style loss on the preference pairs, with no separate reward model and no reinforcement-learning loop. For a chosen reply <var>y</var><sub>w</sub> and a rejected reply <var>y</var><sub>l</sub>:</p>
+<div class="formula">loss = &minus;ln &sigma;(&beta; [ (ln &pi;(<var>y</var><sub>w</sub>) &minus; ln &pi;<sub>ref</sub>(<var>y</var><sub>w</sub>)) &minus; (ln &pi;(<var>y</var><sub>l</sub>) &minus; ln &pi;<sub>ref</sub>(<var>y</var><sub>l</sub>)) ])<span class="cap">&pi; is the model being trained, &pi;<sub>ref</sub> the frozen SFT model, ln &pi;(y) the log-probability of the whole reply, &beta; a strength setting such as 0.1.</span></div>
+<p>Worked with &beta; = 0.1. The chosen reply's log-probability rose from &minus;14.0 under the reference model to &minus;12.0 now: +2.0. The rejected reply's fell from &minus;14.0 to &minus;15.0: &minus;1.0. The bracket is 2.0 &minus; (&minus;1.0) = 3.0; times &beta; is 0.3; &sigma;(0.3) = 0.574; the loss is &minus;ln 0.574 = <b>0.554</b>. The loss falls as the model raises the chosen reply relative to the reference and lowers the rejected one. Because it is simple and stable, DPO and its variants are widely used, including for fine-tuning small open models.</p>
+
+<h3 id="verifiable">Rewards you can check</h3>
+<p>For maths and code, the reward can come from a checker rather than a person or a reward model: did the final answer match, did the tests pass? Reinforcement learning against such verifiable rewards, at large scale, is how recent reasoning models learned to produce long chains of working before an answer (<a href="llm-tokens.html#reasoning">chapter 16</a>), as described for example in "DeepSeek-R1: Incentivizing Reasoning Capability in LLMs via Reinforcement Learning" (2025).</p>
+
+<h2 id="evaluation">Evaluation</h2>
+<p>Every stage needs measurement, and no single number is enough.</p>
+<ul>
+<li><b>Held-out loss and perplexity</b> track pretraining, but say little about usefulness.</li>
+<li><b>Benchmarks</b>: fixed question sets with checkable answers, such as the 57-subject exam questions of "Measuring Massive Multitask Language Understanding" (2020). Cheap and comparable, but they saturate, and contamination can inflate them.</li>
+<li><b>Human preference</b>: people compare two models' replies side by side, often blind. Expensive, but closest to what users feel.</li>
+<li><b>Model as judge</b>: a strong model grades replies against a rubric, studied in "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena" (2023). Scalable, but judges have biases (towards longer replies, towards their own style) and must themselves be checked against human labels.</li>
+<li><b>Your own task evals</b>: questions from your domain, with the answers or properties you need. For an application, these matter far more than public leaderboards.</li>
+</ul>
+
+<div class="callout note"><span class="title">Try it</span><p>A 1-billion-parameter model is trained on 20 billion tokens. How many operations is that, and how long would it take on 8 chips each delivering 10<sup>14</sup> useful operations per second?</p></div>
+<details><summary>Answer</summary><div><p><var>C</var> = 6 &times; 10<sup>9</sup> &times; 2 &times; 10<sup>10</sup> = 1.2 &times; 10<sup>20</sup>. Per second the 8 chips do 8 &times; 10<sup>14</sup>, so 1.2 &times; 10<sup>20</sup> / 8 &times; 10<sup>14</sup> = 150,000 seconds, about 42 hours. It is exactly at 20 tokens per parameter.</p></div></details>
+
+<h2 id="own-evals">Your own task evals in practice</h2>
+<p>If you build on trained models rather than train them, the "your own task evals" of the list above are the evaluation you actually run. A typical set-up has a question bank, built by a script with a <code>--check</code> mode that exits with an error when the built file is out of date. A live run sends every question through the system and has a judge score each answer on every criterion of a written rubric. The judge itself is checked the way this chapter recommends: known defects are planted into good answers, and agreement between labellers, or between a judge candidate and human labels, is measured with Cohen's kappa (<a href="evals.html">chapter 44</a>).</p>
+<p>Two training facts show up as practical limits in such a system. Models know nothing after their cutoff, so live facts such as deposit rates should come from a knowledge base and tools (<a href="knowledge-base.html">chapter 27</a>). And because preference-trained models aim to please, every figure in an answer should trace back to a tool result before it is shown (<a href="guardrails.html">chapter 34</a>).</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-judge.html">Lab 8</a> you build an LLM judge, plant known defects in good answers and measure agreement with Cohen's kappa.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Where does the 6 in C &asymp; 6ND come from?</summary><div><p>About 2 operations per parameter per token in the forward pass (a multiply and an add) and about 4 in the backward pass, which computes gradients for both weights and inputs.</p></div></details>
+<details><summary>Why might a team train a model on far more than 20 tokens per parameter?</summary><div><p>20 per parameter minimises training cost for a given loss, but a smaller model trained longer is cheaper and faster to run, and running costs dominate for a widely used model.</p></div></details>
+<details><summary>In SFT, which tokens contribute to the loss?</summary><div><p>Only the reply's tokens. The prompt is context the model conditions on, not text it should learn to produce.</p></div></details>
+<details><summary>What does the KL penalty in RLHF protect against?</summary><div><p>The model drifting far from the SFT model to exploit weaknesses in the reward model (reward hacking), for example by producing replies that score well without being better.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/watch?v=7xTGNNLPyMI" target="_blank" rel="noopener noreferrer">Deep Dive into LLMs like ChatGPT</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Karpathy&#x27;s long overview of the full pipeline: pretraining on next-token prediction, fine-tuning and reinforcement learning.</span></li>
+<li><a href="https://arxiv.org/abs/2001.08361" target="_blank" rel="noopener noreferrer">Scaling Laws for Neural Language Models (2020)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Kaplan et al. show loss falls as a power law in model size, data and compute.</span></li>
+<li><a href="https://arxiv.org/abs/2203.15556" target="_blank" rel="noopener noreferrer">Training Compute-Optimal Large Language Models (2022)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">The Chinchilla paper: for a fixed budget, train smaller models on far more tokens.</span></li>
+<li><a href="https://arxiv.org/abs/2203.02155" target="_blank" rel="noopener noreferrer">Training language models to follow instructions with human feedback (2022)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">The InstructGPT paper describing supervised instruction tuning followed by RLHF.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-llm-training">All resources for this chapter</a> and 3 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/scaling.js"></script>
+</body>
+</html>

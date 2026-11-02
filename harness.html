@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>33. Harness engineering &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 33</p>
+<h1>Harness engineering</h1>
+<p class="lead">The harness is everything around a model that turns it into a working system: the loop that calls it, the context it is given, the tools and permissions it has, the checks on what it produces, and the records of what it did. Two products built on the same model can differ enormously in quality, and the difference is almost all harness. This chapter is about engineering that layer on purpose.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>A model upgrade is something you receive; the harness is something you build. Most failures in a deployed AI system (a loop that never stops, a check that never ran, a tool that did too much) are harness failures, and they are fixed with ordinary engineering.</p></div>
+
+<h2 id="parts">The parts of a harness</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Part</th><th>Question it answers</th><th>Chapter</th></tr>
+<tr><td>Control loop</td><td>When is the model called, and when does it stop?</td><td><a href="agents.html#loop">29</a></td></tr>
+<tr><td>Context assembly</td><td>What goes into each call, and what is left out?</td><td><a href="context-engineering.html">22</a></td></tr>
+<tr><td>Tools and permissions</td><td>What can the model look at and change, and who approves?</td><td><a href="tools.html">28</a></td></tr>
+<tr><td>Output contracts</td><td>What shape must the answer have, and is it checked?</td><td><a href="tools.html#structured">28</a></td></tr>
+<tr><td>Verification</td><td>How do we know the output is right before anyone relies on it?</td><td>this chapter</td></tr>
+<tr><td>Budgets</td><td>How much time and money may one task spend?</td><td><a href="production.html">42</a></td></tr>
+<tr><td>Observability</td><td>What happened, step by step, and what did it cost?</td><td><a href="observability.html">45</a></td></tr>
+<tr><td>Evaluation</td><td>Is this version of the whole system better than the last?</td><td><a href="evals.html">44</a></td></tr>
+</table></div>
+
+<h2 id="single-gateway">One gateway for every model call</h2>
+<p>The most useful structural rule is that every model call goes through one function. That function is where you scrub personal data, attach the output schema, cap the tool loop, record the cost and send the trace. If calls can bypass it, every protection becomes "usually". Enforce the rule with a check that fails the build, not with a comment asking people to remember: a short script that reads the code with Python's <code>ast</code> module and fails if the provider's SDK is called anywhere outside the gateway is enough.</p>
+<p>Two more habits belong in the gateway. Pass user text to the model as data parts, never by pasting it into a prompt template, so a customer who types template syntax cannot change the prompt. And scrub personal data from every message at this point, even if an earlier step already did: the gateway is the one place that cannot be skipped (<a href="guardrails.html">chapter 34</a>).</p>
+
+<h2 id="verification">Verification: trust the check, not the claim</h2>
+<p>A model's statement that it finished, or that its answer is right, is not evidence. The harness should verify with something that does not depend on the model's opinion:</p>
+<ul>
+<li><b>Deterministic checks first.</b> Schemas, tests, linters, reference checks, arithmetic redone in code. They are cheap, exact and repeatable.</li>
+<li><b>Model-based checks second</b>, for what code cannot judge (tone, suitability), with a rubric and known agreement with people.</li>
+<li><b>Fail closed.</b> If a check cannot run (the checker errored, the service is down), treat the output as failed, not passed.</li>
+<li><b>Prove a check can fail.</b> A new check should be shown to catch a deliberately broken input before you trust its "all clear". A check that silently ran on nothing prints nothing, and nothing looks exactly like a pass.</li>
+<li><b>Guard the checks themselves.</b> An agent told to make the tests pass can delete the failing test. Changes to tests, thresholds and checkers deserve a separate review.</li>
+</ul>
+
+<h2 id="retries">Retries and the maths of verification</h2>
+<p>When a reliable check exists, a retry turns a modest success rate into a high one. Worked: if one attempt succeeds with probability 0.8 and the check catches every failure, the chance that at least one of three attempts passes is 1 &minus; 0.2<sup>3</sup> = 0.992. Without the check you cannot tell which attempt to keep, and the chance that all three are right is only 0.8<sup>3</sup> = 0.512.</p>
+<p>Two cautions. Attempts are not independent: a model that misunderstood the task usually misunderstands it again, so feed the reason for the failure into the retry, or move to a stronger model. And every retry costs time and money, so cap them and decide in advance what happens when the cap is reached: a safe fallback, not one more try.</p>
+
+<h2 id="permissions">Permissions and side effects</h2>
+<ul>
+<li>Separate reading from writing. Most steps need only reads.</li>
+<li>Route irreversible actions (payments, messages, deletions, deployments) through a person or a rule outside the model.</li>
+<li>Run code the model writes in a sandbox with no secrets and limited network.</li>
+<li>Prefer dry runs that show what would happen; make the real run a separate, explicit step.</li>
+</ul>
+
+<h2 id="loop-guards">Guards inside the tool loop</h2>
+<p>A tool loop is where a harness most often runs away, so give it a few mechanical guards:</p>
+<ul>
+<li><b>Cap the rounds.</b> Allow a fixed number of tool rounds (8 is a sensible default for simple tasks; a research-style task may justify more). A model that uses them all without answering gets one more call with no tools, so it must answer from the exchange so far.</li>
+<li><b>Return bad calls as errors.</b> If a tool call's arguments fail the tool's schema, send the model an error result it can correct, instead of crashing the run.</li>
+<li><b>Notice repeats.</b> If the model makes the same call with the same arguments twice in one run, hand back the earlier result with a note to answer now, instead of running the tool again.</li>
+</ul>
+<p>Two further rules apply to what the loop produces. Run the deterministic checks first and the model-based check second, and if the model-based check errors, fail closed to a fixed safe reply. Retry a blocked answer at most once, with the reasons for the block, perhaps on a stronger model, and then fall back to a safe reply. If failures cluster, a circuit breaker (<a href="production.html#reliability">chapter 42</a>) stops retries piling up.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-agent.html">Lab 5</a> you build the tool loop itself, and in <a href="lab-tracing.html">Lab 9</a> you record every call with its tokens and its cost, so you can see what a loop did.</p></div>
+
+<h2 id="state">State that survives the context</h2>
+<p>A long task outlives any one context window. Keep the plan, progress and decisions in files or tables the harness owns, so a run can resume after a crash, a person can see where it stands, and a fresh context can pick up the work. Write down what was tried and failed, not only what worked; otherwise the next attempt repeats the same mistakes.</p>
+
+<h2 id="budgets-records">Budgets and records</h2>
+<ul>
+<li><b>Budgets that refuse.</b> A spend limit should refuse to start the path it guards when no limit is set, and a path that calls a provider directly should book the worst-case cost before each call (<a href="production.html#budgets">chapter 42</a>).</li>
+<li><b>Tag every answer.</b> Record the prompt version, the model ids, the code version and the data source with each answer, and send a trace with personal data scrubbed (<a href="observability.html">chapter 45</a>).</li>
+</ul>
+
+<h2 id="failure-modes">Common harness failures</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Failure</th><th>What it looks like</th><th>Fix</th></tr>
+<tr><td>Silent pass</td><td>A check reports success because it never ran</td><td>Make every check print what it examined; test it on a broken input</td></tr>
+<tr><td>Runaway loop</td><td>Cost climbs while the agent repeats a step</td><td>Turn, tool and money caps with clear messages</td></tr>
+<tr><td>Context rot</td><td>Quality falls as the conversation grows</td><td>Compact or restart with a written summary (<a href="context-engineering.html#techniques">chapter 22</a>)</td></tr>
+<tr><td>Gamed check</td><td>Tests pass because they were weakened</td><td>Review changes to checks separately</td></tr>
+<tr><td>Hidden gap</td><td>A known shortcut lives only in someone's memory and is forgotten</td><td>Keep a written list of known gaps and scan the code for markers that must match it</td></tr>
+<tr><td>Unrecorded change</td><td>Nobody can say which prompt version produced an answer</td><td>Version prompts and tag every answer with them</td></tr>
+</table></div>
+
+<div class="callout note"><span class="title">Try it</span><p>A step succeeds 70% of the time per attempt. You allow up to two attempts and the check catches 90% of failures (a failure it misses is passed through). What fraction of outputs that reach the user are failures?</p></div>
+<details><summary>Answer</summary><div><p>First attempt: 0.7 good; 0.3 &times; 0.1 = 0.03 bad and missed; 0.3 &times; 0.9 = 0.27 caught and retried. Second attempt: 0.27 &times; 0.7 = 0.189 good, 0.27 &times; 0.3 &times; 0.1 = 0.0081 bad and missed, and 0.27 &times; 0.3 &times; 0.9 = 0.0729 caught again, which go to the fallback. Outputs reaching the user: 0.7 + 0.03 + 0.189 + 0.0081 = 0.9271, of which 0.0381 are failures: about 4.1%. The check's misses, not the model, now set the error rate.</p></div></details>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why route every model call through one function?</summary><div><p>So scrubbing, limits, cost records, tracing and validation apply to every call without exception, and one check can enforce it.</p></div></details>
+<details><summary>What does "fail closed" mean for a check?</summary><div><p>If the check cannot run, the output is treated as failed, not as passed.</p></div></details>
+<details><summary>One attempt succeeds 80% of the time and the check is perfect. What do three attempts give?</summary><div><p>1 &minus; 0.2<sup>3</sup> = 0.992, if the attempts fail independently.</p></div></details>
+<details><summary>How do you know a new check works?</summary><div><p>Run it on an input you broke on purpose and see it fail, then on a correct input and see it pass.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.anthropic.com/research/building-effective-agents" target="_blank" rel="noopener noreferrer">Building effective AI agents</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Baseline patterns for agent systems and a case for keeping them simple.</span></li>
+<li><a href="https://www.anthropic.com/research/effective-context-engineering-for-ai-agents" target="_blank" rel="noopener noreferrer">Effective context engineering for AI agents</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Treats context as a scarce budget and covers compaction, note-taking and sub-agents.</span></li>
+<li><a href="https://www.anthropic.com/research/writing-tools-for-agents" target="_blank" rel="noopener noreferrer">Writing effective tools for AI agents</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">How tool design and descriptions shape agent behaviour, and how to evaluate tools.</span></li>
+<li><a href="https://www.anthropic.com/research/effective-harnesses-for-long-running-agents" target="_blank" rel="noopener noreferrer">Effective harnesses for long-running agents</a> <span class="pill">article</span> <span class="pill">advanced</span><br><span class="res-note">Techniques for agents that work across many context windows, such as progress files and incremental steps.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-harness">All resources for this chapter</a> and 4 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

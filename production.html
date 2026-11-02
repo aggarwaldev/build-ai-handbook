@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>42. Running AI in production &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 42</p>
+<h1>Running AI in production</h1>
+<p class="lead">A demo answers one question well. Production answers thousands a day within a time budget and a money budget, keeps working when a provider is slow or down, and tells you when quality slips. This chapter does the arithmetic of latency, cost and caching, and lists the engineering that keeps an AI service up.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Model calls are slow, priced per token and occasionally fail. Small per-request numbers multiply: a cent per answer at ten thousand answers a day is a hundred dollars a day, and a two-second slowdown in one step is felt by every customer.</p></div>
+
+<h2 id="latency">Latency: first token and the rest</h2>
+<p>A model call has two speeds: the time to the first token (reading the prompt, queueing) and the rate at which tokens follow. Total time &asymp; time to first token + output tokens / tokens per second.</p>
+<p>Worked: first token after 0.8 s, then 60 tokens per second, for a 400-token answer: 0.8 + 400 / 60 &asymp; 7.5 s. Streaming does not make that faster, but the customer sees words after 0.8 s instead of a blank screen for 7.5. Long outputs are the main cost in time, so asking for shorter, structured answers is a speed fix as well as a cost fix.</p>
+<p>Streaming over HTTP usually means server-sent events: respond with <code>text/event-stream</code> and <code>Cache-Control: no-cache</code>, and add <code>X-Accel-Buffering: no</code> so a reverse proxy does not hold the stream back. Send a status event as each stage starts, then the answer. Work that does not affect the answer, such as extracting memory facts, can run after the answer is sent and arrive as a last event, so it never adds to the time the customer waits (<a href="memory.html#extraction-rules">chapter 37</a>).</p>
+<p>Watch percentiles, not the average. Sorted response times of 2, 2, 3, 3, 3, 4, 4, 5, 9 and 30 seconds have a mean of 6.5 s, but a median (p50) of 3.5 s, and the slowest 10% take 30 s. The p95 or p99 is what your unhappiest customers feel.</p>
+
+<h2 id="cost">Cost per answer</h2>
+<p>Cost = input tokens &times; input price + output tokens &times; output price, with prices quoted per million tokens. Worked, at $2 per million input tokens and $10 per million output tokens: an answer that sends 6,000 tokens and receives 500 costs 6,000 &times; 2 / 10<sup>6</sup> + 500 &times; 10 / 10<sup>6</sup> = $0.012 + $0.005 = $0.017. At 10,000 answers a day that is $170 a day. An answer that makes five calls (classify, two lookups, merge, check) costs the sum of all five.</p>
+<p>Record the cost of every call as it happens: collect the costs of all calls in a run, then write one row per call with model, provider, prompt version and token counts, and put each call's cost and tokens on its trace span so they sum up the tree to the whole answer (<a href="observability.html">chapter 45</a>). Judge calls belong in the same table, against the message they judged.</p>
+
+<h2 id="caching">Prompt caching</h2>
+<p>Many calls start with the same long prefix: tool definitions, system prompt, reference documents. Providers can cache that prefix so later calls skip re-reading it. With Anthropic's API you mark the end of the reusable part with <code>cache_control</code>; the prefix is built in the order tools, then system, then messages, so put stable content first and anything that changes per request last. A cached prefix lives 5 minutes by default, refreshed each time it is used, or 1 hour if you ask. Prefixes below a minimum length (512 tokens on the newest models) are simply not cached.</p>
+<p>Pricing is relative to the normal input price: writing a 5-minute cache entry costs 1.25&times;, a 1-hour entry 2&times;, and reading from the cache 0.1&times; for most models (0.05&times; for Opus 5.5 and Sonnet 5.5).</p>
+<p>Worked, at $2 per million input tokens with a 0.05&times; read price: a 5,000-token prefix costs $0.010 per call uncached. Cached, the first call writes it for 5,000 &times; 2.50 / 10<sup>6</sup> = $0.0125 and each later call reads it for 5,000 &times; 0.10 / 10<sup>6</sup> = $0.0005. For 100 calls within the cache lifetime: $1.00 uncached against $0.0125 + 99 &times; $0.0005 &asymp; $0.062 cached. Caching also cuts time to first token, because the prefix is not processed again.</p>
+<p>Two places it pays most. In a tool loop, each round resends every earlier round, which is exactly a prefix, so marking the request for caching means later rounds read the earlier ones cheaply. And a fixed breakpoint on the system prompt of a repeated task lets the next conversation on that task read it too. Keep the table of prices in one dated place and check it against the provider's pricing page whenever you touch it: a cache read that is priced wrongly makes every cost chart wrong.</p>
+
+<h2 id="limits">Rate limits, retries and batching</h2>
+<ul>
+<li><b>Rate limits.</b> Providers cap requests and tokens per minute. Know yours, and queue rather than fail when you approach them.</li>
+<li><b>Retries with backoff.</b> Retry only errors that can succeed later (timeouts, overload, rate limits), waiting longer each time (1, 2, 4, 8 seconds) with a little randomness ("jitter") so many clients do not retry in step. Cap the attempts.</li>
+<li><b>Timeouts on everything.</b> A call with no timeout can hold a request open for minutes.</li>
+<li><b>Retry budgets follow who is waiting.</b> A person watching a spinner gets one quick retry after a couple of seconds. A background job building an index can retry the same transient errors (429, 500, 502, 503, 504 or a dropped connection) up to several times, 20 seconds apart. A call still rate-limited after the client's own quick retries can wait a few seconds and try once more.</li>
+<li><b>Batch what can wait.</b> Nightly evaluations or document processing can go through a provider's batch API, which trades hours of delay for a lower price.</li>
+</ul>
+
+<h2 id="reliability">Staying up</h2>
+<ul>
+<li><b>Fallbacks.</b> If one provider fails, route the same model through another, or drop to a different model, and record which one answered.</li>
+<li><b>Circuit breakers.</b> After repeated failures, stop calling a dependency for a while instead of piling up slow requests; try again later.</li>
+<li><b>Degrade gracefully.</b> Decide what the customer sees when a step fails: a shorter answer, a cached one, or an honest "let me hand you to a person".</li>
+<li><b>Budgets as errors.</b> A spend limit that refuses calls turns a runaway bill into a visible error.</li>
+</ul>
+
+<h2 id="budgets">Budgets that cannot be overrun</h2>
+<p>A budget checked after a call only tells you that you overspent. Book the worst case before the call instead: the worst-case cost is the maximum output tokens times the output price. Worked: with a cap of 4,096 output tokens on a model priced at $10 per million output tokens, one call reserves 4,096 &times; 10 / 10<sup>6</sup> = $0.04096. Refuse the call when the amount already spent, plus the amounts reserved by calls in flight, plus this worst case, would reach the limit. Round each recorded cost up to the nearest millionth of a dollar so the meter never undercounts. And make the limit a required setting: a path that spends money should refuse to start when no limit is set, because an optional budget is the one that gets left off. If the counters live in the process's memory they reset on restart and do not add up across servers; that is acceptable for a prototype if you write it down.</p>
+
+<h2 id="watch">What to watch</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Signal</th><th>Why</th></tr>
+<tr><td>p50 and p95 latency per step</td><td>Find the slow step, and see slowdowns before customers complain</td></tr>
+<tr><td>Cost per answer and per day</td><td>Catch a prompt that grew or a loop that runs long</td></tr>
+<tr><td>Error, timeout and fallback rates</td><td>A provider having a bad day shows here first</td></tr>
+<tr><td>Block and fallback rates of your checks</td><td>A sudden change means the model or the data changed</td></tr>
+<tr><td>Quality scores on a sample</td><td>Latency and cost can look perfect while answers get worse (<a href="evals.html">chapter 44</a>)</td></tr>
+</table></div>
+
+<div class="callout note"><span class="title">Try it</span><p>A 3,000-token prefix is used by 40 calls within 5 minutes. Input costs $4 per million tokens, a 5-minute cache write is 1.25&times; and a read 0.05&times;. What does the prefix cost with and without caching?</p></div>
+<details><summary>Answer</summary><div><p>Without: 40 &times; 3,000 &times; 4 / 10<sup>6</sup> = $0.48. With: one write at 3,000 &times; 5 / 10<sup>6</sup> = $0.015, plus 39 reads at 3,000 &times; 0.20 / 10<sup>6</sup> = $0.0006 each, $0.0234. Total about $0.038, roughly a twelfth.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-tracing.html">Lab 9</a> you record the latency, tokens and cost of every model call and add them up per run. <a href="lab-capstone.html">Lab 10</a> brings the labs together in one small assistant, where you can watch these numbers on a whole run.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Streaming does not shorten the total time. Why use it?</summary><div><p>The customer sees the answer begin after the first token instead of waiting for the last one.</p></div></details>
+<details><summary>An answer sends 10,000 tokens and receives 1,000 at $2 and $10 per million. What does it cost?</summary><div><p>$0.02 + $0.01 = $0.03.</p></div></details>
+<details><summary>Why put the part of a prompt that changes per request at the end?</summary><div><p>A cache matches a prefix; anything that changes early in the prompt breaks the match for everything after it.</p></div></details>
+<details><summary>Why add jitter to retry waits?</summary><div><p>So many clients that failed together do not all retry at the same instant and overload the service again.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://docs.vllm.ai/en/latest/" target="_blank" rel="noopener noreferrer">vLLM</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Docs for a high-throughput open-source serving engine for self-hosted models.</span></li>
+<li><a href="https://docs.ollama.com/" target="_blank" rel="noopener noreferrer">Ollama documentation</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Running open models locally behind a simple HTTP API.</span></li>
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching" target="_blank" rel="noopener noreferrer">Prompt caching</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Cutting cost and latency on repeated prompt prefixes.</span></li>
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/batch-processing" target="_blank" rel="noopener noreferrer">Batch processing (Claude API docs)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">The Message Batches API for large asynchronous jobs at lower cost.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-production">All resources for this chapter</a> and 6 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

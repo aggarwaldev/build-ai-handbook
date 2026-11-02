@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>20. Project: train your own tiny language model &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part III &middot; How LLMs work &middot; Chapter 20</p>
+<h1>Project: train your own tiny language model</h1>
+<!-- scripts: -->
+<p class="lead">Build two language models that write text one character at a time. The first is a bigram model in pure Python that counts which character follows which. The second is a tiny transformer in PyTorch with real attention. Both train on the same short text, so you can see exactly what attention adds.</p>
+
+<div class="callout why"><span class="title">Why do this</span><p>A language model is easier to trust once you have trained one and watched its loss fall. The bigram model makes chapters 9 and 16 concrete: probabilities, cross-entropy, perplexity, temperature. The transformer makes chapters 17 and 18 concrete, in about 200 lines you can match against the hand calculations.</p></div>
+
+<h2 id="setup">What you need</h2>
+<div class="tbl-wrap"><table>
+<tr><th></th><th><code>bigram.py</code></th><th><code>tiny_transformer.py</code></th></tr>
+<tr><td>Packages</td><td>None: the Python standard library only</td><td>PyTorch 2.2 or newer</td></tr>
+<tr><td>Hardware</td><td>Any computer</td><td>A laptop CPU is enough; a GPU (CUDA or Apple silicon) is used automatically if present</td></tr>
+<tr><td>Time</td><td>Well under a second</td><td>Estimate: roughly 5 to 15 minutes on a laptop CPU at the default size, much less on a GPU</td></tr>
+<tr><td>Run status</td><td>Run here with Python 3.11; output below</td><td><b>Not run by the author</b>: PyTorch was not installed where this chapter was written. Checked with <code>python3 -m py_compile</code> only.</td></tr>
+</table></div>
+<p>The files are in <code class="path">labs/tiny-language-model/</code>: the two scripts, <code class="path">requirements.txt</code> and the training text <code class="path">data/savings.txt</code>, about 6,600 characters of plain notes on saving money written for this book. Every command below runs from the repository root.</p>
+<pre><code><span class="c"># from the repository root</span>
+python3 labs/tiny-language-model/bigram.py        <span class="c"># no install needed</span>
+python3 -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install -r labs/tiny-language-model/requirements.txt   <span class="c"># PyTorch, for the transformer</span>
+python labs/tiny-language-model/tiny_transformer.py --steps 500</code></pre>
+
+<h2 id="bigram">Part 1: the bigram model</h2>
+<p>A bigram model predicts the next character from the current one only. Training is counting: how often does each character follow each other one? With 50 distinct characters in the text, the model is a 50 &times; 50 table. The probability of <var>b</var> after <var>a</var> is</p>
+<div class="formula"><var>p</var>(<var>b</var> | <var>a</var>) = <span class="frac"><span>count(<var>a</var>, <var>b</var>) + &alpha;</span><span>count(<var>a</var>) + &alpha;<var>V</var></span></span><span class="cap">V is the number of distinct characters. &alpha; is the smoothing: pretend every pair was seen &alpha; extra times.</span></div>
+<p>Why smooth? With &alpha; = 0, a pair never seen in training gets probability 0, and a single such pair in the validation text makes the loss &minus;ln 0 = infinity. The script shows exactly that.</p>
+<pre><code>$ python3 labs/tiny-language-model/bigram.py --after t
+text: 6586 characters, 50 distinct; training on 5927, validating on 659
+uniform guess: loss ln 50 = 3.9120 nats, perplexity 50
+bigram (alpha=0.1): training loss 2.3002, validation loss 2.4832, validation perplexity 11.98
+most common pairs: 'e&#9251;' 182, 's&#9251;' 138, '&#9251;t' 133, 'th' 129, 't&#9251;' 120, '&#9251;a' 119, 'he' 87, 'n&#9251;' 84
+after 't': h 0.318, &#9251; 0.296, e 0.086, o 0.059, s 0.040, . 0.037, i 0.035, a 0.025</code></pre>
+<p>(<code>&#9251;</code> stands for a space.) Read it against earlier chapters. A uniform guess over 50 characters has loss ln 50 = 3.91 (<a href="maths-softmax-entropy.html#cross-entropy">chapter 9</a>). Counting brings the validation loss to 2.48, a perplexity of about 12: as unsure as choosing among 12 characters instead of 50. After "t" the model expects "h" (as in "the") or a space. The training loss is lower than the validation loss, the usual gap (<a href="ml-generalisation.html#splits">chapter 11</a>).</p>
+
+<h3 id="smoothing">Smoothing is regularisation</h3>
+<p>The run here gave these validation losses for different &alpha;:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>&alpha;</th><th>training loss</th><th>validation loss</th></tr>
+<tr><td class="num">0</td><td class="num">2.2733</td><td class="num">infinite</td></tr>
+<tr><td class="num">0.01</td><td class="num">2.2767</td><td class="num">2.4961</td></tr>
+<tr><td class="num">0.03</td><td class="num">2.2827</td><td class="num">2.4838</td></tr>
+<tr><td class="num">0.1</td><td class="num">2.3002</td><td class="num">2.4832</td></tr>
+<tr><td class="num">0.3</td><td class="num">2.3391</td><td class="num">2.5069</td></tr>
+<tr><td class="num">1</td><td class="num">2.4376</td><td class="num">2.5876</td></tr>
+</table></div>
+<p>More smoothing always raises the training loss and first lowers, then raises the validation loss: the U shape of <a href="ml-generalisation.html">chapter 11</a>. &alpha; is a regularisation strength chosen on validation data, which is why the script's default is 0.1.</p>
+
+<h3 id="sampling">Sampling</h3>
+<p>Generation starts from "T", draws the next character from its row of probabilities, and repeats. The temperature works as in <a href="llm-tokens.html#sampling">chapter 16</a>. From the run here:</p>
+<pre><code>temperature 1:   Tis, merangsallimpust. the isttholor s th ls ft n yon eet morrewirendaladded ststrther...
+temperature 0.5: The chen moun thatout the andithe th t th ns fond yor fes pleres s s r and marouroun t thisthe...</code></pre>
+<p>Word-like fragments, common pairs such as "th" and "he", spaces in sensible places, but no words beyond the shortest. A model that sees one character of context cannot do better. Lower temperatures repeat "the" and "th" more; higher ones produce capital letters and punctuation in odd places.</p>
+
+<h3 id="learn">The same table, learned by gradient descent</h3>
+<p>With <code>--learn</code> the script also trains a 50 &times; 50 table of logits, <code>W</code>, by gradient descent: the next-character probabilities are softmax(<code>W</code>[current character]). This is a neural network with one layer and a one-hot input. Its gradient for each row is "predicted minus actual", summed over the pairs starting with that character (<a href="maths-softmax-entropy.html#ce-gradient">chapter 9</a>).</p>
+<pre><code>$ python3 labs/tiny-language-model/bigram.py --learn
+learning a 50 x 50 table of logits by gradient descent (lr 50, 300 steps):
+  step     1  training loss 3.9120
+  step    30  training loss 2.4735
+  step   150  training loss 2.3267
+  step   300  training loss 2.2999
+  the counting model with alpha=0 has training loss 2.2733: the floor to aim for</code></pre>
+<p>(Some lines are left out.) It starts at the uniform guess and falls towards 2.2733, the loss of plain counting, which is the best any table can do on the training text. Counting and gradient descent reach the same model; gradient descent is the method that still works when the model is not a simple table.</p>
+
+<h2 id="transformer">Part 2: the tiny transformer</h2>
+<p><code class="path">tiny_transformer.py</code> keeps the task and the data, but each prediction may look back at up to 64 characters through attention. Its parts map one to one onto <a href="llm-transformer.html">chapter 18</a>:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Piece</th><th>What it does</th><th>Chapter</th></tr>
+<tr><td><code>TinyLM.tok</code>, <code>TinyLM.pos</code></td><td>Token table and learned position table</td><td><a href="llm-embeddings-positions.html#lookup">17</a></td></tr>
+<tr><td><code>CausalSelfAttention</code></td><td>Queries, keys and values from one matrix; scores divided by &radic;(head size); the causal mask; softmax; heads joined and projected</td><td><a href="llm-transformer.html#attention">18</a></td></tr>
+<tr><td><code>MLP</code></td><td>Widen to 4 &times; width, GELU, narrow back</td><td><a href="llm-transformer.html#mlp">18</a></td></tr>
+<tr><td><code>Block</code></td><td><code>x + attn(norm(x))</code>, then <code>x + mlp(norm(x))</code></td><td><a href="llm-transformer.html#shape">18</a></td></tr>
+<tr><td><code>TinyLM.head</code></td><td>Scores every character; shares its weights with the token table</td><td><a href="llm-embeddings-positions.html#size">17</a></td></tr>
+<tr><td>the loop in <code>main</code></td><td>AdamW with weight decay, warmup then cosine decay, gradient clipping at 1.0</td><td><a href="ml-training-deep.html#optimisers">13</a></td></tr>
+<tr><td><code>TinyLM.generate</code></td><td>Temperature and optional top-k sampling, keeping only the last 64 characters as context</td><td><a href="llm-tokens.html#sampling">16</a></td></tr>
+</table></div>
+<p>The default model has width 64, 4 heads, 2 blocks and a 64-character context. Counting its weights as in chapter 18 gives 107,392 parameters (49,984 per block, plus the tables and the final layer norm). Training for 2,000 steps of 32 windows of 64 characters is 4,096,000 character positions, so by <a href="llm-training.html#compute">chapter 19</a> about 6 &times; 107,392 &times; 4,096,000 &asymp; 2.6 &times; 10<sup>12</sup> operations. At 3 to 10 billion useful operations per second, a fair range for PyTorch on a laptop CPU, that is roughly 4 to 15 minutes. The script prints its own count when it starts, and the time at each evaluation.</p>
+<div class="callout warn"><span class="title">No recorded run</span><p>The author had no PyTorch available, so the transformer was compiled but never trained, and no output is shown. What follows is what to look for, not a record of a run.</p></div>
+<h3 id="what-to-expect">What to look for</h3>
+<ul>
+<li>The loss starts near ln 50 = 3.91 and should fall well below the bigram model's 2.48 validation loss, because the model can use up to 64 characters of context instead of one.</li>
+<li>The text is short, so a model this size can start to memorise it. If the validation loss stops falling while the training loss keeps dropping, that is overfitting (<a href="ml-generalisation.html">chapter 11</a>). The script reports the step with the lowest validation loss.</li>
+<li>Samples should contain whole words and phrases from the text. With enough training, long stretches may be copied verbatim: memorisation, the same thing that makes large models repeat their training data.</li>
+</ul>
+
+<h2 id="experiments">Experiments</h2>
+<ol>
+<li><b>Context length.</b> Run the transformer with <code>--block 1</code>. With one character of context, it can do no better than the bigram model. Then try 8, 32 and 64.</li>
+<li><b>Bigger text.</b> Pass any plain text you have the right to use with <code>--text</code>, ideally hundreds of thousands of characters. The gap between training and validation loss should shrink.</li>
+<li><b>Bigger model.</b> Try <code>--layers 4 --width 128</code> on the short text and watch overfitting set in sooner. Then raise <code>--dropout</code> to 0.2.</li>
+<li><b>No mask.</b> Comment out the <code>masked_fill</code> line in <code>CausalSelfAttention.forward</code>. The training loss drops far lower, because every position except the last can now see the character it should predict; generation becomes nonsense. This is why the mask exists.</li>
+<li><b>No scaling.</b> Remove the division by <code>math.sqrt(self.head_size)</code> and compare the first few hundred steps.</li>
+<li><b>Temperature and top-k.</b> Sample with <code>--temperature 0.5</code>, <code>1.2</code> and <code>--top-k 5</code>.</li>
+</ol>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why does the bigram model with &alpha; = 0 have an infinite validation loss?</summary><div><p>Some character pair in the validation text never appears in the training text, so its probability is 0, and &minus;ln 0 is infinite. Smoothing gives every pair a small probability.</p></div></details>
+<details><summary>Gradient descent on the 50 &times; 50 logit table stops near loss 2.2733. Why that number?</summary><div><p>It is the training loss of plain counting (&alpha; = 0), which is the maximum-likelihood table: no table of next-character probabilities can do better on the training text.</p></div></details>
+<details><summary>Why can the transformer beat the bigram model, and when can it not?</summary><div><p>It sees up to 64 earlier characters, so it can use whole words and phrases as context. With a context of one character it has the same information as the bigram model and cannot do better.</p></div></details>
+<details><summary>Removing the causal mask makes the training loss drop sharply. Why is that bad news?</summary><div><p>Each position can attend to the character it is meant to predict, so it learns to copy instead of predict. At generation time the future is not there to copy, and the output is useless.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://karpathy.ai/zero-to-hero.html" target="_blank" rel="noopener noreferrer">Neural Networks: Zero To Hero</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Index page for Karpathy&#x27;s full video course, useful to plan the order of the build.</span></li>
+<li><a href="https://www.youtube.com/watch?v=PaCmpygFfXo" target="_blank" rel="noopener noreferrer">The spelled-out intro to language modeling: building makemore</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Starts with a bigram character model and turns it into a small neural language model.</span></li>
+<li><a href="https://www.youtube.com/watch?v=kCc8FmEb1nY" target="_blank" rel="noopener noreferrer">Let&#x27;s build GPT: from scratch, in code, spelled out.</a> <span class="pill">video</span> <span class="pill">intermediate</span><br><span class="res-note">Builds a small GPT on Shakespeare text step by step, the core walkthrough for this chapter.</span></li>
+<li><a href="https://github.com/karpathy/nanoGPT" target="_blank" rel="noopener noreferrer">karpathy/nanoGPT</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Minimal, readable GPT training code to compare against or extend after the video.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-project-tiny-lm">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

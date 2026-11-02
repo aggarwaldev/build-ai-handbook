@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>16. Language models, tokens and sampling &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part III &middot; How LLMs work &middot; Chapter 16</p>
+<h1>Language models, tokens and sampling</h1>
+<p class="lead">A large language model does one thing: given some text, it gives a probability to every possible next piece of text. Everything else, from chat to tool calls, is built by running that one step in a loop. This chapter covers the pieces of text (tokens), how they are chosen (tokenisers), how the next one is picked (sampling), and the limits and extras that follow: context windows, reasoning tokens and structured output.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>You pay for tokens, wait for tokens and run out of room in tokens. Sampling settings decide whether an answer is repeatable. Structured output is how an application turns a model's text into data that code can check. Every later chapter assumes this vocabulary.</p></div>
+
+<h2 id="next-token">The next-token machine</h2>
+<p>Give a model the text "An emergency fund should cover six". It returns a <a class="g" href="glossary.html#logit">logit</a>, a raw score, for every token in its vocabulary, often 30,000 to 200,000 of them. A softmax (<a href="maths-softmax-entropy.html#softmax">chapter 9</a>) turns the scores into probabilities. Suppose five tokens matter:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>next token</th><th>logit</th><th>e<sup>logit</sup></th><th>probability</th></tr>
+<tr><td>months</td><td class="num">3.0</td><td class="num">20.086</td><td class="num">0.731</td></tr>
+<tr><td>weeks</td><td class="num">1.2</td><td class="num">3.320</td><td class="num">0.121</td></tr>
+<tr><td>years</td><td class="num">0.8</td><td class="num">2.226</td><td class="num">0.081</td></tr>
+<tr><td>days</td><td class="num">0.2</td><td class="num">1.221</td><td class="num">0.044</td></tr>
+<tr><td>salaries</td><td class="num">&minus;0.5</td><td class="num">0.607</td><td class="num">0.022</td></tr>
+<tr><td colspan="2">sum</td><td class="num">27.459</td><td class="num">1.000</td></tr>
+</table></div>
+<p>A token is picked (more on how below), appended to the text, and the whole thing goes back in to get the next token. This loop is called <a class="g" href="glossary.html#autoregressive">autoregressive</a> generation. A 300-token answer is 300 trips through the model, which is why output tokens are slower and dearer than input tokens: the input is read in one parallel pass, the output is written one token at a time.</p>
+
+<h2 id="tokens">Tokens: why not words or letters?</h2>
+<p>A model needs a fixed list of symbols, its vocabulary. Whole words make a huge list that still misses new words, names and typos. Single letters make a tiny list but very long sequences, and attention costs grow with the square of the length (<a href="ml-history.html#transformer">chapter 14</a>). <a class="g" href="glossary.html#token">Tokens</a> sit between: common words are one token, rarer words are a few pieces, and anything at all can still be spelled out from small pieces.</p>
+
+<h3 id="bpe">Byte-pair encoding, worked by hand</h3>
+<p><a class="g" href="glossary.html#bpe">Byte-pair encoding</a> (BPE) builds the vocabulary from data. Start with single characters, then repeatedly merge the most frequent adjacent pair into a new symbol. Take a tiny corpus: "rate" 5 times, "rates" 2, "late" 3, "later" 2 and "eat" 4. Mark the end of each word with <code>_</code> so the tokeniser can tell "eat" at the end of a word from "eat" inside "eaten".</p>
+<ol>
+<li>Count adjacent pairs, weighted by word counts. "a t" appears in all five words: 5 + 2 + 3 + 2 + 4 = <b>16</b>. "t e" appears in four: 5 + 2 + 3 + 2 = 12. Merge <b>a + t &rarr; at</b>. Now "rate" is <code>r at e _</code>.</li>
+<li>Recount. "at e" = 12 is now top. Merge <b>at + e &rarr; ate</b>.</li>
+<li>"ate _" = 8 (rate 5, late 3). Merge <b>ate + _ &rarr; ate_</b>.</li>
+<li>"r ate_" = 5. Merge <b>r + ate_ &rarr; rate_</b>: "rate" is now a single token.</li>
+<li>"at _" = 4 and "e at" = 4 tie; the rule here takes the one that sorts first, <b>at + _ &rarr; at_</b>.</li>
+<li>"e at_" = 4. Merge <b>e + at_ &rarr; eat_</b>.</li>
+</ol>
+<p>After six merges the corpus went from 80 tokens to 31. A word the tokeniser never saw still works: "rated" becomes <code>r | ate | d | _</code>, four tokens, built from learned pieces plus single letters. Real tokenisers do exactly this on billions of words and stop after 30,000 to 200,000 merges. Most work on bytes rather than letters, so any text in any language, emoji included, can be encoded.</p>
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Byte-pair encoding, one merge at a time</h4></div>
+<p class="hint">Press "Do the next merge" six times and compare with the list above. Then type "eaten" as the new word: why is "eat" not one token there? Edit the corpus (for example add <code>eaten:6</code>) and press Reset.</p>
+<div id="w-bpe"></div>
+</div>
+<p>Other schemes follow the same idea with different merge rules. WordPiece, used by BERT-style models, picks merges by a likelihood score instead of a raw count and marks pieces that continue a word with <code>##</code>. SentencePiece treats the space as an ordinary character, so it works for languages written without spaces.</p>
+
+<h3 id="token-costs">What tokenising does to cost</h3>
+<p>Two questions of exactly 44 characters each, run through the WordPiece tokeniser of <code>BAAI/bge-small-en-v1.5</code>, a small open embedding model whose vocabulary has 30,522 tokens:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Text</th><th>Tokens</th><th>Characters per token</th></tr>
+<tr><td>How much should I keep in my emergency fund?</td><td><code>how much should i keep in my emergency fund ?</code> (10)</td><td class="num">4.4</td></tr>
+<tr><td>Should I put AED 15,000 into an S&amp;P 500 ETF?</td><td><code>should i put ae ##d 15 , 000 into an s &amp; p 500 et ##f ?</code> (17)</td><td class="num">2.6</td></tr>
+</table></div>
+<p>Plain English words are mostly one token each. Currency codes, numbers with separators and tickers break into many pieces. Rules of thumb such as "about four characters per English token" are only rough; text full of figures, code or non-Latin scripts usually costs more tokens per character. When cost matters, count with the provider's own tokeniser or token-counting endpoint.</p>
+<p>Splitting numbers into arbitrary pieces is one reason models are unreliable at arithmetic: "15,000" arrives as three unrelated symbols. That is a strong argument for doing sums in code and letting the model call that code as a tool (<a href="tools.html">chapter 28</a>).</p>
+
+<h2 id="sampling">Choosing the next token: sampling</h2>
+<p>With the probabilities in hand, a decoding rule picks one token.</p>
+<ul>
+<li><b>Greedy</b>: always take the most likely token ("months"). Repeatable, but long greedy outputs tend to loop and sound flat.</li>
+<li><b><a class="g" href="glossary.html#sampling">Sampling</a></b>: draw at random in proportion to the probabilities, so "months" 73.1% of the time and "salaries" 2.2%.</li>
+<li><b><a class="g" href="glossary.html#temperature">Temperature</a></b> <var>T</var> divides every logit before the softmax. At <var>T</var> = 0.5 the logits double and the softmax sharpens: "months" rises to 0.958. At <var>T</var> = 2 they halve and it flattens: "months" falls to 0.463 and "salaries" climbs to 0.080. As <var>T</var> approaches 0, sampling becomes greedy.</li>
+<li><b><a class="g" href="glossary.html#top-k">Top-k</a></b>: keep only the <var>k</var> most likely tokens and renormalise. With <var>k</var> = 2: months 0.731 / 0.852 = 0.858 and weeks 0.142. The long tail of odd tokens can never be picked.</li>
+<li><b>Top-p</b> (nucleus sampling): keep the smallest set of top tokens whose probabilities add up to at least <var>p</var>. With <var>p</var> = 0.9: months (0.731), weeks (0.852 so far), years (0.933, past 0.9, stop). Renormalised: 0.784, 0.130 and 0.087. Unlike top-k, the set grows when the model is unsure and shrinks when it is confident.</li>
+</ul>
+<div class="formula"><var>p</var><sub><var>i</var></sub> = <span class="frac"><span>e<sup><var>z</var><sub><var>i</var></sub>/<var>T</var></sup></span><span>&Sigma;<sub><var>j</var></sub> e<sup><var>z</var><sub><var>j</var></sub>/<var>T</var></sup></span></span><span class="cap">z are the logits, T the temperature. T = 1 leaves them unchanged.</span></div>
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Temperature and sampling</h4></div>
+<p class="hint">The scores are the five from the table. Sample 100 tokens at T = 1 and count how often "months" comes up. Then try T = 0.3 and T = 2.5. The entropy line tells you how spread out the choice is.</p>
+<div class="w-softmax" data-labels="months,weeks,years,days,salaries" data-logits="3,1.2,0.8,0.2,-0.5" data-mode="sample"></div>
+</div>
+<div class="callout note"><span class="title">Try it</span><p>Using the table's probabilities, which tokens survive top-p with <var>p</var> = 0.8, and what are their renormalised probabilities?</p></div>
+<details><summary>Answer</summary><div><p>months alone is 0.731, below 0.8; adding weeks gives 0.852, past 0.8, so stop. Two tokens survive: months 0.731 / 0.852 = 0.858 and weeks 0.142, the same as top-2 here.</p></div></details>
+<p>Even at temperature 0, providers do not promise identical outputs on every call: batching, hardware and numeric rounding can change the last digits of a logit and flip a close choice. Treat repeatability as a goal you test for, not a guarantee.</p>
+
+<h2 id="context-window">Context windows</h2>
+<p>A model reads a bounded number of tokens at once: its <a class="g" href="glossary.html#context-window">context window</a>. Everything counts towards it: the system prompt, the conversation so far, tool descriptions and results, retrieved documents, and the answer being written. Three facts follow.</p>
+<ol>
+<li><b>Cost and speed grow with length.</b> Every input token is billed and processed on every call, and attention work grows with the square of the length (<a href="llm-transformer.html#cost">chapter 18</a>).</li>
+<li><b>A bigger window is not a better memory.</b> In "Lost in the Middle: How Language Models Use Long Contexts" (2023), models answered best when the needed fact was near the start or end of a long input and noticeably worse when it sat in the middle. Putting less, better-chosen text in front of the model often beats putting in everything; that is the subject of <a href="context-engineering.html">chapter 22</a>.</li>
+<li><b>Nothing persists between calls.</b> The model has no memory of a previous request. Anything it should know, including earlier turns of the same chat, has to be sent again (<a href="memory.html">chapter 37</a>).</li>
+</ol>
+
+<h2 id="reasoning">Reasoning tokens</h2>
+<p>Some models can "think" before answering: they generate a stretch of working tokens, then the answer. The working gives the model more computation per question, since each extra token is another pass through the network, and it helps most on multi-step problems. Providers call these thinking or <a class="g" href="glossary.html#reasoning-tokens">reasoning tokens</a>. Three practical points:</p>
+<ul>
+<li>They are billed, usually at the output price, even when the provider does not show them to you.</li>
+<li>They add latency, because they are generated one at a time before the first word of the answer.</li>
+<li>Most APIs let you set how much thinking to do, as a token budget or an effort level. More is not always better: for lookups and short tasks it mostly adds cost.</li>
+</ul>
+
+<h2 id="structured-output">Structured output</h2>
+<p>Code cannot act on "Sure! Here is your answer:". It needs data. <a class="g" href="glossary.html#structured-output">Structured output</a> asks the model to reply in a fixed shape, usually JSON that matches a <a class="g" href="glossary.html#json-schema">JSON Schema</a>. There are two levels of strength:</p>
+<ul>
+<li><b>Asked for</b>: the schema is in the prompt or request, and the model usually complies. The reply must still be validated, because "usually" is not "always".</li>
+<li><b>Enforced</b>: the decoder is only allowed to sample tokens that keep the output valid against the schema (constrained decoding). At each step, tokens that would break the JSON get probability zero. The shape is then guaranteed, though the values inside can still be wrong.</li>
+</ul>
+<p>Either way, the safe pattern is: parse, validate against the schema, and on failure send the error back and ask for a corrected reply, a bounded number of times. Well-built systems do exactly this.</p>
+
+<h2 id="in-practice">In practice</h2>
+<ul>
+<li><b>Tokens are the unit of cost.</b> Record <code>input_tokens</code>, <code>output_tokens</code> and, where the provider reports them, <code>reasoning_tokens</code> for every call. Keep a table of prices per million tokens. To keep a budget safe, reserve the worst case before the call: its maximum output tokens times the output price.</li>
+<li><b>Reasoning is set per model.</b> Some models accept a thinking setting, others an effort level, and some reason by their own default. On current Claude models the thinking counts towards <code>max_tokens</code>, so a small limit can leave no room for the answer.</li>
+<li><b>Often there are no sampling settings.</b> Many applications set no temperature, top-k or top-p and use the provider's defaults, and some current models reject a temperature outright. Repeatability is handled by checking the output instead: take figures from tools, block digits in prose, and reject references that do not resolve to a tool result (<a href="guardrails.html">chapter 34</a>).</li>
+<li><b>Structured output everywhere.</b> Have the model reply with a typed answer: a list of segments that are either prose or references to a field in a tool's result. Validate the reply. On failure, send the whole exchange back with a message such as "The previous JSON did not validate (&hellip;). Return corrected JSON only." and stop after a fixed number of tries.</li>
+</ul>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-first-call.html">Lab 1</a> you make a first model call and read its token counts, stop reason and cost. In <a href="lab-tracing.html">Lab 9</a> you add tracing and a cost report to every call.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why are output tokens slower than input tokens?</summary><div><p>Input tokens are all known up front and processed in one parallel pass. Output tokens are produced one at a time, each needing its own pass through the model.</p></div></details>
+<details><summary>What does lowering the temperature do to the probabilities?</summary><div><p>It divides the logits by a smaller number, which stretches the gaps between them, so the softmax puts even more probability on the top tokens. Near zero it becomes greedy decoding.</p></div></details>
+<details><summary>A reply is supposed to match a JSON Schema. What should code do with it?</summary><div><p>Parse it and validate it against the schema every time. On failure, send the validation error back and ask for a corrected reply, with a limit on retries. Enforced structured output guarantees the shape, not that the values are right.</p></div></details>
+<details><summary>Why might "AED 15,000" cost more tokens than "emergency"?</summary><div><p>Common words are single tokens, while currency codes and numbers with separators break into several pieces ("ae", "##d", "15", ",", "000").</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/watch?v=zduSFxRajkE" target="_blank" rel="noopener noreferrer">Let&#x27;s build the GPT Tokenizer</a> <span class="pill">video</span> <span class="pill">intermediate</span><br><span class="res-note">Karpathy implements byte-pair encoding from scratch and shows the odd model behaviours tokenisation causes.</span></li>
+<li><a href="https://arxiv.org/abs/1508.07909" target="_blank" rel="noopener noreferrer">Neural Machine Translation of Rare Words with Subword Units (2015)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">The Sennrich et al. paper that brought byte-pair encoding to neural language models.</span></li>
+<li><a href="https://huggingface.co/learn/llm-course/chapter6/5" target="_blank" rel="noopener noreferrer">Byte-Pair Encoding tokenization (Hugging Face LLM Course)</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Course section that trains a toy BPE tokenizer in code, with merges shown at each step.</span></li>
+<li><a href="https://huggingface.co/blog/how-to-generate" target="_blank" rel="noopener noreferrer">How to generate text: using different decoding methods for language generation with Transformers</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Compares greedy, beam, top-k and top-p sampling and shows what temperature does to the output.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-llm-tokens">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/bpe.js"></script>
+<script src="assets/widgets/softmax.js"></script>
+</body>
+</html>

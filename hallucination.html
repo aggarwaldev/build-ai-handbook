@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>36. Hallucination &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 36</p>
+<h1>Hallucination</h1>
+<p class="lead">A hallucination is a fluent, confident statement that is not supported by the facts the model was given or by the world: a number that was never in the data, a citation to a paper that does not exist, a policy clause that says something else. This chapter explains why models do it, how systems are built so it cannot reach a customer unnoticed, and how to measure how often it happens with honest error bars.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>In a finance, health or legal setting, one invented figure can cause a real loss. You cannot train hallucination away completely, so the work is to design where it cannot hide, and to know your rate well enough to make decisions.</p></div>
+
+<h2 id="kinds">Kinds of hallucination</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Kind</th><th>Example</th></tr>
+<tr><td>Unfaithful to the given source</td><td>The tool says the portfolio is up 4%; the answer says 6%</td></tr>
+<tr><td>Unsupported by any source</td><td>A plausible fee that appears nowhere in the documents</td></tr>
+<tr><td>Fabricated reference</td><td>A section number, paper or URL that does not exist</td></tr>
+<tr><td>Overstated claim</td><td>"Always" where the source says "usually"</td></tr>
+</table></div>
+<p>The first kind, unfaithfulness to sources you supplied, is the one you can check by machine, because you hold the sources. That is why grounded designs try to turn every claim into one that points at a source.</p>
+
+<h2 id="why">Why models make things up</h2>
+<p>A language model is trained to produce likely text. When it does not know, a likely-sounding answer is still likely text. The paper "Why Language Models Hallucinate" (2025) adds a sharper argument: most training signals and benchmarks score a right answer 1 and both a wrong answer and "I don't know" 0, so guessing is always the better strategy.</p>
+<p>Worked: a model is 30% sure of an answer. Under right&nbsp;=&nbsp;1, wrong&nbsp;=&nbsp;0, abstain&nbsp;=&nbsp;0, guessing scores 0.3 on average and abstaining scores 0, so it guesses. Now score a wrong answer &minus;1. Guessing scores 0.3 &times; 1 + 0.7 &times; (&minus;1) = &minus;0.4, worse than abstaining.</p>
+<p>In symbols: with a penalty <i>k</i> for a wrong answer, guessing beats abstaining when <i>p</i> &minus; <i>k</i>(1 &minus; <i>p</i>) &gt; 0, that is when <i>p</i> &gt; <i>k</i> / (1 + <i>k</i>). A penalty of 1 means "answer only when more than 50% sure"; a penalty of 3 means "more than 75%". How you score your own evaluations shapes what you select for.</p>
+
+<h2 id="reduce">Designing it out</h2>
+<ul>
+<li><b>Ground the answer.</b> Give the model the facts (retrieval, tool results) and tell it to use only those.</li>
+<li><b>Let code produce numbers.</b> Calculations happen in tools; the model refers to results instead of typing figures (<a href="tools.html#references">chapter 28</a>). A workable shape: the answer is a list of prose segments and typed references, each naming a tool, a field path and a display format, and code fills in the value. Deterministic checks then block any digit typed in prose, a reference to a tool that was not called, and a path that does not resolve. One exception is worth allowing: a news headline quoted word for word from this answer's own tool results may stand in the prose, digits and all, while a headline changed by even one character is checked like any other prose.</li>
+<li><b>Make claims checkable.</b> Require a citation to a section, or a verbatim quote, and check it exists in the source before the answer is shown. Refuse a quote that is not on the page it names (ignore spacing, but require every letter, digit and mark to match in order), read figures only from quotes that passed, block a cited section that does not exist, and accept a web citation only if its URL is one a lookup tool returned in the same run.</li>
+<li><b>Allow "I don't know".</b> Give the model a legitimate way out, and do not punish it in your evaluations.</li>
+<li><b>Check faithfulness separately.</b> A second pass, by code or by a model with a rubric, asks whether each claim is supported. A useful first criterion reads: "Is every claim faithful to the tool data and the retrieved text shown with it?", scored 0 to 2 and gated. In a multi-step system, judge the steps where the fault starts: whether each worker's answer follows from its own tool results, and whether the merged answer kept every figure and claim and added none of its own (<a href="evals.html">chapter 44</a>).</li>
+</ul>
+<p>Lowering the sampling temperature does not cure hallucination: it makes the model pick its most likely continuation more often, and the most likely continuation can be wrong.</p>
+
+<h2 id="measuring">Measuring the rate, with error bars</h2>
+<p>Check a sample of answers and count the ones with a hallucination: <i>k</i> out of <i>n</i>. The observed rate is <i>k</i>/<i>n</i>, but with small samples the true rate could be far from it. A confidence interval says how far.</p>
+<p>Worked: 3 hallucinations in 50 answers is 6%. The textbook (Wald) interval is 0.06 &plusmn; 1.96&radic;(0.06 &times; 0.94 / 50) = 0.06 &plusmn; 0.066, which runs from &minus;0.6% to 12.6%. A negative rate is impossible: the formula breaks down when <i>k</i> is small. The Wilson interval fixes this; for 3 in 50 it is about 2.1% to 16.2%. So "6%" really means "somewhere between 2 and 16%".</p>
+<p>In symbols, with <i>p</i> = <i>k</i>/<i>n</i> and <i>z</i> = 1.96 for 95%:</p>
+<div class="out">centre = (p + z&sup2;/2n) / (1 + z&sup2;/n)
+half-width = z / (1 + z&sup2;/n) &times; &radic;( p(1 &minus; p)/n + z&sup2;/4n&sup2; )</div>
+<p>Two shortcuts. <b>Rule of three:</b> if you saw no hallucinations in <i>n</i> answers, the true rate is below about 3/<i>n</i> with 95% confidence; zero in 50 still allows up to 6%. <b>Sample size:</b> to pin a rate near 5% to within &plusmn;2 points, you need about <i>n</i> = 1.96&sup2; &times; 0.05 &times; 0.95 / 0.02&sup2; &asymp; 457 answers.</p>
+<p><b>Seeded errors.</b> To test a checker or judge, write answers with defects planted on purpose, so you know the right verdict in advance. Worked: a judge catches 27 of 30 planted defects, 90%. The Wilson interval for 27 in 30 is about 74% to 97%, so a sample this small cannot tell a 75% judge from a 95% one. Read pass rates from samples of this size with the intervals above in mind.</p>
+
+<div class="widget" id="w-wilson">
+<div class="widget-head"><span class="tag">Try it</span><h4>Wald against Wilson</h4></div>
+<p class="hint">Try 3 in 50, then 0 in 50, then 5 in 10 and 10 in 10 (the numbers from <a href="rag-eval.html#uncertainty">chapter 26</a>).</p>
+</div>
+<div class="widget" id="w-samplesize">
+<div class="widget-head"><span class="tag">Try it</span><h4>How many answers must you check?</h4></div>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>A new prompt shows 2 hallucinations in 40 answers; the old one showed 4 in 40. Using the widget, are you confident the new prompt is better?</p></div>
+<details><summary>Answer</summary><div><p>No. 2 in 40 gives a Wilson interval of about 1.4% to 16.5%; 4 in 40 gives about 4.0% to 23.1%. They overlap heavily, so the difference could be chance. You need a larger sample, or a paired comparison on the same questions.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-rag.html">Lab 3</a> you answer questions from a small set of help pages and have code check every citation against its source. In <a href="lab-judge.html">Lab 8</a> you plant defects in answers and measure how many a judge catches, with an interval.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why does scoring "I don't know" as 0, the same as a wrong answer, encourage hallucination?</summary><div><p>Any chance of being right gives a guess a positive expected score, so guessing always beats abstaining.</p></div></details>
+<details><summary>With a penalty of 2 for a wrong answer, how sure must a model be before guessing pays?</summary><div><p><i>p</i> &gt; 2 / 3, about 67%.</p></div></details>
+<details><summary>You saw 0 hallucinations in 100 answers. What can you say?</summary><div><p>By the rule of three the true rate is below about 3% with 95% confidence; it is not proof of zero.</p></div></details>
+<details><summary>Why can code check a typed reference but not a free-text number?</summary><div><p>A reference names the tool and field, so code can look up the exact value; a typed number has no link to where it came from.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://arxiv.org/abs/2311.05232" target="_blank" rel="noopener noreferrer">A Survey on Hallucination in Large Language Models: Principles, Taxonomy, Challenges, and Open Questions (2023)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Broad survey of hallucination types, causes, detection and mitigation.</span></li>
+<li><a href="https://arxiv.org/abs/2109.07958" target="_blank" rel="noopener noreferrer">TruthfulQA: Measuring How Models Mimic Human Falsehoods (2021)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Benchmark of questions where models tend to repeat popular misconceptions.</span></li>
+<li><a href="https://arxiv.org/abs/2509.04664" target="_blank" rel="noopener noreferrer">Why Language Models Hallucinate (2025)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Argues training and grading reward guessing over saying &#x27;I don&#x27;t know&#x27;, so models bluff.</span></li>
+<li><a href="https://openai.com/index/why-language-models-hallucinate/" target="_blank" rel="noopener noreferrer">Why language models hallucinate</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">OpenAI&#x27;s short plain-language summary of the paper above.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-hallucination">All resources for this chapter</a> and 2 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/wilson.js"></script>
+</body>
+</html>

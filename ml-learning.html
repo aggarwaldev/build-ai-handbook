@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>10. What learning means: linear and logistic regression &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part II &middot; ML foundations &middot; Chapter 10</p>
+<h1>What learning means: linear and logistic regression</h1>
+<p class="lead">Machine learning means choosing a function's parameters from examples instead of writing its rule by hand. Linear regression predicts numbers, logistic regression predicts yes or no, and together they contain every idea a neural network uses.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Every model in this book, up to the largest language model, is built from four parts: a function with parameters, a loss that scores its mistakes, an optimiser that lowers the loss, and data. This chapter assembles all four in the simplest possible setting, where you can check every number by hand.</p></div>
+
+<h2 id="recipe">The four-part recipe</h2>
+<ol>
+<li><b>Data</b>: examples of inputs with the right outputs, called <b>labels</b>. Learning from labelled examples is <b>supervised learning</b>.</li>
+<li><b>Model</b>: a function with adjustable <a class="g" href="glossary.html#parameter">parameters</a> (<a href="maths-functions.html#in-ai">chapter 2</a>).</li>
+<li><b>Loss</b>: one number that says how wrong the model is on the data (<a class="g" href="glossary.html#loss">loss</a>).</li>
+<li><b>Optimiser</b>: a method for changing the parameters to lower the loss, usually gradient descent (<a href="maths-gradient-descent.html">chapter 6</a>).</li>
+</ol>
+<p>The inputs are often called <b>features</b>. For a house price model they might be area, bedrooms and distance to the station; for a spam filter, counts of certain words.</p>
+
+<h2 id="linear-regression">Linear regression</h2>
+<p>The model is a straight line, <span class="math"><var>&#375;</var> = <var>w</var><var>x</var> + <var>b</var></span>, where <var>&#375;</var> ("y-hat") is the prediction. With several features it is <span class="math"><var>&#375;</var> = <var>w</var><sub>1</sub><var>x</var><sub>1</sub> + &hellip; + <var>w</var><sub><var>n</var></sub><var>x</var><sub><var>n</var></sub> + <var>b</var></span>, a dot product plus a bias (<a href="maths-vectors-matrices.html#dot-product">chapter 4</a>).</p>
+
+<h3 id="mse">The loss: mean squared error</h3>
+<p>Three examples: (<var>x</var>, <var>y</var>) = (1, 2), (2, 4) and (3, 5). Try the line <var>w</var> = 1.5, <var>b</var> = 0.667:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>x</th><th>y</th><th>prediction 1.5x + 0.667</th><th>error</th><th>error squared</th></tr>
+<tr><td class="num">1</td><td class="num">2</td><td class="num">2.167</td><td class="num">0.167</td><td class="num">0.028</td></tr>
+<tr><td class="num">2</td><td class="num">4</td><td class="num">3.667</td><td class="num">&minus;0.333</td><td class="num">0.111</td></tr>
+<tr><td class="num">3</td><td class="num">5</td><td class="num">5.167</td><td class="num">0.167</td><td class="num">0.028</td></tr>
+</table></div>
+<p>The <b>mean squared error</b> (MSE) is the average of the last column: 0.167 / 3 = 0.056.</p>
+<div class="formula"><var>L</var>(<var>w</var>, <var>b</var>) = <span class="frac"><span>1</span><span><var>n</var></span></span> <span class="big">&Sigma;</span><sub><var>i</var></sub> (<var>w</var><var>x</var><sub><var>i</var></sub> + <var>b</var> &minus; <var>y</var><sub><var>i</var></sub>)<sup>2</sup></div>
+<p>Squaring makes every error count as positive and punishes big errors far more than small ones: an error of 3 costs 9, an error of 1 costs 1. That is also its weakness, as the widget shows: one far-off point drags the whole line towards it.</p>
+
+<h3 id="lr-solve">Finding the best line</h3>
+<p>For a straight line there is a formula. The best slope is the sum of (<var>x</var> &minus; mean <var>x</var>)(<var>y</var> &minus; mean <var>y</var>) divided by the sum of (<var>x</var> &minus; mean <var>x</var>)<sup>2</sup>. Here mean <var>x</var> = 2 and mean <var>y</var> = 3.667, so the slope is ((&minus;1)(&minus;1.667) + 0 + (1)(1.333)) / (1 + 0 + 1) = 3 / 2 = 1.5, and <var>b</var> = 3.667 &minus; 1.5 &times; 2 = 0.667. That is the line in the table; no other line has a lower MSE on these points.</p>
+<p>Gradient descent reaches the same answer step by step, and unlike the formula it works for any model. Start at <var>w</var> = 0, <var>b</var> = 0, where every prediction is 0:</p>
+<ul>
+<li>&part;<var>L</var>/&part;<var>w</var> = (2/<var>n</var>) &Sigma; (prediction &minus; <var>y</var>) &times; <var>x</var> = (2/3)(&minus;2&times;1 &minus; 4&times;2 &minus; 5&times;3) = (2/3)(&minus;25) = &minus;16.67.</li>
+<li>&part;<var>L</var>/&part;<var>b</var> = (2/<var>n</var>) &Sigma; (prediction &minus; <var>y</var>) = (2/3)(&minus;11) = &minus;7.33.</li>
+<li>With learning rate 0.05: <var>w</var> = 0 + 0.05 &times; 16.67 = 0.833 and <var>b</var> = 0 + 0.05 &times; 7.33 = 0.367. Already closer.</li>
+</ul>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Fit a line by gradient descent</h4></div>
+<p class="hint">Press Step and watch the line swing into place; the dashed lines are the errors. Then drag one point far away and press Solve exactly: the squared loss lets one outlier pull the whole line.</p>
+<div id="w-regress"></div>
+</div>
+
+<h2 id="logistic">Logistic regression: predicting yes or no</h2>
+<p>Now the label is a class: spam or not, will default or not. We want a probability between 0 and 1. Take the same linear score <span class="math"><var>z</var> = <var>w</var><var>x</var> + <var>b</var></span> and squash it with the <a class="g" href="glossary.html#sigmoid">sigmoid</a>:</p>
+<div class="formula"><var>p</var> = &sigma;(<var>z</var>) = <span class="frac"><span>1</span><span>1 + <var>e</var><sup>&minus;<var>z</var></sup></span></span><span class="cap">&sigma;(0) = 0.5, large positive z gives nearly 1, large negative z gives nearly 0.</span></div>
+<p>The loss is cross-entropy for two classes (<a href="maths-softmax-entropy.html#cross-entropy">chapter 9</a>), also called <b>binary cross-entropy</b>: &minus;ln <var>p</var> when the label is 1, and &minus;ln(1 &minus; <var>p</var>) when it is 0.</p>
+<p>Worked example with <var>w</var> = 2, <var>b</var> = &minus;3 and one input <var>x</var> = 2 whose label is 1:</p>
+<ol>
+<li>Score: <var>z</var> = 2 &times; 2 &minus; 3 = 1. Probability: &sigma;(1) = 0.731.</li>
+<li>Loss: &minus;ln 0.731 = 0.313.</li>
+<li>Gradient: with sigmoid and cross-entropy together, the slope of the loss with respect to <var>z</var> is simply <var>p</var> &minus; <var>y</var> = 0.731 &minus; 1 = &minus;0.269 (the two-class case of <a href="maths-softmax-entropy.html#ce-gradient">chapter 9's</a> result). So &part;<var>L</var>/&part;<var>w</var> = &minus;0.269 &times; <var>x</var> = &minus;0.538 and &part;<var>L</var>/&part;<var>b</var> = &minus;0.269.</li>
+<li>A step with learning rate 0.5 raises <var>w</var> to 2.269 and <var>b</var> to &minus;2.866, pushing <var>p</var> for this example up towards 1.</li>
+</ol>
+<p>The model says "yes" when <var>p</var> &gt; 0.5, which is when <var>z</var> &gt; 0. With two features the line <span class="math"><var>w</var><sub>1</sub><var>x</var><sub>1</sub> + <var>w</var><sub>2</sub><var>x</var><sub>2</sub> + <var>b</var> = 0</span> splits the plane into a yes side and a no side. This <b>decision boundary</b> is always straight, which is logistic regression's great limit: it cannot separate classes that need a curved border. The trainer in <a href="ml-neural-networks.html#trainer">chapter 12</a> shows it failing, and a hidden layer fixing it.</p>
+<p>With more than two classes, give each class its own score and use softmax instead of sigmoid. This is <b>softmax regression</b>, and it is exactly the last layer of a language model, with one class per token in the vocabulary.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>Same model (<var>w</var> = 2, <var>b</var> = &minus;3). An input <var>x</var> = 0.5 has label 0. Find <var>p</var>, the loss and &part;<var>L</var>/&part;<var>w</var>. You need <var>e</var><sup>2</sup> = 7.389.</p></div>
+<details><summary>Answer</summary><div><p>z = 1 &minus; 3 = &minus;2, so p = 1 / (1 + 7.389) = 0.119. Label 0, so loss = &minus;ln(1 &minus; 0.119) = 0.127. Gradient: (p &minus; y) &times; x = 0.119 &times; 0.5 = 0.060. Positive, so w goes down a little.</p></div></details>
+
+<h2 id="choosing-loss">Choosing a loss</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Predicting</th><th>Output layer</th><th>Usual loss</th></tr>
+<tr><td>a number (a price, a temperature)</td><td>none (raw score)</td><td>mean squared error, or mean absolute error when outliers matter</td></tr>
+<tr><td>yes or no</td><td>sigmoid</td><td>binary cross-entropy</td></tr>
+<tr><td>one of many classes (including the next token)</td><td>softmax</td><td>cross-entropy</td></tr>
+</table></div>
+<p>Why not train on accuracy, the share of answers that are right? Because accuracy is flat almost everywhere: nudging a weight slightly usually changes no prediction, so its slope is zero and gradient descent has nothing to follow. Cross-entropy changes smoothly with every nudge. We train on the smooth loss and report accuracy.</p>
+
+<h2 id="prompt-classifier">A classifier made of words</h2>
+<p>Not every classification decision needs a trained classifier. Systems built on language models often ask a model with written criteria instead. A short instruction plus one criterion per class (say <code>simple</code>, <code>standard</code> and <code>complex</code> for incoming questions) goes to a model, which returns a label and perhaps a confidence or probabilities. If the call fails, or the label is not one of the allowed classes, the system falls back to a safe default.</p>
+<p>Compared with training a logistic regression, this needs no labelled data and can be changed by editing a sentence. The costs are a model call per item and probabilities that nobody has checked for calibration. Evaluation (<a href="evals.html">chapter 44</a>) is the place to measure how well it sorts.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-prompt-bench.html">Lab 2</a> you build a test bench that runs a prompt over labelled cases and scores the replies, which is how you measure a classifier made of words.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Name the four parts of the learning recipe.</summary><div><p>Data with labels, a model with parameters, a loss that scores mistakes, and an optimiser that lowers the loss.</p></div></details>
+<details><summary>Predictions 3 and 5 against true values 4 and 5. What is the MSE?</summary><div><p>Errors &minus;1 and 0, squares 1 and 0, mean 0.5.</p></div></details>
+<details><summary>Why can logistic regression not separate classes arranged in a ring?</summary><div><p>Its decision boundary is where a linear score equals zero, which is always a straight line (or flat plane). A ring needs a curved boundary.</p></div></details>
+<details><summary>Why train on cross-entropy but report accuracy?</summary><div><p>Accuracy has zero slope almost everywhere, so gradient descent cannot use it. Cross-entropy changes smoothly with every parameter, so it can be minimised; accuracy is easier for people to read.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/watch?v=7ArmBVF2dCs" target="_blank" rel="noopener noreferrer">Linear Regression, Clearly Explained!!!</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Fitting a line by least squares, R-squared and p-values, explained without heavy maths.</span></li>
+<li><a href="https://developers.google.com/machine-learning/crash-course/linear-regression/loss" target="_blank" rel="noopener noreferrer">Linear regression: Loss</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Introduces loss functions such as squared and absolute error and how the choice changes the fitted model.</span></li>
+<li><a href="https://www.youtube.com/watch?v=yIYKR4sgzI8" target="_blank" rel="noopener noreferrer">StatQuest: Logistic Regression</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Moves from predicting numbers to predicting probabilities of a class with the S-shaped curve.</span></li>
+<li><a href="https://developers.google.com/machine-learning/crash-course/logistic-regression/loss-regularization" target="_blank" rel="noopener noreferrer">Logistic regression: Loss and regularization</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Explains log loss for classifiers and why regularisation matters for logistic models.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-ml-learning">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/regress.js"></script>
+</body>
+</html>

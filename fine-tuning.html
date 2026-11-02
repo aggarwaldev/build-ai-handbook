@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>40. Fine-tuning and distillation &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 40</p>
+<h1>Fine-tuning and distillation</h1>
+<p class="lead">Fine-tuning continues training a model that already works, on your own examples, so it adopts a behaviour, a format or a style. Distillation trains a small model to imitate a large one. Both change the weights, which prompts and retrieval never do. This chapter covers when that is worth it, the arithmetic of full fine-tuning against LoRA, and how distillation's soft targets carry more than a label.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Training is the most expensive and least reversible way to change a model's behaviour. Knowing what it can and cannot fix keeps you from reaching for it too early, and knowing LoRA's numbers tells you when it is cheap enough to try.</p></div>
+
+<h2 id="when">When to fine-tune</h2>
+<p>Try the cheaper changes first, in this order: a better prompt, examples in the prompt, retrieval of the facts the model lacks, tools for anything exact. Fine-tune when those plateau and the gap is about <b>behaviour</b>: always answering in a strict format, a house style, a narrow classification done thousands of times a day by a smaller, cheaper model. Fine-tuning is a poor way to add <b>facts</b>, especially facts that change: the model may blend them with what it already knows, and you cannot cite or update them. Retrieval does that job better.</p>
+<p>Before any training, remember how much behaviour the cheaper levers already control. Versioned prompts (record the prompt version with every answer), retrieval and tools that compute every exact figure shape what a system does without touching a weight. Choosing among candidate models by measuring each on labelled answers and planted defects (<a href="evals.html">chapter 44</a>) matches a model to a standard without training it. Reach for training only when those run out.</p>
+
+<h2 id="full">Full fine-tuning and its memory bill</h2>
+<p>Full fine-tuning updates every weight. With the Adam optimiser in mixed precision, a common estimate is 16 bytes per parameter during training: 2 for the 16-bit weights, 2 for their gradients, 4 for a 32-bit master copy of the weights, and 4 + 4 for Adam's two running averages (this accounting comes from "ZeRO: Memory Optimizations Toward Training Trillion Parameter Models", 2019). For a 7-billion-parameter model that is 7 &times; 10<sup>9</sup> &times; 16 bytes = 112 GB, before activations: more than one large GPU holds.</p>
+<p>It also risks <b>forgetting</b>: training hard on a new task can damage the old one. In this book's NumPy project, full fine-tuning on a turned version of a task took the original task's accuracy from 0.997 to 0.703 (<a href="project-finetune-distil.html#lora">chapter 41</a>).</p>
+
+<h2 id="lora">LoRA: train a small update instead</h2>
+<p>LoRA (from "LoRA: Low-Rank Adaptation of Large Language Models", 2021) freezes a weight matrix <i>W</i> of size <i>d</i> &times; <i>k</i> and learns an update made of two thin matrices: <i>A</i> (<i>d</i> &times; <i>r</i>) and <i>B</i> (<i>r</i> &times; <i>k</i>), with a small rank <i>r</i>. The layer uses</p>
+<div class="out">W' = W + (&alpha; / r) &middot; A B</div>
+<p><i>B</i> starts at zero, so training starts exactly from the original model. Only <i>A</i> and <i>B</i> are trained, and after training <i>A B</i> can be added into <i>W</i> once, so the finished model runs at the original speed. Or keep the adapter separate and swap adapters per task over one shared base model.</p>
+<p>Worked: a 4096 &times; 4096 matrix has 16,777,216 weights. With <i>r</i> = 8, LoRA trains 8 &times; (4096 + 4096) = 65,536 numbers: 0.39% of the matrix. Adapting four such matrices in each of 32 layers trains 128 &times; 65,536 = 8,388,608 numbers, about 17 MB at 16 bits.</p>
+<p>The bet behind LoRA is that the change a task needs has low rank: it can be described by a few directions, even though the matrix is large. Often it can; when it cannot, raise <i>r</i>. <b>QLoRA</b> ("QLoRA: Efficient Finetuning of Quantized LLMs", 2023) goes further by holding the frozen base model in 4 bits (<a href="quantisation.html#formats">chapter 39</a>) while the adapters train in 16 bits.</p>
+
+<div class="widget" id="w-lora">
+<div class="widget-head"><span class="tag">Try it</span><h4>What does LoRA train?</h4></div>
+<p class="hint">The rank slider moves in powers of two, from 1 to 256.</p>
+</div>
+
+<h2 id="distillation">Distillation: a small model learns from a large one</h2>
+<p>A trained classifier outputs probabilities, not just a winner. Those probabilities say how the model sees the classes: "mostly a cat, a bit like a dog, nothing like a car". Distillation ("Distilling the Knowledge in a Neural Network", 2015) trains a small <b>student</b> to match a large <b>teacher</b>'s probabilities, softened with a <b>temperature</b> <i>T</i>, instead of only the hard labels.</p>
+<p>Worked: the teacher's logits are 4, 2 and 1. At <i>T</i> = 1, softmax gives 0.8438, 0.1142 and 0.0420 (<a href="maths-softmax-entropy.html">chapter 9</a>). Divide the logits by <i>T</i> = 2 first, giving 2, 1 and 0.5, and softmax gives 0.6285, 0.2312 and 0.1402. The ranking is the same, but the second and third classes now carry visible signal for the student to learn from.</p>
+<p>The student's loss is the cross-entropy between the teacher's softened probabilities and its own at the same <i>T</i>. Its gradient at the logits is (<i>p</i><sub>student</sub> &minus; <i>p</i><sub>teacher</sub>) / <i>T</i>, so it is usually multiplied by <i>T</i>&sup2; to keep the step size similar whatever <i>T</i> you choose.</p>
+<p>The practical win is often <b>data</b>: the teacher can label as many unlabelled examples as you can afford to run it on. With language models, distillation usually means training a small model on text a large model generated; check the large model's licence and terms before you do.</p>
+
+<div class="widget" id="w-softtemp">
+<div class="widget-head"><span class="tag">Try it</span><h4>Soften the teacher's probabilities</h4></div>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>A layer is 4096 &times; 11008. How many numbers does LoRA with <i>r</i> = 16 train, and what share of the matrix is that?</p></div>
+<details><summary>Answer</summary><div><p>16 &times; (4096 + 11008) = 16 &times; 15,104 = 241,664. The matrix has 4096 &times; 11008 = 45,088,768 weights, so the share is 241,664 / 45,088,768 &asymp; 0.54%.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>The project in <a href="project-finetune-distil.html">chapter 41</a> runs both techniques on a laptop: <code>python labs/finetune-distil/lora_numpy.py</code> adapts a trained network with LoRA while its own weights stay frozen, and <code>python labs/finetune-distil/distil_numpy.py</code> teaches a 99-weight student from a 17,283-weight teacher.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why is fine-tuning a poor way to keep a model up to date with interest rates?</summary><div><p>Facts learned in weights cannot be cited, are mixed with older knowledge and need retraining to change; retrieval or a tool can be updated at once.</p></div></details>
+<details><summary>Why does LoRA start <i>B</i> at zero?</summary><div><p>So <i>A B</i> = 0 and the adapted model starts exactly equal to the original.</p></div></details>
+<details><summary>How many bytes per parameter does full fine-tuning with Adam in mixed precision need, by the common estimate?</summary><div><p>About 16: 2 weights, 2 gradients, 4 master weights, 8 for Adam's two averages.</p></div></details>
+<details><summary>What does a higher temperature do to the teacher's probabilities?</summary><div><p>It flattens them, keeping the order but giving the smaller classes more weight, so the student sees how classes relate.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://arxiv.org/abs/2106.09685" target="_blank" rel="noopener noreferrer">LoRA: Low-Rank Adaptation of Large Language Models (2021)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Freezes the base model and trains small low-rank matrices, the basis of most cheap fine-tuning.</span></li>
+<li><a href="https://arxiv.org/abs/2305.14314" target="_blank" rel="noopener noreferrer">QLoRA: Efficient Finetuning of Quantized LLMs (2023)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Combines a 4-bit frozen base with LoRA adapters to fine-tune large models on modest hardware.</span></li>
+<li><a href="https://arxiv.org/abs/1503.02531" target="_blank" rel="noopener noreferrer">Distilling the Knowledge in a Neural Network (2015)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Hinton et al. train a small student on a large teacher&#x27;s softened outputs.</span></li>
+<li><a href="https://huggingface.co/docs/peft/index" target="_blank" rel="noopener noreferrer">PEFT (Hugging Face docs)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Library docs for parameter-efficient methods such as LoRA, with conceptual guides.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-fine-tuning">All resources for this chapter</a> and 1 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/lora.js"></script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>3. Exponentials and logarithms &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part I &middot; Maths &middot; Chapter 3</p>
+<h1>Exponentials and logarithms</h1>
+<p class="lead">Repeated multiplication gives exponentials; asking "how many times?" gives logarithms. Money grows by the first, and every AI loss function is written with the second.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Language models multiply hundreds of probabilities together, and the result is too small for a computer to store. Logarithms turn that multiplication into addition, which is why the training loss of every model in this book has a "log" in it. Compound interest and the "e" inside softmax all come from the same idea.</p></div>
+
+<h2 id="repeated">Repeated multiplication</h2>
+<p>Put 1,000 in an account paying 7% a year. Each year the balance is multiplied by 1.07 (<a href="maths-functions.html#percent">chapter 2</a>):</p>
+<ul>
+<li>After 1 year: 1,000 &times; 1.07 = 1,070.</li>
+<li>After 2 years: 1,070 &times; 1.07 = 1,144.90.</li>
+<li>After 3 years: 1,144.90 &times; 1.07 = 1,225.04.</li>
+</ul>
+<p>After <var>n</var> years you have multiplied by 1.07 a total of <var>n</var> times, which is a power:</p>
+<div class="formula">value after <var>n</var> years = 1,000 &times; 1.07<sup><var>n</var></sup><span class="cap">After 10 years: 1,000 &times; 1.07<sup>10</sup> = 1,967.15. The growth itself earns growth; that is "compounding".</span></div>
+<p>A function where the variable sits in the power is an <a class="g" href="glossary.html#exponential">exponential</a>. Compare it with simple growth, where you earn 7% of the original 1,000 each year and nothing on the interest: after 10 years that is 1,000 &times; (1 + 0.07 &times; 10) = 1,700. The gap widens every year.</p>
+
+<h3 id="power-rules">Power rules you will use</h3>
+<ul>
+<li><span class="math"><var>a</var><sup><var>m</var></sup> &times; <var>a</var><sup><var>n</var></sup> = <var>a</var><sup><var>m</var>+<var>n</var></sup></span>. Worked: 2<sup>3</sup> &times; 2<sup>2</sup> = 8 &times; 4 = 32 = 2<sup>5</sup>.</li>
+<li><span class="math">(<var>a</var><sup><var>m</var></sup>)<sup><var>n</var></sup> = <var>a</var><sup><var>m</var><var>n</var></sup></span>. Worked: (2<sup>2</sup>)<sup>3</sup> = 4<sup>3</sup> = 64 = 2<sup>6</sup>.</li>
+<li><span class="math"><var>a</var><sup>0</sup> = 1</span> and <span class="math"><var>a</var><sup>&minus;<var>n</var></sup> = 1 / <var>a</var><sup><var>n</var></sup></span>. Worked: 2<sup>&minus;3</sup> = 1/8 = 0.125.</li>
+<li>A fractional power is a root: <span class="math"><var>a</var><sup>1/2</sup> = &radic;<var>a</var></span>, and <span class="math"><var>a</var><sup>1/20</sup></span> is the twentieth root.</li>
+</ul>
+
+<h3 id="decay">Decay</h3>
+<p>Multiplying by a number below 1 shrinks things exponentially. Halve something three times and you have 0.5<sup>3</sup> = 0.125 of it. Halve it 100 times and you have 0.5<sup>100</sup> &asymp; 0.000&hellip;0008, with 30 zeros after the decimal point. Keep that number in mind for the next section.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Compound growth</h4></div>
+<p class="hint">Move the rate and the years. Then switch to the log scale: steady compound growth becomes a straight line, because each year adds the same amount to the logarithm.</p>
+<div id="w-growth"></div>
+</div>
+
+<h2 id="e">The number e</h2>
+<p>Suppose a bank pays 100% a year but adds the interest in smaller and smaller pieces. Paid once: 1 becomes 2. Paid monthly, 1/12 each time: (1 + 1/12)<sup>12</sup> = 2.613. Paid daily: (1 + 1/365)<sup>365</sup> = 2.7146. The more often you compound, the closer you get to a fixed number:</p>
+<div class="formula"><var>e</var> &asymp; 2.71828<span class="cap">The limit of (1 + 1/n)<sup>n</sup> as n grows without end.</span></div>
+<p>You will meet <var>e</var> mostly through the function <span class="math">exp(<var>x</var>) = <var>e</var><sup><var>x</var></sup></span>. It has two properties that make it the favourite of AI: it is always positive, whatever <var>x</var> is (exp(&minus;5) = 0.0067, exp(0) = 1, exp(3) = 20.1), and its slope at every point equals its own value (<a href="maths-derivatives.html">chapter 5</a>). Softmax (<a href="maths-softmax-entropy.html">chapter 9</a>) uses exp to turn any list of scores into positive numbers.</p>
+
+<h2 id="logs">Logarithms: counting the multiplications</h2>
+<p>A <a class="g" href="glossary.html#logarithm">logarithm</a> answers the question "what power do I need?"</p>
+<ul>
+<li>log<sub>10</sub> 1,000 = 3, because 10<sup>3</sup> = 1,000.</li>
+<li>log<sub>2</sub> 8 = 3, because 2<sup>3</sup> = 8.</li>
+<li>log<sub>2</sub> (1/8) = &minus;3, because 2<sup>&minus;3</sup> = 1/8.</li>
+</ul>
+<div class="formula">log<sub><var>b</var></sub> <var>y</var> = <var>x</var> &nbsp;means&nbsp; <var>b</var><sup><var>x</var></sup> = <var>y</var><span class="cap">The small b is the base. With base e the log is called the natural log, written ln.</span></div>
+<p>So log undoes exp, and exp undoes log: ln(<var>e</var><sup>3</sup>) = 3 and <var>e</var><sup>ln 5</sup> = 5.</p>
+
+<h3 id="log-rules">The rules that make logs useful</h3>
+<div class="formula">log(<var>a</var> &times; <var>b</var>) = log <var>a</var> + log <var>b</var> &nbsp;&nbsp;&nbsp; log(<var>a</var><sup><var>n</var></sup>) = <var>n</var> log <var>a</var> &nbsp;&nbsp;&nbsp; log(<var>a</var> / <var>b</var>) = log <var>a</var> &minus; log <var>b</var></div>
+<p>Check the first with base 10: log 100 + log 1,000 = 2 + 3 = 5, and log(100 &times; 1,000) = log 100,000 = 5. Logs turn multiplication into addition. Before calculators, engineers multiplied large numbers with printed log tables for exactly this reason.</p>
+<p>The second rule solves "how long until it doubles?". We need 1.07<sup><var>n</var></sup> = 2. Take ln of both sides: <var>n</var> &times; ln 1.07 = ln 2, so <var>n</var> = 0.6931 / 0.0677 = 10.24 years. The "rule of 72" is a shortcut for the same thing: 72 / 7 = 10.3.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>At 10% a year, how many years until money doubles? Use ln 2 = 0.6931 and ln 1.1 = 0.0953.</p></div>
+<details><summary>Answer</summary><div><p>n = 0.6931 / 0.0953 = 7.27 years. The rule of 72 says 72 / 10 = 7.2.</p></div></details>
+
+<h3 id="log-negative">Logs of numbers below 1 are negative</h3>
+<p>Probabilities sit between 0 and 1, so their logs are zero or negative: ln 1 = 0, ln 0.9 = &minus;0.105, ln 0.5 = &minus;0.693, ln 0.1 = &minus;2.303, ln 0.001 = &minus;6.91. The closer the probability is to zero, the larger the negative number. Flip the sign and you get a "surprise" score: an event you gave probability 0.9 surprises you by 0.105; one you gave 0.001 surprises you by 6.91. That surprise is exactly the loss used to train language models (<a href="maths-softmax-entropy.html#cross-entropy">chapter 9</a>).</p>
+
+<h2 id="in-ai">In AI: adding logs instead of multiplying probabilities</h2>
+<p>A language model gives a probability to each next token. The probability of a whole sentence is the product of the step probabilities. Three steps with probabilities 0.9, 0.8 and 0.7 give 0.9 &times; 0.8 &times; 0.7 = 0.504. A thousand steps of about 0.5 each would give 0.5<sup>1000</sup> &asymp; 10<sup>&minus;301</sup>. The 32-bit floats that models compute in round anything below about 10<sup>&minus;45</sup> to exactly zero, and even 64-bit floats give up below about 10<sup>&minus;308</sup>, which a few more steps would reach.</p>
+<p>Take logs instead: ln 0.9 + ln 0.8 + ln 0.7 = &minus;0.105 &minus; 0.223 &minus; 0.357 = &minus;0.685, and exp(&minus;0.685) = 0.504, the same answer. A thousand steps simply add up to about &minus;693, which is easy to store. That is why models report "log probabilities" (often shortened to logprobs) and why training minimises a sum of negative logs.</p>
+<div class="formula">log(<var>p</var><sub>1</sub> &times; <var>p</var><sub>2</sub> &times; &hellip; &times; <var>p</var><sub><var>n</var></sub>) = <span class="big">&Sigma;</span><sub><var>i</var></sub> log <var>p</var><sub><var>i</var></sub></div>
+
+<h2 id="in-practice">Growth numbers in practice</h2>
+<p>Banks usually add interest monthly, not yearly. Divide the yearly rate by 12 and multiply that many times: <code>growth = (1 + rate / 12) ** months</code>. For 10,000 at 7% over 10 years that is 1.005833<sup>120</sup> = 2.00966, so the lump sum grows to 20,096.61. Yearly compounding would give 10,000 &times; 1.07<sup>10</sup> = 19,671.51, a little less, because the interest starts earning sooner.</p>
+<p>Saving a fixed amount every month adds a geometric series, and the sum has a closed form: <code>contribution * (growth - 1) / monthly_rate</code>. Saving 200 a month for those 10 years gives 200 &times; (2.00966 &minus; 1) / 0.005833 = 34,616.96. At a 0% rate the formula divides by zero, so a careful calculator needs a separate branch for that case.</p>
+<p>Money code should use a decimal type, not binary floats. Floats cannot hold 0.1 exactly: adding 0.1 ten times in Python gives 0.9999999999999999, and rounding errors like that show up in cents. Python's <code>Decimal</code> rounds the way a person expects.</p>
+<p>Two more habits. To express a future amount in today's money, divide by <code>(1 + inflation) ** years</code>. And to turn a start and end value into one average yearly return, take a root: <code>(end / start) ** (1 / years) - 1</code>. If 10,000 grows to 26,533 in 20 years, the average return is 2.6533<sup>1/20</sup> &minus; 1 = 5.0% a year.</p>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>What is log<sub>10</sub> 0.01, and why?</summary><div><p>&minus;2, because 10<sup>&minus;2</sup> = 1/100 = 0.01.</p></div></details>
+<details><summary>Why do models work with log probabilities rather than probabilities?</summary><div><p>A product of many probabilities becomes too small for floating point and rounds to zero. The log of a product is the sum of the logs, which stays a manageable negative number and is cheaper to compute.</p></div></details>
+<details><summary>10,000 grows at 5% a year while prices rise 3% a year. Roughly what is it worth in today's money after 20 years?</summary><div><p>10,000 &times; 1.05<sup>20</sup> / 1.03<sup>20</sup> = 10,000 &times; 2.6533 / 1.8061 = 14,691.</p></div></details>
+<details><summary>Why does steady compound growth look like a straight line on a log scale?</summary><div><p>Because log(start &times; (1 + r)<sup>n</sup>) = log(start) + n &times; log(1 + r). That is a straight-line function of n with slope log(1 + r).</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/watch?v=m2MIpDrF7Es" target="_blank" rel="noopener noreferrer">What&#x27;s so special about Euler&#x27;s number e? | Chapter 5, Essence of calculus</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Shows why e appears when a quantity grows in proportion to itself, linking exponentials to their own derivative.</span></li>
+<li><a href="https://www.youtube.com/watch?v=cEvgcoyZvB4" target="_blank" rel="noopener noreferrer">Logarithm Fundamentals | Ep. 6 Lockdown live math</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">A gentle live lesson treating logs as the inverse of exponentials, with the rules derived rather than memorised.</span></li>
+<li><a href="https://www.khanacademy.org/math/algebra2/x2ec2f6f830c9fb89:logs" target="_blank" rel="noopener noreferrer">Logarithms (Khan Academy, Algebra 2)</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Practice unit covering log rules, the constant e and natural log, and solving exponential equations.</span></li>
+<li><a href="https://betterexplained.com/articles/an-intuitive-guide-to-exponential-functions-e/" target="_blank" rel="noopener noreferrer">An Intuitive Guide To Exponential Functions &amp; e</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Builds e from continuous compound growth so the number feels natural instead of arbitrary.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-maths-exp-log">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/growth.js"></script>
+</body>
+</html>

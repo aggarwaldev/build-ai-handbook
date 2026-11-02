@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>45. Observability, tracing and cost &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 45</p>
+<h1>Observability, tracing and cost</h1>
+<p class="lead">When an answer is slow, wrong or expensive, you need to see what happened inside it: which model ran with which prompt, what it read, which tools it called, how long each step took and what each call cost. This chapter covers what to record for every model call, traces and spans for runs with many steps, the OpenTelemetry conventions, keeping personal data out of logs, sampling, latency percentiles, cost from token counts, budgets that stop spending at a cap, and alerts on quality as well as errors.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>A model application fails quietly: a prompt change can double the cost or halve the quality with no error anywhere. Without records you are guessing. With them, any answer can be followed back to its inputs, and a spending mistake stops at a cap instead of at the end of the month.</p></div>
+
+<h2 id="per-call">What to record for every model call</h2>
+<p>One record per call, written when the call ends, whether it succeeded or not:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Field</th><th>Example</th><th>Why you want it</th></tr>
+<tr><td>Trace and span ids</td><td><code>t-2f9c</code>, <code>s-07</code>, parent <code>s-01</code></td><td>Tie the call to the request and the step that made it (<a href="#traces">below</a>)</td></tr>
+<tr><td><a class="g" href="glossary.html#prompt-version">Prompt version</a></td><td><code>support_answer_v7</code></td><td>Compare runs across prompt changes; find which version wrote a bad answer</td></tr>
+<tr><td>Model id</td><td><code>claude-haiku-5-5</code></td><td>The exact id the provider reports, not an alias, so a model swap shows</td></tr>
+<tr><td>Input and output tokens</td><td>4,200 and 350</td><td>Cost, and how the context grows in a loop; output includes any <a class="g" href="glossary.html#reasoning-tokens">thinking</a></td></tr>
+<tr><td>Latency</td><td>1.42 s; first token after 0.38 s</td><td>Find the slow step; <a class="g" href="glossary.html#ttft">time to first token</a> when streaming</td></tr>
+<tr><td>Cost</td><td>$0.000595</td><td>Computed from the tokens when the call is made (<a href="#cost">below</a>)</td></tr>
+<tr><td>Stop reason</td><td><code>end</code>, <code>tool_use</code>, <code>max_tokens</code>, <code>refusal</code></td><td><code>max_tokens</code> means the reply was cut off</td></tr>
+<tr><td>Tool calls</td><td>Name, masked arguments, result size, error flag</td><td>What the model did, not only what it said</td></tr>
+<tr><td>Retrieved ids</td><td><code>loans-policy#renewals</code></td><td>Check citations against what was retrieved; find bad retrieval</td></tr>
+<tr><td>Errors</td><td>Error type, HTTP status, number of retries</td><td>Provider trouble shows here first</td></tr>
+<tr><td>Run context</td><td>Code version, environment, time</td><td>Reproduce the call later</td></tr>
+</table></div>
+<p>Most of these come back with the reply: the token counts, the stop reason, the model id and the tool calls are part of every response. The rest you add. As one line of JSON, for a help desk assistant that answers library members' questions:</p>
+<pre><code>{"trace_id": "t-2f9c", "span_id": "s-07", "parent_id": "s-01", "name": "chat claude-haiku-5-5",
+ "prompt_version": "support_answer_v7", "model": "claude-haiku-5-5",
+ "input_tokens": 4200, "output_tokens": 350, "latency_s": 1.42, "cost_usd": 0.000595,
+ "stop_reason": "end", "tool_calls": [], "retrieved_ids": ["loans-policy#renewals"], "error": null}</code></pre>
+<p>Watch the stop reason in particular. Current Claude models think before they answer, and the thinking counts toward <code>max_tokens</code>. Set <code>max_tokens</code> too low and some replies stop with <code>max_tokens</code> after thinking, with little or no answer text. A rise in <code>max_tokens</code> stops after a change is the record telling you so.</p>
+
+<h2 id="traces">Traces and spans</h2>
+<p>One request often makes several calls: retrieve passages, ask the model to plan, run a tool, ask the model to answer, check the output. A log line per call cannot show how they fit together. A <a class="g" href="glossary.html#trace">trace</a> can. It is a tree of <a class="g" href="glossary.html#span">spans</a>: each span is one piece of work with a name, a start time, an end time, some attributes, and a parent, the span that started it. The root span is the whole request.</p>
+<pre><code>answer                                   2.81 s   $0.001115
+├─ retrieve      (embed and search)      0.21 s
+├─ chat claude-haiku-5-5   (plan)        0.94 s   $0.000520   3,000 in   440 out
+├─ tool lookup_loans                     0.12 s
+├─ chat claude-haiku-5-5   (answer)      1.42 s   $0.000595   4,200 in   350 out
+└─ check         (citations, schema)     0.03 s</code></pre>
+<p>Read it top down. The children took 2.72 s together; the other 0.09 s of the root went between steps. The answer call is the slowest step and the most expensive, so that is where to look first.</p>
+<ul>
+<li><b>Roll costs up.</b> As each model span finishes, add its cost and tokens to its parent's sum, and write the sum on the parent when it ends. Then every span shows what everything under it cost, and the root shows the whole request: $0.000520 + $0.000595 = $0.001115 here. See <a class="g" href="glossary.html#cost-rollup">cost rollup</a>.</li>
+<li><b>Find the parent from the context.</b> Each new span takes the current span as its parent. In Python the current span lives in a context variable, which tasks started inside it inherit, so parallel branches land under the right parent and two users' requests never mix.</li>
+<li><b>Give background work its own trace.</b> Work that runs after the answer has been sent, such as judging a sample of answers (<a href="evals.html#offline-online">chapter 44</a>), starts in a fresh context. Give it a trace of its own and store the answer's trace id on it, so you can go from one to the other.</li>
+<li><b>Never block the answer.</b> Send spans in the background, in batches. If the tracing backend is down, drop the spans and count the drops; tracing must never slow or break a request.</li>
+</ul>
+<p>You need no service to start. A file with one JSON line per span, carrying its trace id and parent id, is a trace store you can search with <code>grep</code> and turn back into a tree with a few lines of code.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-tracing.html">Lab 9</a> you record every model call as a span with its tokens, latency and cost, rebuild the trace tree from a file, and stop a run before it passes a budget cap.</p></div>
+
+<h3 id="otel">OpenTelemetry and the GenAI conventions</h3>
+<p><a class="g" href="glossary.html#opentelemetry">OpenTelemetry</a> is an open standard, with SDKs for most languages, for producing traces, metrics and logs and sending them to any backend that accepts its wire format, OTLP. Instrument your code once and you can change backends without touching it.</p>
+<p>Its <b>GenAI semantic conventions</b> name the attributes of a model call, so different tools read the same fields. Among them:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Attribute</th><th>Holds</th></tr>
+<tr><td><code>gen_ai.operation.name</code></td><td>The kind of call, such as <code>chat</code>, <code>embeddings</code> or <code>execute_tool</code></td></tr>
+<tr><td><code>gen_ai.request.model</code></td><td>The model asked for</td></tr>
+<tr><td><code>gen_ai.response.model</code></td><td>The model that answered</td></tr>
+<tr><td><code>gen_ai.usage.input_tokens</code></td><td>Input tokens</td></tr>
+<tr><td><code>gen_ai.usage.output_tokens</code></td><td>Output tokens</td></tr>
+<tr><td><code>gen_ai.response.finish_reasons</code></td><td>Why generation stopped</td></tr>
+</table></div>
+<p>The conventions are still marked as in development, so names can change between versions: check the current specification before you depend on one. Prompt versions, costs and retrieved ids have no standard name yet, so put them under a prefix of your own.</p>
+<p>Several tools are built for model applications. <a class="g" href="glossary.html#langfuse">Langfuse</a> and Arize Phoenix are open source and can run on your own machines; others are hosted services. They accept OpenTelemetry spans and add views a general tracing tool lacks: the prompt and reply of each call, token counts and costs, scores from judges and users, and test sets built from saved traces. A general OpenTelemetry backend such as Jaeger shows the same spans as a timeline. Choose by where the data may live and who may see it (<a href="#personal-data">below</a>), not by features alone.</p>
+
+<h2 id="personal-data">Personal data in logs</h2>
+<p>Traces copy prompts and replies, and prompts carry whatever users typed: names, email addresses, account numbers, health details. A trace store that keeps them is a second copy of your users' data, often with wider access and a longer life than the first. Four rules:</p>
+<ol>
+<li><b>Mask before logging, not when displaying.</b> Replace <a class="g" href="glossary.html#pii">personal data</a> with placeholders before a span leaves the process (<a href="guardrails.html#input">chapter 34</a>). <a class="g" href="glossary.html#masking">Masking</a> in the viewer leaves the raw data in the store. If the model already saw a masked copy, log that copy.</li>
+<li><b>Mask structured fields by key name.</b> A tool result such as <code>{"name": …, "email": …, "loans": 3}</code> can be masked by the names of its keys, which is exact; free text needs a detector, which is not. Never log secrets: API keys, tokens, passwords, cookies.</li>
+<li><b>Log references where you can.</b> Ids, counts, versions and amounts are enough for most debugging. A span that says "retrieved 4 passages" with their ids needs no passage text.</li>
+<li><b>Set retention and access.</b> Decide how long traces live, for example 30 days for full prompts and replies, and delete them on schedule. Cost and count records hold no personal data and can live longer. Limit who can open traces. A hosted tracing service processes your users' data, with the obligations that brings (<a href="regulated.html">chapter 43</a>).</li>
+</ol>
+
+<h2 id="sampling">Sampling</h2>
+<p>At low volume, keep every trace. At high volume, full traces with prompt text cost storage and money, and nobody reads most of them. Sampling keeps some:</p>
+<ul>
+<li><b>Head sampling</b> decides when the request starts: keep 10%, say. It is simple, but it throws away errors as readily as successes.</li>
+<li><b>Tail sampling</b> decides when the request ends, so it can keep every error, every slow request and every answer a judge or a user marked down, plus a share of the rest. It has to hold the spans until the request finishes.</li>
+</ul>
+<p>Worked: 200,000 calls a day, 1% of them errors. Keep every error and 10% of the rest: 2,000 + 10% &times; 198,000 = 2,000 + 19,800 = 21,800 traces a day, about 10.9% of the calls, with no error lost.</p>
+<p>Sample the payloads, never the counters. Every call's tokens and cost must be recorded, sampled or not, or your cost totals and budget checks are wrong.</p>
+
+<h2 id="latency">Latency percentiles</h2>
+<p><a href="production.html#latency">Chapter 42</a> explains why you watch percentiles rather than the average. Here is how they are computed. A <a class="g" href="glossary.html#percentile">percentile</a> p<i>N</i> is the value that <i>N</i>% of the measurements are at or below.</p>
+<p>Worked: twenty calls took these times, in seconds, sorted:</p>
+<div class="out">1.1  1.2  1.2  1.3  1.3  1.3  1.4  1.4  1.4  1.5  1.5  1.5  1.6  1.6  1.7  1.9  2.2  2.4  6.8  9.1</div>
+<ul>
+<li><b>Mean</b>: the sum is 43.4, so 43.4 / 20 = 2.17 s. Two slow calls pull it up, and it describes no real call.</li>
+<li><b>p50</b>, the median, by the nearest-rank method: rank = &lceil;0.50 &times; 20&rceil; = 10, and the 10th value is 1.5 s.</li>
+<li><b>p95</b>: rank = &lceil;0.95 &times; 20&rceil; = 19, and the 19th value is 6.8 s. One call in twenty waits about that long or longer.</li>
+</ul>
+<p>Tools differ in method: many interpolate between neighbours, and NumPy's default gives 6.915 s for this p95. With twenty values a p95 rests on one or two calls, so wait for a few hundred before you trust it, and know which method your dashboard uses.</p>
+<p>Two habits help. Record percentiles per step as well as for the whole request, to find which step is slow. And compute the request's percentile from whole-request times: the p95s of the steps do not add up to the p95 of the request, because the slow calls of different steps rarely land on the same request. For streamed answers, track time to first token too; it is what the user feels first.</p>
+
+<h2 id="cost">Cost from token counts</h2>
+<p>Providers bill by tokens, with separate prices per million input and output tokens:</p>
+<p class="math">cost = (input tokens &times; input price + output tokens &times; output price) / 1,000,000</p>
+<p>Worked: a help desk answer sends 4,200 input tokens (system prompt, four retrieved passages and the question) and gets 350 output tokens back. With the prices per million tokens of Claude Haiku 5.5 ($0.10 input, $0.50 output), Sonnet 5.5 ($2, $10) and Opus 5.5 ($4, $20):</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Model</th><th>Input</th><th>Output</th><th>Per answer</th><th>5,000 answers a day</th></tr>
+<tr><td>Haiku 5.5</td><td>4,200 &times; 0.10 / 10<sup>6</sup> = $0.00042</td><td>350 &times; 0.50 / 10<sup>6</sup> = $0.000175</td><td class="num">$0.000595</td><td class="num">$2.975</td></tr>
+<tr><td>Sonnet 5.5</td><td>4,200 &times; 2 / 10<sup>6</sup> = $0.0084</td><td>350 &times; 10 / 10<sup>6</sup> = $0.0035</td><td class="num">$0.0119</td><td class="num">$59.50</td></tr>
+<tr><td>Opus 5.5</td><td>4,200 &times; 4 / 10<sup>6</sup> = $0.0168</td><td>350 &times; 20 / 10<sup>6</sup> = $0.007</td><td class="num">$0.0238</td><td class="num">$119.00</td></tr>
+</table></div>
+<p>Three things make real costs bigger than one call suggests:</p>
+<ul>
+<li><b>Thinking is output.</b> Current Claude models think before they answer. Those tokens are billed at the output price and appear in the output count.</li>
+<li><b>Loops resend the conversation.</b> In an agent loop (<a href="agents.html">chapter 29</a>) each round sends everything so far again. Worked on Sonnet 5.5: the first round sends 3,000 tokens; each round adds 600 (the model's 150-token tool call and a 450-token tool result); the fourth round writes a 400-token answer. Input per round is 3,000, 3,600, 4,200 and 4,800, 15,600 in all; output is 150 + 150 + 150 + 400 = 850. Cost: (15,600 &times; 2 + 850 &times; 10) / 10<sup>6</sup> = $0.0397, against $0.0075 for the first round alone.</li>
+<li><b>Requests make many calls.</b> The root span holds the sum of its calls, and that sum per request is the number to watch.</li>
+</ul>
+<p><a class="g" href="glossary.html#prompt-caching">Prompt caching</a> cuts the cost of a repeated prefix (<a href="production.html#caching">chapter 42</a>). Prices change, so keep the price table in one place with the date you checked it, and store the computed cost with each call, so old records keep the price they were made at. Keep money out of floating point when you add up many records: store whole millionths of a dollar or use a decimal type, and round each call's cost up, so the meter never undercounts.</p>
+
+<h2 id="budgets">Budgets and spend caps</h2>
+<p>A <a class="g" href="glossary.html#spend-guard">spend guard</a> refuses a paid call that could push spending past a cap. Caps belong at several levels: per run (one agent task, one eval run), per user per day, and for the whole application per month. The guard works in three steps:</p>
+<ol>
+<li><b>Reserve.</b> Before the call, work out the most it could cost: its input tokens at the input price plus <code>max_tokens</code> at the output price. If spent + already reserved + this worst case reaches the cap, refuse the call.</li>
+<li><b>Call.</b> If the call fails, release the reservation.</li>
+<li><b>Settle.</b> Price the real tokens, add them to the amount spent, and release the reservation.</li>
+</ol>
+<p>Worked, on Sonnet 5.5 with a cap of $0.05: each call sends 3,000 tokens, allows <code>max_tokens</code> = 1,024 and writes 400. A call really costs (3,000 &times; 2 + 400 &times; 10) / 10<sup>6</sup> = $0.010, and its worst case is (3,000 &times; 2 + 1,024 &times; 10) / 10<sup>6</sup> = $0.01624. Calls 1 to 4 go ahead, leaving $0.040 spent. Call 5 needs 0.040 + 0.01624 = $0.05624, which passes the cap, so it is refused, although its real cost would just have fitted. Planning for the worst case costs a little headroom, and it is what makes the cap a cap.</p>
+<p>The guard must <a class="g" href="glossary.html#fail-closed">fail closed</a>. If it cannot read its meter, it refuses every paid call; if it cannot record a cost, it keeps the reservation counted as spent and makes no further paid call. A guard that lets calls through when it is unsure is not a guard. Set the provider's own spending limit on the API key as well, as a backstop: it catches what your code does not count, such as calls made by other programs with the same key.</p>
+
+<div class="widget" id="w-spend">
+<div class="widget-head"><span class="tag">Try it</span><h4>A budget guard with a running total</h4></div>
+<p class="hint">Press "Make the call" until the guard refuses: with the starting values it refuses the fifth call while $0.01 of the cap is still unspent. Then raise max_tokens and watch it refuse sooner, or tick "the meter cannot be read".</p>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>The cap is $1.00 and $0.95 is spent. Two Sonnet 5.5 calls are in flight, each sending 3,000 tokens with <code>max_tokens</code> = 2,048. Can a third, identical call start? And once both finish, each having written 500 tokens?</p></div>
+<details><summary>Answer</summary><div><p>Each call reserves (3,000 &times; 2 + 2,048 &times; 10) / 10<sup>6</sup> = $0.02648, so the two in flight hold $0.05296. The third needs 0.95 + 0.05296 + 0.02648 = $1.02944, which passes the cap, so it is refused. Once both settle at (3,000 &times; 2 + 500 &times; 10) / 10<sup>6</sup> = $0.011 each, spent is $0.972 and nothing is reserved: 0.972 + 0.02648 = $0.99848, below $1.00, so it may start.</p></div></details>
+
+<h2 id="alerting">Alerting on quality as well as errors</h2>
+<p>Errors and slowness announce themselves. Quality does not: a model update or a prompt change can make answers worse while every request still succeeds. Alert on both kinds of signal:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Signal</th><th>Alert when</th><th>Often means</th></tr>
+<tr><td>Error and timeout rate</td><td>Above its usual level</td><td>Provider trouble, a bad release</td></tr>
+<tr><td>p95 latency per step</td><td>Above its target</td><td>A slow provider, a longer prompt, a loop running long</td></tr>
+<tr><td>Cost per request and per day</td><td>Over budget, or a sudden jump</td><td>A prompt that grew, a loop that does not stop, a model swap</td></tr>
+<tr><td><code>max_tokens</code> stop rate</td><td>Rises</td><td><code>max_tokens</code> set too low; answers cut off</td></tr>
+<tr><td>Refusal and guard-block rates</td><td>Change sharply either way</td><td>A model change, a guard too strict or broken</td></tr>
+<tr><td>Retrievals that found nothing</td><td>Rise</td><td>An index problem, a new kind of question</td></tr>
+<tr><td>Judge pass rate on a live sample</td><td>Drops</td><td>Answer quality fell (<a href="evals.html#offline-online">chapter 44</a>)</td></tr>
+<tr><td>User feedback (thumbs-down)</td><td>Rises</td><td>Something the other signals missed</td></tr>
+</table></div>
+<p>Alert on change against a baseline, and allow for sample size, or the alerts will cry wolf. Worked: last week the judge passed 1,288 of 1,400 sampled answers (92%; 95% <a class="g" href="glossary.html#wilson-interval">Wilson interval</a> 90.5% to 93.3%). Today it passed 126 of 150 (84%; interval 77.3% to 89.0%). The intervals do not overlap, so this is a real drop, not noise. Filter today's traces by prompt version and model id: if the drop starts with a new version, you have your suspect.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-capstone.html">Lab 10</a> the capstone assistant writes a trace for every run, stops before it passes its budget cap, and scores itself with code checks first and a judge after.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>A reply comes back with no answer text and stop reason <code>max_tokens</code>. What probably happened, and which fields of the record show it?</summary><div><p>The model spent its token allowance thinking and was cut off before it wrote the answer. The stop reason says it was cut off, and the output token count equals <code>max_tokens</code>. Raise <code>max_tokens</code>, or lower the effort the model puts into thinking.</p></div></details>
+<details><summary>Why is the p95 of a whole request not the sum of its steps' p95s?</summary><div><p>Each step's slow calls happen on different requests. Adding the step p95s assumes every step is slow on the same request, which rarely happens, so the sum overstates the request's p95. Compute it from whole-request times.</p></div></details>
+<details><summary>A call sends 6,000 input tokens and gets 800 output tokens. What does it cost on Sonnet 5.5, and on Haiku 5.5?</summary><div><p>Sonnet: (6,000 &times; 2 + 800 &times; 10) / 10<sup>6</sup> = $0.020. Haiku: (6,000 &times; 0.10 + 800 &times; 0.50) / 10<sup>6</sup> = $0.001.</p></div></details>
+<details><summary>The spend guard cannot read its meter. What should it do?</summary><div><p>Refuse every paid call. It cannot know whether a call would pass the cap, and a guard that lets calls through when it is unsure is not a guard: it fails closed.</p></div></details>
+<details><summary>Why sample trace payloads but never cost records?</summary><div><p>Payloads are large and mostly unread, so a sample is enough for debugging. Cost and token records feed the totals and the budget checks, which are wrong if any call is missing.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/" target="_blank" rel="noopener noreferrer">Semantic conventions for generative AI systems (OpenTelemetry)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">The standard attribute names for model calls, token usage and agent spans.</span></li>
+<li><a href="https://opentelemetry.io/docs/languages/python/" target="_blank" rel="noopener noreferrer">Python (OpenTelemetry docs)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Official guide to instrumenting Python services with OpenTelemetry traces and metrics.</span></li>
+<li><a href="https://langfuse.com/docs/observability/overview" target="_blank" rel="noopener noreferrer">LLM Observability &amp; Application Tracing (Open Source) - Langfuse</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Langfuse&#x27;s tracing docs: traces, spans and generations for LLM apps.</span></li>
+<li><a href="https://langfuse.com/integrations/native/opentelemetry" target="_blank" rel="noopener noreferrer">OpenTelemetry (OTEL) for LLM Observability - Langfuse</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">How Langfuse ingests OpenTelemetry spans, so standard instrumentation lands in the same place.</span></li>
+<li><a href="https://sre.google/sre-book/monitoring-distributed-systems/" target="_blank" rel="noopener noreferrer">Monitoring Distributed Systems (Site Reliability Engineering, chapter 6)</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Free chapter from Google&#x27;s SRE book on what to monitor, latency percentiles and alerts worth waking up for.</span></li>
+<li><a href="https://platform.claude.com/docs/en/about-claude/pricing" target="_blank" rel="noopener noreferrer">Pricing (Claude API docs)</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Per-token prices, including cache and batch discounts.</span></li>
+</ul>
+<p class="resources-link">Free. <a href="resources.html#r-observability">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/spend.js"></script>
+</body>
+</html>

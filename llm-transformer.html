@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>18. The transformer block &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part III &middot; How LLMs work &middot; Chapter 18</p>
+<h1>The transformer block</h1>
+<p class="lead">A transformer is a stack of identical blocks. Each block does two things to every token's vector: attention, where the token gathers information from other tokens, and a small feed-forward network, where it processes what it gathered. Residual connections and layer normalisation hold the stack together. This chapter computes each piece with real numbers.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Parameter counts, context limits, memory use, latency and the price per token all follow from the block's arithmetic. Once you can count a block's weights and operations by hand, model cards and hosting bills stop being mysterious.</p></div>
+
+<h2 id="shape">The shape of the model</h2>
+<ol>
+<li>Tokens become vectors of width <var>d</var>, with positions added (<a href="llm-embeddings-positions.html">chapter 17</a>).</li>
+<li><var>N</var> blocks each update every vector: <span class="math"><var>x</var> &larr; <var>x</var> + Attention(LayerNorm(<var>x</var>))</span>, then <span class="math"><var>x</var> &larr; <var>x</var> + MLP(LayerNorm(<var>x</var>))</span>.</li>
+<li>A final layer norm, then one matrix turns the last token's vector into a <a class="g" href="glossary.html#logit">logit</a> for every vocabulary token, and the softmax gives the next-token probabilities (<a href="llm-tokens.html#next-token">chapter 16</a>).</li>
+</ol>
+<p>The "x +" in each line is a <a class="g" href="glossary.html#residual">residual connection</a> (<a href="ml-training-deep.html#residuals">chapter 13</a>). Putting the layer norm before each part, as here, is the common modern arrangement ("pre-norm"); the 2017 original normalised after.</p>
+
+<h2 id="attention">Attention with real numbers</h2>
+<p><a class="g" href="glossary.html#attention">Attention</a> lets each token look at the others and pull in what is relevant. Every token's vector <var>x</var> is multiplied by three learned matrices to get three new vectors:</p>
+<ul>
+<li>a <b>query</b> <var>q</var> = <var>x</var> <var>W</var><sub>Q</sub>: what this token is looking for;</li>
+<li>a <b>key</b> <var>k</var> = <var>x</var> <var>W</var><sub>K</sub>: what this token offers to be found by;</li>
+<li>a <b>value</b> <var>v</var> = <var>x</var> <var>W</var><sub>V</sub>: what this token hands over if chosen.</li>
+</ul>
+<div class="formula">Attention(<var>Q</var>, <var>K</var>, <var>V</var>) = softmax(<span class="frac"><span><var>Q</var> <var>K</var><sup>T</sup></span><span>&radic;<var>d</var><sub><var>k</var></sub></span></span> + mask) <var>V</var><span class="cap">Each row of Q, K and V is one token. d<sub>k</sub> is the length of a key. The mask puts &minus;&infin; on future tokens.</span></div>
+<p>Worked with three tokens, "fund pays it", and <var>d</var> = 2. The embeddings are <var>x</var><sub>1</sub> = (1, 0), <var>x</var><sub>2</sub> = (0, 1), <var>x</var><sub>3</sub> = (1, 1). Take <var>W</var><sub>Q</sub> = [[1, 0], [1, 1]], <var>W</var><sub>K</sub> = the identity, and <var>W</var><sub>V</sub> = [[1, 0], [0, 2]]. Each vector is a row, multiplied on the right.</p>
+<ol>
+<li><b>Project.</b> Queries: (1, 0), (1, 1), (2, 1). Keys: (1, 0), (0, 1), (1, 1). Values: (1, 0), (0, 2), (1, 2).</li>
+<li><b>Score</b> token 3 ("it") against every key: <var>q</var><sub>3</sub> &middot; <var>k</var><sub>1</sub> = 2 &times; 1 + 1 &times; 0 = 2, <var>q</var><sub>3</sub> &middot; <var>k</var><sub>2</sub> = 1, <var>q</var><sub>3</sub> &middot; <var>k</var><sub>3</sub> = 3.</li>
+<li><b>Scale</b> by &radic;2 = 1.414: 1.414, 0.707, 2.121.</li>
+<li><b>Softmax</b>: e<sup>1.414</sup> = 4.113, e<sup>0.707</sup> = 2.028, e<sup>2.121</sup> = 8.342; the sum is 14.484; the weights are <b>0.284, 0.140, 0.576</b>.</li>
+<li><b>Mix the values</b>: 0.284 &times; (1, 0) + 0.140 &times; (0, 2) + 0.576 &times; (1, 2) = <b>(0.860, 1.432)</b>.</li>
+</ol>
+<p>Token 3's new vector is mostly its own value and token 1's, because its query matched those keys best. Training adjusts the three matrices so that, for example, a pronoun's query matches the key of the noun it refers to.</p>
+
+<h3 id="why-scale">Why divide by &radic;d?</h3>
+<p>A dot product of two random vectors of length <var>d</var> has a spread that grows like &radic;<var>d</var>. With <var>d</var><sub>k</sub> = 128, raw scores of 30 or 40 are common, and a softmax of such numbers puts almost all weight on one token, where the gradient is nearly zero (<a href="maths-softmax-entropy.html#softmax">chapter 9</a>). Dividing by &radic;<var>d</var><sub>k</sub> keeps the scores around size 1, so the softmax stays soft enough to learn.</p>
+
+<h3 id="causal">The causal mask</h3>
+<p>A model that writes text left to right must not peek at the tokens it is about to predict. The mask sets scores for later positions to &minus;&infin;, whose exponential is 0. In the example, token 1 sees only itself (weight 1), token 2 sees tokens 1 and 2 (scores 1 and 1, so 0.5 each, output (0.5, 1.0)), and only token 3 sees all three. Models that only read, such as the embedding models used for search, drop the mask and let every token see the whole input.</p>
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>One attention head</h4></div>
+<p class="hint">The first three tokens are the worked example: pick token 3 and check every line. Then turn off the causal mask and see "back" join in; turn off the scaling and see the weights sharpen. Edit an embedding to make "it" attend mostly to "pays".</p>
+<div id="w-attention"></div>
+</div>
+
+<h2 id="multi-head">Multi-head attention</h2>
+<p>One head computes one pattern of "who looks at whom". A token may need several at once: the subject of its verb, the previous token, the matching opening bracket. <a class="g" href="glossary.html#multi-head">Multi-head attention</a> runs <var>h</var> heads side by side, each with its own smaller <var>W</var><sub>Q</sub>, <var>W</var><sub>K</sub> and <var>W</var><sub>V</sub> of width <var>d</var>/<var>h</var>. Their outputs are joined end to end back to width <var>d</var> and multiplied by one more matrix, <var>W</var><sub>O</sub>.</p>
+<p>Worked for <var>d</var> = 768 and 12 heads: each head works in 64 dimensions. The four matrices <var>W</var><sub>Q</sub>, <var>W</var><sub>K</sub>, <var>W</var><sub>V</sub> and <var>W</var><sub>O</sub> are each 768 &times; 768 in total across the heads, so attention costs 4 &times; 768<sup>2</sup> = 2,359,296 weights per block, plus 3,072 biases if the model uses them. Splitting into heads adds no weights; it changes what the same weights can express.</p>
+
+<h2 id="mlp">The feed-forward network</h2>
+<p>After attention, each token's vector goes through a two-layer <a class="g" href="glossary.html#mlp">MLP</a> on its own: widen to 4<var>d</var>, apply a nonlinearity, narrow back to <var>d</var>. Attention moves information between tokens; the MLP transforms it within each token. Much of what a model "knows" is thought to be stored in these weights.</p>
+<p>Worked with <var>d</var> = 2 and a hidden width of 4. Take the attention output (0.860, 1.432) and a first matrix whose four columns are (1, 0), (0, 1), (1, &minus;1) and (&minus;1, 1): the hidden pre-activations are 0.860, 1.432, &minus;0.572 and 0.572. ReLU zeroes the negative one: (0.860, 1.432, 0, 0.572). A second 4 &times; 2 matrix brings it back to two numbers, which are added to the token's vector through the residual connection. Real models use smoother activations such as GELU, or gated variants like SwiGLU, but the shape is the same.</p>
+<p>Weights per block for <var>d</var> = 768: two matrices of 768 &times; 3,072, so 2 &times; 2,359,296 = 4,718,592, plus 3,840 biases. That is twice the attention weights: in most transformers about two thirds of the block's parameters are in the MLP.</p>
+
+<h2 id="norm">Layer norm in the block</h2>
+<p><a class="g" href="glossary.html#layer-norm">Layer normalisation</a> rescales each token's vector to mean 0 and standard deviation 1, then applies a learned scale and shift (worked in <a href="ml-training-deep.html#norms">chapter 13</a>). In the block it sits before attention and before the MLP, so each part receives well-scaled inputs however large the residual stream has grown. Many recent models use RMSNorm, which skips the mean and only divides by the root mean square.</p>
+
+<h2 id="count">Counting a whole model</h2>
+<p>Put it together for a model with <var>d</var> = 768, 12 blocks, an MLP of width 3,072, a vocabulary of 50,257 tokens and 1,024 learned positions:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Part</th><th>Calculation</th><th>Parameters</th></tr>
+<tr><td>Attention per block</td><td>4 &times; 768<sup>2</sup> + 4 &times; 768</td><td class="num">2,362,368</td></tr>
+<tr><td>MLP per block</td><td>2 &times; 768 &times; 3,072 + 3,072 + 768</td><td class="num">4,722,432</td></tr>
+<tr><td>Two layer norms per block</td><td>2 &times; 2 &times; 768</td><td class="num">3,072</td></tr>
+<tr><td>12 blocks</td><td>12 &times; 7,087,872</td><td class="num">85,054,464</td></tr>
+<tr><td>Token and position tables</td><td>50,257 &times; 768 + 1,024 &times; 768</td><td class="num">39,383,808</td></tr>
+<tr><td>Final layer norm</td><td>2 &times; 768</td><td class="num">1,536</td></tr>
+<tr><td colspan="2"><b>Total</b> (output matrix shared with the token table)</td><td class="num"><b>124,439,808</b></td></tr>
+</table></div>
+<p>About 124 million, the size of the smallest model in the GPT-2 family. A useful shortcut: each block has about 12<var>d</var><sup>2</sup> weights, so a model has roughly 12 <var>N</var> <var>d</var><sup>2</sup> plus its embedding table.</p>
+
+<h2 id="cost">What attention costs</h2>
+<p>For a sequence of <var>n</var> tokens, the score matrix <var>Q</var><var>K</var><sup>T</sup> has <var>n</var> &times; <var>n</var> entries in every head of every block. Going from 1,000 to 2,000 tokens takes it from 1 million to 4 million entries: double the input, four times the attention work. Most other work in the block grows only in proportion to <var>n</var>. For short inputs the MLPs dominate the cost; for long ones attention takes over. Much engineering, such as memory-saving attention kernels and windowed or sparse attention, exists to tame this square.</p>
+
+<h3 id="kv-cache">The KV cache</h3>
+<p>When generating, each new token needs to attend to all earlier tokens, whose keys and values do not change. Servers keep them in memory, the KV cache, instead of recomputing them. Its size is 2 (keys and values) &times; blocks &times; tokens &times; <var>d</var> &times; bytes per number. For 32 blocks, <var>d</var> = 4,096, 8,192 tokens and 2-byte numbers: 2 &times; 32 &times; 8,192 &times; 4,096 &times; 2 &asymp; 4.3 GB, for one conversation. That is why long contexts are expensive to serve, and why many models share keys and values across groups of heads to shrink the cache.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A model has <var>d</var> = 2,048 and 24 blocks. Roughly how many parameters are in its blocks? If its context doubles from 4,000 to 8,000 tokens, by how much does the score-matrix work grow?</p></div>
+<details><summary>Answer</summary><div><p>12 &times; 24 &times; 2,048<sup>2</sup> &asymp; 1.21 billion. The score matrix grows by (8,000 / 4,000)<sup>2</sup> = 4 times.</p></div></details>
+
+<h2 id="real-model">Reading a real model</h2>
+<p>A small open embedding model, <code>BAAI/bge-small-en-v1.5</code>, is a real transformer that reads like this chapter. Its public <code>config.json</code> gives 12 blocks, width 384, 12 attention heads (so 32 dimensions each), an MLP of width 1,536 (four times 384) with GELU, and 512 learned positions. Counting as in the table above gives about 33 million parameters. It is a reading-only model, so it uses no causal mask: every token in a question sees every other token.</p>
+<p>The language models you call through an API are far larger and run on the provider's servers. Because attention cost grows with the square of the input, careful applications cap how much of a prompt the user can fill: a chat box might refuse a question longer than 2,000 characters, which keeps the user's share of every prompt, and of its attention cost, bounded.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="project-tiny-lm.html">chapter 20</a> you write every part of this block by hand in PyTorch and train a tiny language model with it.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>In attention, what are the query, key and value for?</summary><div><p>The query says what a token is looking for, keys say what each token offers, and their dot products decide the weights. The values are what gets mixed together using those weights.</p></div></details>
+<details><summary>Why are attention scores divided by &radic;d<sub>k</sub>?</summary><div><p>Dot products grow with vector length, and large scores push the softmax to put nearly all weight on one token, where gradients vanish. Dividing keeps the scores around size 1.</p></div></details>
+<details><summary>Roughly what fraction of a transformer block's parameters are in the MLP, and why?</summary><div><p>About two thirds: its two matrices of d &times; 4d hold 8d<sup>2</sup> weights against attention's 4d<sup>2</sup>.</p></div></details>
+<details><summary>What does the KV cache store, and why does it grow with context length?</summary><div><p>The keys and values of every earlier token in every block, so new tokens can attend to them without recomputing. One set per token, so it grows in proportion to the number of tokens.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener noreferrer">Attention Is All You Need (2017)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">The original transformer paper: scaled dot-product attention, multi-head attention and the encoder-decoder stack.</span></li>
+<li><a href="https://jalammar.github.io/illustrated-transformer/" target="_blank" rel="noopener noreferrer">The Illustrated Transformer</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Jay Alammar&#x27;s diagram-by-diagram walk through self-attention and the transformer block.</span></li>
+<li><a href="https://www.youtube.com/watch?v=eMlx5fFNoYc" target="_blank" rel="noopener noreferrer">Attention in transformers, step-by-step | Deep Learning Chapter 6</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Animated explanation of queries, keys, values and multiple heads.</span></li>
+<li><a href="https://poloclub.github.io/transformer-explainer/" target="_blank" rel="noopener noreferrer">Transformer Explainer: LLM Transformer Model Visually Explained</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Interactive in-browser GPT-2 that lets you inspect attention and next-token probabilities live.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-llm-transformer">All resources for this chapter</a> and 1 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/attention.js"></script>
+</body>
+</html>

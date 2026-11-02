@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Glossary &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Reference</p>
+<h1>Glossary</h1>
+<p class="lead">Every term the book uses, in plain words. Each entry names the chapter that teaches it in depth.</p>
+<nav class="az" aria-label="Letters">
+<a href="#l-a">A</a><a href="#l-b">B</a><a href="#l-c">C</a><a href="#l-d">D</a><a href="#l-e">E</a><a href="#l-f">F</a><a href="#l-g">G</a><a href="#l-h">H</a><a href="#l-i">I</a><a href="#l-j">J</a><a href="#l-k">K</a><a href="#l-l">L</a><a href="#l-m">M</a><a href="#l-n">N</a><a href="#l-o">O</a><a href="#l-p">P</a><a href="#l-q">Q</a><a href="#l-r">R</a><a href="#l-s">S</a><a href="#l-t">T</a><a href="#l-u">U</a><a href="#l-v">V</a><a href="#l-w">W</a><a href="#l-x">X</a><a href="#l-z">Z</a>
+</nav>
+
+<dl class="glossary">
+<h3 id="l-a">A</h3>
+<dt id="activation">Activation function</dt><dd>A simple non-linear function applied to a neuron's weighted sum, such as ReLU or the sigmoid. Without it, a stack of layers collapses into one straight-line function. See <a href="ml-neural-networks.html">chapter 12</a>.</dd>
+<dt id="adam">Adam</dt><dd>An optimiser that keeps a running average of each weight's gradient (momentum) and of its squared gradient, and scales each step by both. The default choice for training transformers. See <a href="ml-training-deep.html">chapter 13</a>.</dd>
+<dt id="adapter">adapter</dt><dd>A small set of trained weights added to a frozen model, such as LoRA's A and B matrices; one base model can carry a different adapter per task. See <a href="fine-tuning.html#lora">chapter 40</a>.</dd>
+<dt id="agent">Agent</dt><dd>A program in which a language model chooses actions (usually tool calls) in a loop, sees the results, and decides what to do next until a goal or a stopping rule is reached. See <a href="agents.html">chapter 29</a> and <a href="lab-agent.html">Lab 5</a>.</dd>
+<dt id="agent-loop">Agent loop</dt><dd>The cycle at the centre of an agent: send the conversation and the tool descriptions to the model; if it asks for tools, run them and append the results; call the model again; stop when it answers without asking for a tool or a step limit is reached. See <a href="agents.html">chapter 29</a> and <a href="lab-agent.html">Lab 5</a>.</dd>
+<dt id="allow-list">Allow-list</dt><dd>A fixed list of what an agent may use, such as the tools it may call. Anything not on it is never offered to the model. See <a href="security.html#defences">chapter 35</a> and <a href="tools.html">chapter 28</a>.</dd>
+<dt id="ann">Approximate nearest neighbour (ANN)</dt><dd>A search that examines only part of the stored vectors and usually, not always, finds the true nearest ones. IVF and HNSW are the common designs. See <a href="vector-search.html#ann">chapter 25</a>.</dd>
+<dt id="as-of">As-of date</dt><dd>The date a figure or fact was true. A number with no date can be years out of date, so a careful system stores the date with each figure and shows it beside the number. See <a href="knowledge-base.html">chapter 27</a>.</dd>
+<dt id="attention">Attention</dt><dd>The transformer's way of letting each token gather information from other tokens, weighting them by how well its query matches their keys. See <a href="llm-transformer.html">chapter 18</a>.</dd>
+<dt id="autoregressive">Autoregressive</dt><dd>Producing a sequence one piece at a time, each piece conditioned on the pieces already produced. Language models generate text this way. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+<dt id="awq">AWQ</dt><dd>Activation-aware weight quantisation: protects the few weights that matter most (found from activation sizes) by scaling them before rounding. See <a href="quantisation.html">chapter 39</a>.</dd>
+
+<h3 id="l-b">B</h3>
+<dt id="backpropagation">Backpropagation</dt><dd>The method that computes every weight's gradient in a network by applying the chain rule backwards from the loss, layer by layer. See <a href="ml-neural-networks.html">chapter 12</a>.</dd>
+<dt id="batch">Batch</dt><dd>A group of training examples processed together in one step. The gradient is averaged over the batch. See <a href="maths-gradient-descent.html">chapter 6</a>.</dd>
+<dt id="batch-norm">Batch normalisation</dt><dd>A layer that rescales each feature to mean 0 and variance 1 across the examples in a batch, then applies a learned scale and shift. See <a href="ml-training-deep.html">chapter 13</a>.</dd>
+<dt id="bayes">Bayes' rule</dt><dd>A formula that turns P(B given A) into P(A given B) using the base rate P(A). See <a href="maths-probability.html">chapter 7</a>.</dd>
+<dt id="bf16">bf16</dt><dd>"Brain float 16": a 16-bit number format with the same exponent range as fp32 but fewer digits of precision. Common for training. See <a href="quantisation.html">chapter 39</a>.</dd>
+<dt id="bge">bge-small</dt><dd>BAAI/bge-small-en-v1.5, a small open embedding model that turns text into 384 numbers and runs on an ordinary laptop. See <a href="embeddings.html">chapter 23</a>.</dd>
+<dt id="bias-term">Bias (of a neuron)</dt><dd>The number a neuron adds to its weighted sum before the activation, letting it shift its output up or down. Not the same as unfairness or statistical bias.</dd>
+<dt id="bias-probe">Bias probe</dt><dd>A test that changes how an answer is presented (order, length) but not what it says, and checks that a judge's scores stay the same. See <a href="evals.html">chapter 44</a>.</dd>
+<dt id="bi-encoder">Bi-encoder</dt><dd>A model that encodes a query and a passage separately into vectors, so passage vectors can be computed ahead of time. Embedding models are bi-encoders. See <a href="vector-search.html#rerank">chapter 25</a>.</dd>
+<dt id="bigram">Bigram model</dt><dd>The simplest language model: it predicts the next character or word from the one before it only, using counts. See <a href="project-tiny-lm.html">chapter 20</a>.</dd>
+<dt id="bm25">BM25</dt><dd>The standard keyword relevance score: rare words count more, repeated words count with diminishing returns, and long documents are discounted. See <a href="vector-search.html#bm25">chapter 25</a> and <a href="lab-retrieval-eval.html">Lab 4</a>.</dd>
+<dt id="bpe">BPE (byte-pair encoding)</dt><dd>A way to build a tokeniser's vocabulary: start from single characters or bytes and repeatedly merge the most frequent neighbouring pair into a new token. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+
+<h3 id="l-c">C</h3>
+<dt id="catastrophic-forgetting">catastrophic forgetting</dt><dd>A model losing an old skill while it is trained on a new one. See <a href="fine-tuning.html#full">chapter 40</a>.</dd>
+<dt id="chain-rule">Chain rule</dt><dd>The rule for the derivative of a function inside a function: multiply the derivatives of each stage. The heart of backpropagation. See <a href="maths-derivatives.html">chapter 5</a>.</dd>
+<dt id="chunk">Chunk</dt><dd>A piece of a document small enough to embed and retrieve on its own. A chunk whose text never names its subject is hard to find, so it can be embedded with a label in front (see labelled chunk). See <a href="rag.html#chunking">chapter 24</a> and <a href="lab-rag.html">Lab 3</a>.</dd>
+<dt id="circuit-breaker">circuit breaker</dt><dd>A switch that stops calling a failing dependency for a while after repeated errors, then tries again. See <a href="production.html#reliability">chapter 42</a>.</dd>
+<dt id="citation">Citation</dt><dd>A pointer from a claim to the document section it came from. A careful system checks that any quoted text really appears in the cited place, and labels the passage by the heading printed before it or by its page number. See <a href="rag.html">chapter 24</a>.</dd>
+<dt id="cohen-kappa">Cohen's kappa</dt><dd>A measure of how much two raters agree beyond what chance would give: 1 is perfect agreement, 0 is chance level. An LLM judge's agreement with human labels is measured with it. See <a href="evals.html">chapter 44</a> and <a href="lab-judge.html">Lab 8</a>.</dd>
+<dt id="compaction">Compaction</dt><dd>Replacing the oldest part of a long conversation with a model-written summary, so the window keeps decisions and open questions without every earlier token. See <a href="context-engineering.html#techniques">chapter 22</a>.</dd>
+<dt id="conditional-probability">Conditional probability</dt><dd>The probability of one thing given that another is known to be true, written P(A | B). See <a href="maths-probability.html">chapter 7</a>.</dd>
+<dt id="confidence-interval">Confidence interval</dt><dd>A range that, by a stated method, captures the true value of a quantity most of the time (for example 95% of the time). Small samples give wide intervals. See <a href="hallucination.html">chapter 36</a>.</dd>
+<dt id="context-engineering">Context engineering</dt><dd>Choosing what goes into the context window on each call: which history, documents and tool results, in what order and how much. See <a href="context-engineering.html">chapter 22</a>.</dd>
+<dt id="context-variable">Context variable</dt><dd>A Python value (<code>contextvars.ContextVar</code>) that each task sees its own copy of, so concurrent requests do not mix. Tracing and cost code use them to know which request a call belongs to. See <a href="observability.html">chapter 45</a>.</dd>
+<dt id="context-window">Context window</dt><dd>The most tokens a model can read at once, prompt and answer together. Anything outside it is invisible to the model. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+<dt id="continuous-batching">continuous batching</dt><dd>Adding new requests to a batch that is already running, instead of waiting for the whole batch to finish. See <a href="frameworks.html#self-host">chapter 38</a>.</dd>
+<dt id="contrastive-learning">Contrastive learning</dt><dd>Training that pulls the vectors of matching pairs together and pushes non-matching pairs apart. Most embedding models are trained this way. See <a href="embeddings.html#from-tokens">chapter 23</a>.</dd>
+<dt id="cosine-distance">Cosine distance</dt><dd>One minus the cosine similarity. Vector databases such as pgvector return it as the distance for their <code>&lt;=&gt;</code> operator, so the similarity is 1 minus that distance. See <a href="embeddings.html">chapter 23</a>.</dd>
+<dt id="cosine-similarity">Cosine similarity</dt><dd>The cosine of the angle between two vectors: the dot product divided by both lengths. 1 means same direction, 0 means unrelated, -1 means opposite. See <a href="embeddings.html">chapter 23</a>.</dd>
+<dt id="cost-rollup">Cost rollup</dt><dd>The cost and tokens of every model call under a span, added up and written on the spans above it, so one span shows what everything inside it cost. See <a href="observability.html">chapter 45</a> and <a href="lab-tracing.html">Lab 9</a>.</dd>
+<dt id="cross-encoder">Cross-encoder</dt><dd>A model that reads a query and one passage together and outputs a relevance score. More accurate than a bi-encoder and too slow for whole collections, so it reranks a short list. See <a href="vector-search.html#rerank">chapter 25</a>.</dd>
+<dt id="cross-entropy">Cross-entropy</dt><dd>A loss that measures how surprised a model's predicted probabilities are by the true answer: minus the log of the probability it gave the right answer. See <a href="maths-softmax-entropy.html">chapter 9</a>.</dd>
+
+<h3 id="l-d">D</h3>
+<dt id="derivative">Derivative</dt><dd>The slope of a function at one point: how fast the output changes per unit change of the input. See <a href="maths-derivatives.html">chapter 5</a>.</dd>
+<dt id="dimension">Dimension</dt><dd>The number of entries in a vector. An embedding with 384 dimensions is a list of 384 numbers. See <a href="maths-vectors-matrices.html">chapter 4</a>.</dd>
+<dt id="disclosure">Disclosure</dt><dd>Fixed wording an answer must carry in some situations, such as a notice that it is not professional advice. Code adds it, so the model cannot forget or reword it. See <a href="guardrails.html#disclosures">chapter 34</a>.</dd>
+<dt id="distillation">Distillation</dt><dd>Training a small "student" model to imitate a larger "teacher" model's output probabilities rather than only the right answers. See <a href="fine-tuning.html">chapter 40</a>.</dd>
+<dt id="dot-product">Dot product</dt><dd>Multiply two vectors entry by entry and add the results. It is large when the vectors point the same way. See <a href="maths-vectors-matrices.html">chapter 4</a>.</dd>
+<dt id="dpo">DPO</dt><dd>Direct preference optimisation: tunes a model on pairs of preferred and rejected answers with a simple loss, without training a separate reward model. See <a href="llm-training.html">chapter 19</a>.</dd>
+<dt id="dropout">Dropout</dt><dd>During training, randomly switch off a fraction of neurons at each step, so the network cannot depend on any one of them. See <a href="ml-training-deep.html">chapter 13</a>.</dd>
+<dt id="distribution">Probability distribution</dt><dd>A list of possible outcomes with a probability for each, adding up to 1. See <a href="maths-probability.html">chapter 7</a>.</dd>
+
+<h3 id="l-e">E</h3>
+<dt id="effort">Effort (thinking effort)</dt><dd>A setting, usually low, medium or high, that tells a reasoning model how much to think before it answers. Higher effort helps on hard problems and costs more, because the thinking is written as <a href="#reasoning-tokens">reasoning tokens</a>. See <a href="llm-tokens.html">chapter 16</a> and <a href="lab-first-call.html">Lab 1</a>.</dd>
+<dt id="elicitation">Elicitation</dt><dd>An MCP feature that lets a server ask the user for input, through a form or by sending them to a URL. A form must never ask for passwords, keys or payment details. See <a href="mcp.html#roles">chapter 30</a>.</dd>
+<dt id="embedding">Embedding</dt><dd>A list of numbers (a vector) that stands for a piece of text, so that texts with similar meaning get vectors pointing in similar directions. See <a href="embeddings.html">chapter 23</a>.</dd>
+<dt id="embedding-layer">Embedding layer</dt><dd>The first layer of a language model: a table with one learned vector per token id. See <a href="llm-embeddings-positions.html">chapter 17</a>.</dd>
+<dt id="entropy">Entropy</dt><dd>The average surprise of a distribution, in bits or nats. High when outcomes are evenly spread, zero when one outcome is certain. See <a href="maths-softmax-entropy.html">chapter 9</a>.</dd>
+<dt id="epoch">Epoch</dt><dd>One full pass over the training data. See <a href="maths-gradient-descent.html">chapter 6</a>.</dd>
+<dt id="eval">Eval</dt><dd>A repeatable test of an AI system on a fixed set of cases, with a scoring rule. See <a href="evals.html">chapter 44</a>.</dd>
+<dt id="exponential">Exponential</dt><dd>A function like 2<sup>x</sup> or e<sup>x</sup> where the input is the power. It grows by the same factor for each step of x. See <a href="maths-exp-log.html">chapter 3</a>.</dd>
+<dt id="backoff">exponential backoff</dt><dd>Waiting longer after each failed attempt (1, 2, 4, 8 seconds), usually with random jitter, before retrying. See <a href="production.html#limits">chapter 42</a>.</dd>
+
+<h3 id="l-f">F</h3>
+<dt id="factuality">Factuality</dt><dd>Whether a statement is true about the world. Compare faithfulness. See <a href="hallucination.html">chapter 36</a>.</dd>
+<dt id="fail-closed">Fail closed</dt><dd>Treating a check that could not run as a failed check, so an error never lets output through unchecked. See <a href="harness.html#verification">chapter 33</a>.</dd>
+<dt id="faithfulness">Faithfulness</dt><dd>Whether a statement is supported by the sources the model was given. A judge usually scores it as a criterion of its own. See <a href="hallucination.html">chapter 36</a>.</dd>
+<dt id="fan-out">Fan-out</dt><dd>Starting several branches of work at once from one point, such as running several subagents in parallel and merging their reports. See <a href="subagents.html">chapter 32</a>.</dd>
+<dt id="fastembed">fastembed</dt><dd>A small Python library that runs embedding models on the local machine, with no API key. See <a href="embeddings.html">chapter 23</a>.</dd>
+<dt id="few-shot">Few-shot prompting</dt><dd>Putting a few worked input-and-output examples in a prompt so the model copies the format and judgement. Models also copy the examples' surface features, so vary them. See <a href="prompt-engineering.html#few-shot">chapter 21</a>.</dd>
+<dt id="fine-tuning">Fine-tuning</dt><dd>Training an already-trained model a little more, on a smaller dataset, to change its behaviour. See <a href="fine-tuning.html">chapter 40</a>.</dd>
+<dt id="fp16">fp16</dt><dd>16-bit floating point: 1 sign bit, 5 exponent bits, 10 fraction bits; largest value 65,504. See <a href="quantisation.html#formats">chapter 39</a>.</dd>
+<dt id="fp32">fp32 and fp16</dt><dd>Floating-point number formats with 32 and 16 bits. fp32 is the usual default; fp16 halves the memory at the cost of range and precision. See <a href="quantisation.html">chapter 39</a>.</dd>
+<dt id="function">Function</dt><dd>A rule that turns each input into exactly one output, like a machine. See <a href="maths-functions.html">chapter 2</a>.</dd>
+
+<h3 id="l-g">G</h3>
+<dt id="llm-gateway">gateway (LLM)</dt><dd>A service or library that puts many models and providers behind one API, with routing and fallbacks. OpenRouter is one. See <a href="frameworks.html#gateways">chapter 38</a>.</dd>
+<dt id="genkit">Genkit</dt><dd>A framework for calling models, defining tools and getting structured output, with plugins per provider. See <a href="frameworks.html">chapter 38</a>.</dd>
+<dt id="gguf">GGUF</dt><dd>The file format llama.cpp uses for quantised models, holding weights in several low-bit schemes plus the tokenizer and settings. See <a href="quantisation.html">chapter 39</a>.</dd>
+<dt id="gptq">GPTQ</dt><dd>A post-training quantisation method that rounds weights one column at a time and adjusts the rest to cancel the error, using a little calibration data. See <a href="quantisation.html">chapter 39</a>.</dd>
+<dt id="gradient">Gradient</dt><dd>The list of all partial derivatives of a function. It points uphill, in the direction of fastest increase. See <a href="maths-derivatives.html">chapter 5</a>.</dd>
+<dt id="gradient-descent">Gradient descent</dt><dd>Training by repeatedly moving the weights a small step against the gradient of the loss. See <a href="maths-gradient-descent.html">chapter 6</a>.</dd>
+<dt id="group-quantisation">group-wise quantisation</dt><dd>Giving each small group of weights its own scale, so an outlier spoils only its group. See <a href="quantisation.html#outliers">chapter 39</a>.</dd>
+<dt id="guardrail">Guardrail</dt><dd>A check or limit around a model that keeps the system safe even when the model misbehaves. See <a href="guardrails.html">chapter 34</a>.</dd>
+
+<h3 id="l-h">H</h3>
+<dt id="hallucination">Hallucination</dt><dd>Fluent model output that is not supported by the sources or not true. See <a href="hallucination.html">chapter 36</a>.</dd>
+<dt id="harness">Harness</dt><dd>Everything around a model that makes it a working system: the loop, the context, tools and permissions, output checks, budgets, traces and evals. See <a href="harness.html">chapter 33</a>.</dd>
+<dt id="hindsight">Hindsight</dt><dd>An open-source long-term memory server for agents: a system writes facts to it and recalls them later. See <a href="memory.html">chapter 37</a>.</dd>
+<dt id="hit-rate">Hit rate (hit@k)</dt><dd>The share of questions with at least one relevant result in the top k, reported as hit@3 or hit@5 for k of 3 or 5. See <a href="rag-eval.html#metrics">chapter 26</a> and <a href="lab-retrieval-eval.html">Lab 4</a>.</dd>
+<dt id="hnsw">HNSW</dt><dd>Hierarchical navigable small world: a graph index that finds nearest vectors quickly without comparing against every vector, by walking from neighbour to neighbour. pgvector can use it for its index. See <a href="vector-search.html#hnsw">chapter 25</a>.</dd>
+<dt id="hybrid-search">Hybrid search</dt><dd>Combining keyword search and vector search, usually by merging their ranked lists with reciprocal rank fusion. See <a href="vector-search.html#hybrid">chapter 25</a>.</dd>
+<dt id="hyperparameter">Hyperparameter</dt><dd>A setting chosen by a person rather than learned, such as the learning rate or the number of layers. See <a href="ml-generalisation.html">chapter 11</a>.</dd>
+
+<h3 id="l-i">I</h3>
+<dt id="iban">IBAN</dt><dd>International bank account number. A scrubber can find one by its shape (two letters, two check digits, then 11 to 30 letters or digits) and mask it as <code>&lt;IBAN_A&gt;</code>. See <a href="guardrails.html">chapter 34</a>.</dd>
+<dt id="indirect-prompt-injection">indirect prompt injection</dt><dd>Instructions planted in content a model reads (a web page, document or tool result) rather than typed by the user. See <a href="security.html#injection">chapter 35</a> and <a href="lab-guardrails.html">Lab 7</a>.</dd>
+<dt id="inference">Inference</dt><dd>Using a trained model to produce outputs, as opposed to training it.</dd>
+<dt id="int4">int4</dt><dd>4-bit integers, 16 levels, used with a shared scale to store weights in a quarter of 16-bit memory. See <a href="quantisation.html#formats">chapter 39</a>.</dd>
+<dt id="int8">int8 and int4</dt><dd>Integer formats with 8 and 4 bits: 256 and 16 possible values. Quantised models store weights in them. See <a href="quantisation.html">chapter 39</a>.</dd>
+<dt id="intent">Intent</dt><dd>What a user's message is asking for, such as a refund or the opening hours. A router can label each message with an intent to pick the prompt, tool or model that handles it. See <a href="context-engineering.html#routing">chapter 22</a>.</dd>
+<dt id="ivf">IVF (inverted file index)</dt><dd>An approximate vector index that clusters the vectors into lists and searches only the lists whose centres are nearest the query (the probes). See <a href="vector-search.html#ivf">chapter 25</a>.</dd>
+
+<h3 id="l-j">J</h3>
+<dt id="jailbreak">Jailbreak</dt><dd>A prompt crafted to make a model ignore its rules. See <a href="security.html">chapter 35</a>.</dd>
+<dt id="jina">Jina</dt><dd>A hosted embedding and reranking service. See <a href="embeddings.html">chapter 23</a>.</dd>
+<dt id="json-schema">JSON Schema</dt><dd>A standard way to describe the shape of JSON data: its fields, types and which are required. Tools and structured outputs are described to the model with it. See <a href="tools.html">chapter 28</a>.</dd>
+<dt id="json-rpc">JSON-RPC</dt><dd>A simple standard for calling procedures with JSON messages: a request has an id and a method, a result or error answers it with the same id, and a notification has no id and gets no reply. MCP messages are JSON-RPC 2.0. See <a href="mcp.html#wire">chapter 30</a>.</dd>
+<dt id="judge">Judge (LLM-as-judge)</dt><dd>A separate model that scores another model's answers against a rubric. See <a href="evals.html">chapter 44</a> and <a href="lab-judge.html">Lab 8</a>.</dd>
+
+<h3 id="l-k">K</h3>
+<dt id="kl-divergence">KL divergence</dt><dd>Kullback-Leibler divergence: how many extra bits (or nats) you pay, on average, for using distribution Q when the truth is P. Zero only when they match. See <a href="maths-softmax-entropy.html">chapter 9</a>.</dd>
+<dt id="knowledge-base">Knowledge base</dt><dd>The documents and stored facts a system reads to answer questions. See <a href="knowledge-base.html">chapter 27</a>.</dd>
+
+<h3 id="l-l">L</h3>
+<dt id="labelled-chunk">Labelled chunk</dt><dd>A chunk embedded with a label in front, such as its document title and heading path, so a chunk that never names its subject can still be found. A reranker can read the label too. See <a href="rag.html#context">chapter 24</a>.</dd>
+<dt id="langchain">LangChain</dt><dd>A Python library of building blocks for model applications: model wrappers, tools and agents. See <a href="frameworks.html">chapter 38</a>.</dd>
+<dt id="langfuse">Langfuse</dt><dd>An open-source tracing service for model applications. A program sends it each request as a trace of spans with cost and latency, and can link each answer to its trace. See <a href="observability.html">chapter 45</a>.</dd>
+<dt id="langgraph">LangGraph</dt><dd>A library for building an agent or workflow as a graph: nodes (the steps) read and update a shared state, and edges say which node runs next. See <a href="frameworks.html">chapter 38</a>.</dd>
+<dt id="layer-norm">Layer normalisation</dt><dd>Rescales the numbers inside one token's vector to mean 0 and variance 1, then applies a learned scale and shift. Used in every transformer block. See <a href="ml-training-deep.html">chapter 13</a>.</dd>
+<dt id="learning-rate">Learning rate</dt><dd>The size of each gradient descent step. Too small is slow; too large overshoots and can diverge. See <a href="maths-gradient-descent.html">chapter 6</a>.</dd>
+<dt id="least-privilege">least privilege</dt><dd>Giving each component only the access its task needs, so a fooled model can do little harm. See <a href="security.html#defences">chapter 35</a>.</dd>
+<dt id="lethal-trifecta">lethal trifecta</dt><dd>Simon Willison's name for an agent that has private data, reads untrusted content and can send data out: together they allow data theft by injection. See <a href="security.html#trifecta">chapter 35</a>.</dd>
+<dt id="linear-regression">Linear regression</dt><dd>Fitting a straight line (or flat plane) to data by choosing the weights that make the squared error smallest. See <a href="ml-learning.html">chapter 10</a>.</dd>
+<dt id="llm">LLM (large language model)</dt><dd>A neural network trained on a large amount of text to predict the next token. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+<dt id="logarithm">Logarithm</dt><dd>The inverse of an exponential: log<sub>2</sub>(8) = 3 because 2<sup>3</sup> = 8. Logs turn products into sums. See <a href="maths-exp-log.html">chapter 3</a>.</dd>
+<dt id="logistic-regression">Logistic regression</dt><dd>A linear model whose output goes through the sigmoid, giving a probability for a yes-or-no answer. See <a href="ml-learning.html">chapter 10</a>.</dd>
+<dt id="logit">Logit</dt><dd>A raw score a model gives each option before softmax turns the scores into probabilities. See <a href="maths-softmax-entropy.html">chapter 9</a>.</dd>
+<dt id="lora">LoRA</dt><dd>Low-rank adaptation: fine-tune a model by learning two thin matrices B and A whose product is added to a frozen weight matrix. See <a href="fine-tuning.html">chapter 40</a>.</dd>
+<dt id="loss">Loss</dt><dd>A single number that says how wrong a model is on some data. Training makes it smaller. See <a href="ml-learning.html">chapter 10</a>.</dd>
+<dt id="lstm">LSTM</dt><dd>Long short-term memory: a recurrent network with gates that decide what to keep, forget and output, so information can survive many steps. See <a href="ml-history.html">chapter 14</a>.</dd>
+
+<h3 id="l-m">M</h3>
+<dt id="masking">Masking</dt><dd>Replacing personal data with placeholders such as <code>&lt;PERSON_A&gt;</code> before text leaves your system, and putting it back afterwards. See <a href="guardrails.html">chapter 34</a> and <a href="lab-guardrails.html">Lab 7</a>.</dd>
+<dt id="matrix">Matrix</dt><dd>A rectangular grid of numbers. A layer of a neural network is mostly a matrix. See <a href="maths-vectors-matrices.html">chapter 4</a>.</dd>
+<dt id="matrix-multiplication">Matrix multiplication</dt><dd>Combining two matrices by taking the dot product of each row of the first with each column of the second. See <a href="maths-vectors-matrices.html">chapter 4</a>.</dd>
+<dt id="mcp">MCP</dt><dd>Model Context Protocol: a standard way for an AI application to reach tools and data on a server. See <a href="mcp.html">chapter 30</a> and <a href="lab-mcp.html">Lab 6</a>.</dd>
+<dt id="mean">Mean</dt><dd>The average: add the numbers and divide by how many there are. See <a href="maths-statistics.html">chapter 8</a>.</dd>
+<dt id="memory-bank">Memory bank</dt><dd>A named store in a memory server such as Hindsight, for example one bank per user. See <a href="memory.html">chapter 37</a>.</dd>
+<dt id="memory-poisoning">memory poisoning</dt><dd>Planting an instruction or false fact in a system's long-term memory so it is replayed into later prompts. See <a href="memory.html#risks">chapter 37</a>.</dd>
+<dt id="mlp">MLP</dt><dd>Multi-layer perceptron: layers of neurons where each layer is a matrix multiply plus an activation. Each transformer block contains one. See <a href="ml-neural-networks.html">chapter 12</a>.</dd>
+<dt id="model-card">model card</dt><dd>A short document describing a model's intended use, evaluation and limits, proposed in "Model Cards for Model Reporting" (2018). See <a href="regulated.html#change">chapter 43</a>.</dd>
+<dt id="model-routing">Model routing</dt><dd>Sending each request to a model tier chosen for it, so easy requests use cheaper, faster models. A router, which can be a small model or plain rules, picks a tier such as simple, standard or complex. See <a href="context-engineering.html#routing">chapter 22</a>.</dd>
+<dt id="momentum">Momentum</dt><dd>An optimiser trick: keep a running average of past gradients and step along it, which smooths zig-zags. See <a href="ml-training-deep.html">chapter 13</a>.</dd>
+<dt id="mrr">MRR (mean reciprocal rank)</dt><dd>The average over questions of 1 divided by the rank of the first relevant result, counting 0 when there is none. See <a href="rag-eval.html#metrics">chapter 26</a> and <a href="lab-retrieval-eval.html">Lab 4</a>.</dd>
+<dt id="multi-head">Multi-head attention</dt><dd>Running several attention operations side by side on smaller slices of the vectors, so each head can track a different kind of relation. See <a href="llm-transformer.html">chapter 18</a>.</dd>
+
+<h3 id="l-n">N</h3>
+<dt id="ndcg">nDCG</dt><dd>Normalised discounted cumulative gain: relevance grades summed with a discount of log2(rank + 1), divided by the best possible ordering's sum. Rewards putting the most relevant results first. See <a href="rag-eval.html#ndcg">chapter 26</a>.</dd>
+<dt id="neighbouring-text">Neighbouring text</dt><dd>The end of the chunk before a retrieved passage and the start of the chunk after it, from the same document, added so the passage reads in context. See <a href="rag.html">chapter 24</a>.</dd>
+<dt id="neuron">Neuron</dt><dd>The basic unit of a neural network: a weighted sum of inputs plus a bias, passed through an activation function. See <a href="ml-neural-networks.html">chapter 12</a>.</dd>
+<dt id="next-token">Next-token prediction</dt><dd>The training task of a language model: given the text so far, give a probability to every possible next token. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+<dt id="nf4">NF4</dt><dd>A 4-bit format whose 16 levels are spaced to suit bell-shaped weights, introduced with QLoRA (2023). See <a href="quantisation.html#formats">chapter 39</a>.</dd>
+<dt id="norm">Norm (length)</dt><dd>The length of a vector: the square root of the sum of its squared entries. See <a href="maths-vectors-matrices.html">chapter 4</a>.</dd>
+<dt id="normalisation">Normalisation</dt><dd>Rescaling numbers to a standard size: dividing a vector by its length, or shifting and scaling data to mean 0 and variance 1. See <a href="maths-statistics.html">chapter 8</a>.</dd>
+
+<h3 id="l-o">O</h3>
+<dt id="ollama">Ollama</dt><dd>An open-source tool for running open-weight models on one machine, with a local API. The labs can use it instead of a paid model. See <a href="frameworks.html#self-host">chapter 38</a> and <a href="lab-setup.html">Lab 0</a>.</dd>
+<dt id="openrouter">OpenRouter</dt><dd>A service that gives one API for many model providers, with routing rules per request. See <a href="frameworks.html">chapter 38</a>.</dd>
+<dt id="opentelemetry">OpenTelemetry</dt><dd>An open standard for traces and spans. Many tracing tools accept spans in this format. See <a href="observability.html">chapter 45</a>.</dd>
+<dt id="orchestrator">Orchestrator</dt><dd>The code, or a lead agent, that runs the steps of a task in order, decides what comes next and hands work to workers or subagents. See <a href="agents.html">chapter 29</a> and <a href="subagents.html">chapter 32</a>.</dd>
+<dt id="output-check">Output check</dt><dd>The checks every answer passes before it is shown: deterministic rules first, then, if wanted, a model reviewer. See <a href="guardrails.html">chapter 34</a>.</dd>
+<dt id="overfitting">Overfitting</dt><dd>When a model learns its training data so closely, noise included, that it does worse on new data. See <a href="ml-generalisation.html">chapter 11</a>.</dd>
+
+<h3 id="l-p">P</h3>
+<dt id="paged-attention">PagedAttention</dt><dd>vLLM's way of storing the attention key and value cache in fixed-size pages, like an operating system's virtual memory, so many requests share a GPU with little waste. See <a href="frameworks.html#self-host">chapter 38</a>.</dd>
+<dt id="pageindex">PageIndex</dt><dd>A library that turns a long document into a tree of its sections. At question time a model reads the tree and picks the sections to open, instead of searching by vector similarity. See <a href="rag.html">chapter 24</a>.</dd>
+<dt id="parameter">Parameter (weight)</dt><dd>A number inside a model that training adjusts. A "7B" model has about seven billion of them. See <a href="ml-neural-networks.html">chapter 12</a>.</dd>
+<dt id="partial-derivative">Partial derivative</dt><dd>The slope of a function of several inputs along one input, holding the others fixed. See <a href="maths-derivatives.html">chapter 5</a>.</dd>
+<dt id="passages">Passages</dt><dd>Pieces of documents that retrieval puts into the prompt before the model reasons, marked as data and cited by document name and section. See <a href="rag.html">chapter 24</a>.</dd>
+<dt id="percentile">percentile (p50, p95)</dt><dd>The value below which a given share of measurements fall: p50 is the median, p95 the value 95% stay under. See <a href="production.html#latency">chapter 42</a>.</dd>
+<dt id="perplexity">Perplexity</dt><dd>e raised to the average cross-entropy per token. Roughly "how many tokens the model is choosing between". Lower is better. See <a href="llm-training.html">chapter 19</a>.</dd>
+<dt id="pgvector">pgvector</dt><dd>A Postgres extension that stores vectors and finds the nearest ones. See <a href="rag.html">chapter 24</a>.</dd>
+<dt id="pii">PII</dt><dd>Personally identifiable information: names, email addresses, phone numbers, ID numbers, bank account numbers, IBANs and addresses. See <a href="guardrails.html">chapter 34</a> and <a href="lab-guardrails.html">Lab 7</a>.</dd>
+<dt id="placeholder">Placeholder</dt><dd>A stand-in token such as <code>&lt;PERSON_A&gt;</code>, <code>&lt;EMAIL_A&gt;</code> or <code>&lt;ACCOUNT_A&gt;</code> that replaces a piece of personal data while the text is outside your system. After Z the letters go on as AA, AB and so on. See <a href="guardrails.html">chapter 34</a>.</dd>
+<dt id="pooling">Pooling</dt><dd>Turning a transformer's one-vector-per-token output into one vector for the whole text, for example by averaging or by taking a special first token. See <a href="embeddings.html#from-tokens">chapter 23</a>.</dd>
+<dt id="positional-encoding">Positional encoding</dt><dd>Extra numbers added to (or rotations applied to) token vectors so the model knows where each token sits in the sequence. See <a href="llm-embeddings-positions.html">chapter 17</a>.</dd>
+<dt id="precision-recall">precision and recall</dt><dd>For a check that flags items: recall is the share of truly bad items it flags; precision is the share of its flags that were truly bad. See <a href="guardrails.html#maths">chapter 34</a>.</dd>
+<dt id="precision-at-k">Precision@k</dt><dd>The share of the top k results that are relevant. See <a href="rag-eval.html#metrics">chapter 26</a> and <a href="lab-retrieval-eval.html">Lab 4</a>.</dd>
+<dt id="presidio">Presidio</dt><dd>An open-source library that finds personal data in text with recognisers and a spaCy language model. A scrubber can be built on it. See <a href="guardrails.html">chapter 34</a>.</dd>
+<dt id="probability">Probability</dt><dd>A number from 0 to 1 that says how likely something is. See <a href="maths-probability.html">chapter 7</a>.</dd>
+<dt id="progressive-disclosure">Progressive disclosure</dt><dd>Loading information in stages, only as it is needed. A skill's description is always in context; its body loads when it is triggered; its bundled files only when read. See <a href="skills.html#disclosure">chapter 31</a>.</dd>
+<dt id="prompt">Prompt</dt><dd>The text sent to a model. Usually a system prompt with standing instructions, earlier messages, and the new user message.</dd>
+<dt id="prompt-caching">Prompt caching</dt><dd>A provider feature that stores the processed start of a long prompt so a repeat call is cheaper and faster. You mark the stable part of the prompt, such as the instructions and tool descriptions, for caching. See <a href="frameworks.html">chapter 38</a>.</dd>
+<dt id="prompt-injection">Prompt injection</dt><dd>Text that tries to give a model new instructions, either typed by a user (direct) or hidden in a document or web page the model reads (indirect). See <a href="security.html">chapter 35</a> and <a href="lab-guardrails.html">Lab 7</a>.</dd>
+<dt id="prompt-version">Prompt version</dt><dd>A label such as <code>support_v5</code> naming one version of a prompt. Cost rows and traces carry it so results can be compared across prompt changes. See <a href="prompt-engineering.html">chapter 21</a> and <a href="lab-prompt-bench.html">Lab 2</a>.</dd>
+<dt id="provenance">Provenance</dt><dd>Where a stored fact came from. A memory fact might be <code>said</code> (extracted from chat) or <code>confirmed</code> (the user pressed confirm). See <a href="memory.html">chapter 37</a>.</dd>
+<dt id="provider-routing">Provider routing</dt><dd>Gateway settings that pick which providers may serve a call, in which order, and whether they must keep no data. See <a href="frameworks.html">chapter 38</a>.</dd>
+<dt id="pydantic">Pydantic</dt><dd>A Python library for typed data models with validation. It is often used to describe structured outputs and tool inputs. See <a href="tools.html">chapter 28</a>.</dd>
+
+<h3 id="l-q">Q</h3>
+<dt id="qlora">QLoRA</dt><dd>LoRA on top of a base model stored in 4 bits, so a large model can be fine-tuned on one modest GPU. See <a href="fine-tuning.html">chapter 40</a>.</dd>
+<dt id="quantisation">Quantisation</dt><dd>Storing a model's numbers with fewer bits, such as int8 instead of fp32, to save memory and time at a small cost in accuracy. See <a href="quantisation.html">chapter 39</a>.</dd>
+
+<h3 id="l-r">R</h3>
+<dt id="rag">RAG (retrieval-augmented generation)</dt><dd>Find relevant passages first, then give them to the model with the question so it answers from them. See <a href="rag.html">chapter 24</a> and <a href="lab-rag.html">Lab 3</a>.</dd>
+<dt id="rate-limit">Rate limit</dt><dd>A cap on requests per user per time window, such as 30 a minute. See <a href="guardrails.html">chapter 34</a>.</dd>
+<dt id="react">ReAct</dt><dd>A pattern where a model alternates reasoning, an action (a tool call) and an observation (the result) until it can answer. See <a href="agents.html">chapter 29</a>.</dd>
+<dt id="reasoning-tokens">Reasoning tokens</dt><dd>Tokens a model writes to think before its answer. They cost like output tokens and count towards the output limit, so a small <code>max_tokens</code> can be used up before any answer appears. The <a href="#effort">effort</a> setting controls how many are used. See <a href="llm-tokens.html">chapter 16</a> and <a href="lab-first-call.html">Lab 1</a>.</dd>
+<dt id="recall-at-k">Recall@k</dt><dd>The share of all relevant items that appear in the top k results. For an approximate index, the share of the true k nearest neighbours it returns. See <a href="rag-eval.html#metrics">chapter 26</a> and <a href="lab-retrieval-eval.html">Lab 4</a>.</dd>
+<dt id="rrf">Reciprocal rank fusion (RRF)</dt><dd>Merging ranked lists by giving each item 1 / (60 + rank) from each list and adding them up. Uses ranks, not scores, so lists on different scales can be merged. See <a href="vector-search.html#hybrid">chapter 25</a> and <a href="lab-retrieval-eval.html">Lab 4</a>.</dd>
+<dt id="regularisation">Regularisation</dt><dd>Anything that discourages a model from fitting noise, such as a penalty on large weights or dropout. See <a href="ml-generalisation.html">chapter 11</a>.</dd>
+<dt id="relu">ReLU</dt><dd>Rectified linear unit: max(0, x). The activation that made deep networks practical. See <a href="ml-neural-networks.html">chapter 12</a>.</dd>
+<dt id="repeated-tool-call">Repeated tool call</dt><dd>A tool call with the same arguments as an earlier one in the same loop. A harness can answer it with the earlier result and a note to answer now, so the tool runs once. See <a href="tools.html#loop">chapter 28</a>.</dd>
+<dt id="reranker">Reranker</dt><dd>A cross-encoder that scores each candidate passage against the question after a fast search, to reorder a short list such as the 50 nearest chunks. See <a href="vector-search.html#rerank">chapter 25</a>.</dd>
+<dt id="residual">Residual connection</dt><dd>Adding a layer's input to its output, so the layer only learns a correction and gradients flow straight through. See <a href="ml-training-deep.html">chapter 13</a>.</dd>
+<dt id="retrieval">Retrieval</dt><dd>Finding the stored passages most relevant to a question. See <a href="rag.html">chapter 24</a>.</dd>
+<dt id="rlhf">RLHF</dt><dd>Reinforcement learning from human feedback: train a reward model on people's preferences between answers, then tune the language model to score well on it. See <a href="llm-training.html">chapter 19</a>.</dd>
+<dt id="rnn">RNN</dt><dd>Recurrent neural network: reads a sequence one step at a time, carrying a hidden state forward. See <a href="ml-history.html">chapter 14</a>.</dd>
+<dt id="round-half-even">Rounding half to even</dt><dd>Rounding a value exactly halfway between two neighbours to the even one, so halves go down as often as up and totals do not drift. Python's built-in <code>round</code> does this: <code>round(2.5)</code> is 2 and <code>round(3.5)</code> is 4.</dd>
+<dt id="rubric">Rubric</dt><dd>A list of criteria with what earns each score, for example 0 to 2 per criterion. A judge scores an answer against it. See <a href="evals.html">chapter 44</a>.</dd>
+<dt id="rule-of-three">rule of three</dt><dd>If none of <i>n</i> checked items failed, the true failure rate is below about 3/<i>n</i> with 95% confidence. See <a href="hallucination.html#measuring">chapter 36</a>.</dd>
+
+<h3 id="l-s">S</h3>
+<dt id="sampling">Sampling</dt><dd>Choosing the next token at random according to the model's probabilities, instead of always taking the most likely one. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+<dt id="quant-scale">scale (quantisation)</dt><dd>The number that turns stored integers back into real values: real value = integer &times; scale. Set by the largest weight in its group. See <a href="quantisation.html#how">chapter 39</a>.</dd>
+<dt id="schema-repair">Schema repair</dt><dd>When a model's structured output fails validation, ask once more with the error and the earlier exchange. See <a href="tools.html">chapter 28</a>.</dd>
+<dt id="seeded-defect">Seeded defect</dt><dd>A known flaw planted into a good answer on purpose, to test whether a judge catches it. See <a href="evals.html">chapter 44</a>.</dd>
+<dt id="sft">SFT</dt><dd>Supervised fine-tuning: train a model on example prompts with the answers you want. See <a href="llm-training.html">chapter 19</a>.</dd>
+<dt id="sigmoid">Sigmoid</dt><dd>The S-shaped function 1 / (1 + e<sup>-x</sup>) that squeezes any number into the range 0 to 1. See <a href="ml-learning.html">chapter 10</a>.</dd>
+<dt id="skill">Skill</dt><dd>A folder with a SKILL.md file (a name, a description, then instructions) and optional scripts and reference files, which an agent loads only when a task needs it. See <a href="skills.html">chapter 31</a>.</dd>
+<dt id="soft-targets">soft targets</dt><dd>A teacher model's full probability list, often softened by a temperature, used to train a student in distillation. See <a href="fine-tuning.html#distillation">chapter 40</a>.</dd>
+<dt id="softmax">Softmax</dt><dd>Turns a list of scores into probabilities: raise e to each score, then divide each by the total. See <a href="maths-softmax-entropy.html">chapter 9</a>.</dd>
+<dt id="span">Span</dt><dd>One timed step inside a trace, such as one model call. See <a href="observability.html">chapter 45</a> and <a href="lab-tracing.html">Lab 9</a>.</dd>
+<dt id="spend-guard">Spend guard</dt><dd>Code that refuses a paid model call when it could push spending past a set limit. See <a href="observability.html">chapter 45</a>.</dd>
+<dt id="sse">SSE (server-sent events)</dt><dd>A simple way for a server to stream messages to a browser over one HTTP response. Chat services stream an answer this way as it is written, and MCP's Streamable HTTP can use it. See <a href="mcp.html#http">chapter 30</a>.</dd>
+<dt id="ssrf">SSRF (server-side request forgery)</dt><dd>Tricking a server into fetching an address of the attacker's choosing, often an internal one. Fetch tools guard against it by allowing only public hosts. See <a href="security.html#defences">chapter 35</a>.</dd>
+<dt id="standard-deviation">Standard deviation</dt><dd>The square root of the variance: a typical distance of a value from the mean, in the data's own units. See <a href="maths-statistics.html">chapter 8</a>.</dd>
+<dt id="stdio-transport">stdio transport</dt><dd>Running a local MCP server as a child process and exchanging one JSON message per line over its standard input and output. See <a href="mcp.html#wire">chapter 30</a> and <a href="lab-mcp.html">Lab 6</a>.</dd>
+<dt id="streamable-http">Streamable HTTP</dt><dd>MCP's HTTP transport: one endpoint that accepts POST and answers with JSON or a stream of server-sent events. A local server binds to 127.0.0.1 and checks the Origin header. See <a href="mcp.html#http">chapter 30</a>.</dd>
+<dt id="structured-output">Structured output</dt><dd>Asking a model for JSON that matches a schema, and validating it, instead of free text. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+<dt id="subagent">Subagent</dt><dd>A separate agent started for one self-contained task, with its own instructions, tools and empty context window, which returns only a report. See <a href="subagents.html">chapter 32</a>.</dd>
+<dt id="system-prompt">System prompt</dt><dd>The standing instructions sent before the conversation. Keeping them in their own file makes changes easy to track. See <a href="prompt-engineering.html">chapter 21</a>.</dd>
+
+<h3 id="l-t">T</h3>
+<dt id="temperature">Temperature</dt><dd>A number that divides the logits before softmax. Below 1 sharpens the distribution; above 1 flattens it. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+<dt id="tensor">Tensor</dt><dd>A grid of numbers with any number of axes: a vector has one, a matrix two, a batch of images four.</dd>
+<dt id="test-set">Test set</dt><dd>Data kept aside and used once, at the end, to estimate how a model does on new data. See <a href="ml-generalisation.html">chapter 11</a>.</dd>
+<dt id="ttft">time to first token</dt><dd>How long a model call takes to produce its first output token; streaming shows the answer from this point. See <a href="production.html#latency">chapter 42</a>.</dd>
+<dt id="token">Token</dt><dd>A piece of text, often part of a word, that a language model reads and writes as one unit. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+<dt id="token-passthrough">Token passthrough</dt><dd>A server accepting an access token that was not issued to it and forwarding it to another service. Forbidden by the MCP specification, because it bypasses the other service's checks and breaks the audit trail. See <a href="mcp.html#auth">chapter 30</a>.</dd>
+<dt id="tokeniser">Tokeniser</dt><dd>The fixed procedure that splits text into tokens and maps each to an integer id. See <a href="llm-tokens.html">chapter 16</a>.</dd>
+<dt id="tool">Tool (function calling)</dt><dd>A function the model may ask the program to run, described by a name, a purpose and an input schema. The program runs it and returns the result. See <a href="tools.html">chapter 28</a> and <a href="lab-agent.html">Lab 5</a>.</dd>
+<dt id="tool-call">Tool call</dt><dd>A request from the model, returned in its reply, to run one named tool with given arguments. It carries an id so the program can match the result it sends back. The model never runs anything itself. See <a href="tools.html">chapter 28</a> and <a href="lab-agent.html">Lab 5</a>.</dd>
+<dt id="tool-argument-error">Tool argument error</dt><dd>A tool call whose arguments fail the tool's schema. Send it back to the model as an error result naming the fields, never their values, so the model can correct the call instead of the call ending. See <a href="tools.html#loop">chapter 28</a> and <a href="lab-agent.html">Lab 5</a>.</dd>
+<dt id="tool-loop">Tool loop</dt><dd>The back-and-forth in one model call: the model asks for tools, the program runs them and sends results back, until the model answers. See <a href="tools.html">chapter 28</a> and <a href="lab-agent.html">Lab 5</a>.</dd>
+<dt id="tool-trace">Tool trace</dt><dd>The list of tool calls an agent made, with arguments and results. Requiring every figure in an answer to point into it catches invented numbers. See <a href="tools.html">chapter 28</a>.</dd>
+<dt id="top-k">Top-k</dt><dd>Keep only the k best-scoring items. A retriever returns the top k passages, for example the top 3 or top 5. See <a href="rag.html">chapter 24</a>.</dd>
+<dt id="top-p">Top-p (nucleus sampling)</dt><dd>Sample the next token only from the smallest set of tokens whose probabilities add up to at least p. See <a href="llm-tokens.html#sampling">chapter 16</a>.</dd>
+<dt id="trace">Trace</dt><dd>In observability, the record of one request as a tree of timed spans. See <a href="observability.html">chapter 45</a> and <a href="lab-tracing.html">Lab 9</a>.</dd>
+<dt id="traceability">traceability</dt><dd>Recording enough with each answer (inputs, sources, versions, checks) to rebuild how it was produced. See <a href="regulated.html#traceability">chapter 43</a>.</dd>
+<dt id="transformer">Transformer</dt><dd>The neural network design behind today's language models: stacked blocks of attention and MLP layers with residual connections. See <a href="llm-transformer.html">chapter 18</a>.</dd>
+<dt id="typed-reference">Typed reference</dt><dd>An answer segment that names a tool, a field path into its result and a format, instead of writing a number. Code fills the number in, so the model cannot misquote it. See <a href="tools.html">chapter 28</a>.</dd>
+
+<h3 id="l-u">U</h3>
+<dt id="underfitting">Underfitting</dt><dd>When a model is too simple to capture the pattern, so it does badly on training and new data alike. See <a href="ml-generalisation.html">chapter 11</a>.</dd>
+<dt id="uv">uv</dt><dd>A fast Python package and project manager. Commands run as <code>uv run ...</code>, and dependencies can be locked in a <code>uv.lock</code> file.</dd>
+
+<h3 id="l-v">V</h3>
+<dt id="validation-set">Validation set</dt><dd>Data kept out of training and used to choose hyperparameters and to notice overfitting. See <a href="ml-generalisation.html">chapter 11</a>.</dd>
+<dt id="vanishing-gradient">Vanishing gradient</dt><dd>When gradients shrink as they pass back through many layers, so early layers barely learn. See <a href="ml-history.html">chapter 14</a>.</dd>
+<dt id="variance">Variance</dt><dd>The average squared distance of values from their mean: a measure of spread. See <a href="maths-statistics.html">chapter 8</a>.</dd>
+<dt id="vector">Vector</dt><dd>An ordered list of numbers, which can be drawn as an arrow from the origin. See <a href="maths-vectors-matrices.html">chapter 4</a>.</dd>
+<dt id="vllm">vLLM</dt><dd>An open-source engine for serving language models at high throughput, using PagedAttention and continuous batching. See <a href="frameworks.html#self-host">chapter 38</a>.</dd>
+
+<h3 id="l-w">W</h3>
+<dt id="weight">Weight</dt><dd>A learned number that multiplies an input inside a model. "Weights" often means all of a model's parameters. See <a href="ml-neural-networks.html">chapter 12</a>.</dd>
+<dt id="wilson-interval">Wilson interval</dt><dd>A confidence interval for a proportion that stays between 0 and 1 and behaves well for small counts, unlike the plus-or-minus formula. 3 failures in 50 gives about 2.1% to 16.2%. See <a href="hallucination.html#measuring">chapter 36</a>.</dd>
+<dt id="workflow">Workflow</dt><dd>A design in which code fixes the steps and their order and models fill in some of them, as opposed to an agent, where the model chooses its next step. See <a href="agents.html#definition">chapter 29</a>.</dd>
+
+<h3 id="l-x">X</h3>
+<dt id="xor">XOR</dt><dd>"Exclusive or": true when exactly one of two inputs is true. No single straight line separates its cases, which showed the limit of one-layer networks. See <a href="ml-history.html">chapter 14</a>.</dd>
+
+<h3 id="l-z">Z</h3>
+<dt id="zdr">ZDR (zero data retention)</dt><dd>A provider promise to keep no copy of prompts or outputs. Some gateways let you limit calls to providers that make it. See <a href="frameworks.html">chapter 38</a>.</dd>
+<dt id="zero-point">Zero point</dt><dd>In affine quantisation, the integer that stands for the real number 0. Together with the scale it maps real values to integers. See <a href="quantisation.html">chapter 39</a>.</dd>
+<dt id="z-score">z-score</dt><dd>How many standard deviations a value is from the mean: (x &minus; mean) / standard deviation. See <a href="maths-statistics.html">chapter 8</a>.</dd>
+</dl>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

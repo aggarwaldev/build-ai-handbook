@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>17. The embedding layer and positions &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part III &middot; How LLMs work &middot; Chapter 17</p>
+<h1>The embedding layer and positions</h1>
+<p class="lead">A tokeniser turns text into whole numbers, token ids. A network needs vectors. The embedding layer turns each id into a vector of a few hundred or thousand numbers, and a positional scheme adds where in the sequence each token sits. Together they make the input that every transformer block works on.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>The embedding layer is the first place meaning lives in a model, and a large share of a small model's parameters. Positions explain why models have a maximum input length and why some can be stretched past it. Both ideas come back in <a href="embeddings.html">chapter 23</a>, where whole texts become vectors for search.</p></div>
+
+<h2 id="lookup">From token id to vector: a table lookup</h2>
+<p>The embedding layer is a matrix <var>E</var> with one row per token in the vocabulary and <var>d</var> columns, where <var>d</var> is the model width. Token id 2 gets row 2. That is all.</p>
+<p>Worked with a five-token vocabulary and <var>d</var> = 3:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>id</th><th>token</th><th colspan="3">row of E</th></tr>
+<tr><td class="num">0</td><td>[end]</td><td class="num">0.0</td><td class="num">0.0</td><td class="num">0.0</td></tr>
+<tr><td class="num">1</td><td>save</td><td class="num">0.8</td><td class="num">0.1</td><td class="num">&minus;0.3</td></tr>
+<tr><td class="num">2</td><td>invest</td><td class="num">0.7</td><td class="num">0.4</td><td class="num">&minus;0.2</td></tr>
+<tr><td class="num">3</td><td>spend</td><td class="num">&minus;0.6</td><td class="num">0.2</td><td class="num">0.5</td></tr>
+<tr><td class="num">4</td><td>fund</td><td class="num">0.1</td><td class="num">0.9</td><td class="num">0.3</td></tr>
+</table></div>
+<p>The sentence "save invest fund" is ids (1, 2, 4), and its input is a 3 &times; 3 matrix made of rows 1, 2 and 4. The same lookup can be written as a matrix product: the one-hot vector (0, 0, 1, 0, 0) times <var>E</var> picks out row 2 (<a href="maths-vectors-matrices.html#in-ai">chapter 4</a>). Thinking of it as a product matters for training: the gradient of the loss reaches <var>E</var> like any other weight, but only the rows of tokens that appeared in the batch receive an update.</p>
+<p>Nobody writes these numbers. They start random and are learned with everything else. Training pushes tokens used in similar contexts towards similar rows, so in the table "save" and "invest" (cosine similarity 0.92) sit close together and "spend" points away from both (&minus;0.88 with "save"). The arithmetic is in <a href="maths-vectors-matrices.html#dot-product">chapter 4</a>.</p>
+
+<h3 id="size">How big is it?</h3>
+<p>Rows times columns. A 50,000-token vocabulary at <var>d</var> = 768 is 38.4 million numbers. At <var>d</var> = 4,096 and a 128,000-token vocabulary it is 524 million. In small models this is a large share of all parameters, which is one reason vocabularies are not made arbitrarily large. Many models reuse the same matrix at the other end, to turn the final vector back into a score for every token ("tied embeddings").</p>
+
+<h2 id="order">Attention is blind to order</h2>
+<p>The next chapter's attention compares every token with every other token and takes a weighted average. Nothing in that calculation knows which token came first: shuffle the input rows and each output row is the same, just shuffled. "Bank lends to customer" and "customer lends to bank" would look alike. So position has to be added to the input.</p>
+
+<h2 id="learned">Learned positions</h2>
+<p>The simplest scheme is a second table, one row per position: position 0 has its own vector, position 1 another, up to some maximum. The input for a token is its token row plus its position row. The vectors are learned like any other weights.</p>
+<p>The catch is the hard limit: a model trained with 512 position rows has no row for position 512. Inputs must be cut to fit, which is why many embedding models have a strict token limit.</p>
+
+<h2 id="sinusoidal">Sinusoidal positions</h2>
+<p>"Attention Is All You Need" (2017) used fixed vectors made from sine and cosine waves, one frequency per pair of dimensions:</p>
+<div class="formula">PE(<var>pos</var>, 2<var>i</var>) = sin(<var>pos</var> / 10000<sup>2<var>i</var>/<var>d</var></sup>) &nbsp;&nbsp;&nbsp; PE(<var>pos</var>, 2<var>i</var>+1) = cos(<var>pos</var> / 10000<sup>2<var>i</var>/<var>d</var></sup>)<span class="cap">pos is the position, d the vector size, i counts the pairs of dimensions from 0 to d/2 &minus; 1.</span></div>
+<p>Worked for <var>d</var> = 4. Pair 0 uses frequency 1, pair 1 uses 1/10000<sup>2/4</sup> = 0.01:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>pos</th><th>sin(pos)</th><th>cos(pos)</th><th>sin(0.01 pos)</th><th>cos(0.01 pos)</th></tr>
+<tr><td class="num">0</td><td class="num">0.000</td><td class="num">1.000</td><td class="num">0.000</td><td class="num">1.000</td></tr>
+<tr><td class="num">1</td><td class="num">0.841</td><td class="num">0.540</td><td class="num">0.010</td><td class="num">1.000</td></tr>
+<tr><td class="num">2</td><td class="num">0.909</td><td class="num">&minus;0.416</td><td class="num">0.020</td><td class="num">1.000</td></tr>
+<tr><td class="num">3</td><td class="num">0.141</td><td class="num">&minus;0.990</td><td class="num">0.030</td><td class="num">1.000</td></tr>
+</table></div>
+<p>The first pair spins fast and tells neighbours apart; the second barely moves and tells near from far over long ranges, like the second hand and hour hand of a clock. Their key property: the dot product of two positions' vectors depends only on the distance between them, since sin <var>a</var> sin <var>b</var> + cos <var>a</var> cos <var>b</var> = cos(<var>a</var> &minus; <var>b</var>). The model can learn "two tokens back" once and use it everywhere.</p>
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Positional encodings as a heat map</h4></div>
+<p class="hint">Move the position slider and watch the left columns change fast and the right columns slowly. In the plot below, the similarity peaks at the chosen position and falls away with distance, with the same shape wherever you put it.</p>
+<div id="w-posenc"></div>
+</div>
+
+<h2 id="rope">Rotary positions (RoPE)</h2>
+<p>Most recent language models use rotary position embedding, from "RoFormer: Enhanced Transformer with Rotary Position Embedding" (2021). Instead of adding a vector to the input, it rotates the query and key vectors inside attention (<a href="llm-transformer.html#attention">chapter 18</a>) by an angle proportional to the position, a different speed for each pair of dimensions. Attention compares queries and keys by their dot product, and the dot product of two rotated vectors depends only on the difference of their angles. So the score depends on how far apart two tokens are, never on where they sit.</p>
+<p>Worked in two dimensions with angle 0.5 per position. Take <var>q</var> = (1, 0.5) and <var>k</var> = (0.8, 0.2); unrotated, <var>q</var> &middot; <var>k</var> = 0.9.</p>
+<ul>
+<li>Query at position 1, key at position 3: rotate <var>q</var> by 0.5 and <var>k</var> by 1.5. The dot product equals <var>q</var> &middot; (<var>k</var> rotated by 1.5 &minus; 0.5 = 1.0) = (1)(0.8 cos 1 &minus; 0.2 sin 1) + (0.5)(0.8 sin 1 + 0.2 cos 1) = 0.264 + 0.391 = <b>0.655</b>.</li>
+<li>Query at 11, key at 13: the angles are 5.5 and 6.5, the difference is still 1.0, and the score is still <b>0.655</b>.</li>
+<li>Same position: difference 0, score 0.9 as unrotated.</li>
+</ul>
+<p>Rotary positions have no table with a last row, so a model can at least run past its training length, though quality drops unless the rotation speeds are rescaled. Methods that stretch the angles are how many models extend their context windows after training. Another approach, from "Train Short, Test Long: Attention with Linear Biases Enables Input Length Extrapolation" (2021), adds no position vectors at all and instead subtracts a penalty from each attention score in proportion to distance.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>With the sinusoidal scheme and <var>d</var> = 4, what is the dot product of PE(1) and PE(3)? Check it against cos of the distance for each pair.</p></div>
+<details><summary>Answer</summary><div><p>From the table: 0.841 &times; 0.141 + 0.540 &times; (&minus;0.990) + 0.010 &times; 0.030 + 1.000 &times; 1.000 = 0.119 &minus; 0.535 + 0.0003 + 1.000 &asymp; 0.584. By the identity it is cos(2) + cos(0.02) = &minus;0.416 + 1.000 = 0.584.</p></div></details>
+
+<h2 id="stream">The start of the residual stream</h2>
+<p>After the lookup and positions, each token is one vector of size <var>d</var>. That vector then passes through every block of the model, and each block adds something to it rather than replacing it (residual connections, <a href="ml-training-deep.html#residuals">chapter 13</a>). It helps to picture a stream per token that starts as "which token, where" and gathers context block by block until, at the end, it holds enough to score the next token.</p>
+
+<h2 id="real-size">Both ideas at real size</h2>
+<p>A small open embedding model, <code>BAAI/bge-small-en-v1.5</code>, shows both ideas at real size. Its public <code>config.json</code> gives a vocabulary of 30,522 tokens and a width of 384, so its token table holds 30,522 &times; 384 = 11.7 million numbers. It uses learned absolute positions with 512 rows, which is why it truncates its input at 512 tokens.</p>
+<p>That model's output is not the token table itself. It runs the whole transformer and pools the final vectors into one 384-number vector per text, the kind of embedding that search uses (<a href="embeddings.html">chapter 23</a>). If you store such vectors, check the configured dimension against the model's own vector size, so that a mistyped setting fails loudly instead of producing vectors of the wrong length.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-rag.html">Lab 3</a> you turn passages into vectors and search them, so you can inspect the vectors and the similarity scores for yourself.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>What does the embedding layer compute for token id 7?</summary><div><p>It returns row 7 of the embedding matrix. Equivalently, a one-hot vector with a 1 in place 7, times the matrix.</p></div></details>
+<details><summary>Why does a transformer need positional information at all?</summary><div><p>Attention is a weighted average over all tokens, which gives the same result whatever their order. Without positions, "bank lends to customer" and "customer lends to bank" would look the same.</p></div></details>
+<details><summary>What is the practical drawback of a learned position table?</summary><div><p>It has a fixed number of rows. Inputs longer than the table cannot be encoded and must be truncated.</p></div></details>
+<details><summary>Why does a rotary scheme make attention depend on distance only?</summary><div><p>Rotating the query by angle a and the key by angle b gives a dot product that depends only on b &minus; a, and the angles are proportional to position, so only the difference in positions matters.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/watch?v=wjZofJX0v4M" target="_blank" rel="noopener noreferrer">Transformers, the tech behind LLMs | Deep Learning Chapter 5</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Visual tour of the embedding layer and how token vectors carry meaning into a transformer.</span></li>
+<li><a href="https://kazemnejad.com/blog/transformer_architecture_positional_encoding/" target="_blank" rel="noopener noreferrer">Transformer Architecture: The Positional Encoding</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Explains the sinusoidal position encoding from the original transformer and why it works.</span></li>
+<li><a href="https://huggingface.co/blog/designing-positional-encoding" target="_blank" rel="noopener noreferrer">You could have designed state of the art positional encoding</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Walks from naive position schemes step by step to rotary embeddings (RoPE).</span></li>
+<li><a href="https://arxiv.org/abs/2104.09864" target="_blank" rel="noopener noreferrer">RoFormer: Enhanced Transformer with Rotary Position Embedding (2021)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">The paper that introduced RoPE, now used by most open LLMs.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-llm-embeddings-positions">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/posenc.js"></script>
+</body>
+</html>

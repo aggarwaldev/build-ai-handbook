@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>12. Neural networks and backpropagation &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part II &middot; ML foundations &middot; Chapter 12</p>
+<h1>Neural networks and backpropagation</h1>
+<p class="lead">A neural network is logistic regression stacked in layers, with a bend between each layer. This chapter builds one from a single neuron, runs it forward and backward by hand with real numbers, and then lets you train one in the browser.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Backpropagation is the algorithm that trains every model in Part III. If you can follow the twenty or so multiplications in the worked example below, you understand what a GPU does for weeks when a language model is trained; it just does it for billions of weights at once.</p></div>
+
+<h2 id="neuron">One neuron</h2>
+<p>A <a class="g" href="glossary.html#neuron">neuron</a> takes inputs, computes a weighted sum plus a bias, and passes the result through an <a class="g" href="glossary.html#activation">activation function</a>:</p>
+<div class="formula"><var>a</var> = <var>f</var>(<var>w</var><sub>1</sub><var>x</var><sub>1</sub> + <var>w</var><sub>2</sub><var>x</var><sub>2</sub> + <var>b</var>)</div>
+<p>Worked: inputs (0.5, 1.0), weights (0.1, 0.4), bias 0. The sum is 0.05 + 0.4 = 0.45. With the sigmoid as <var>f</var>, the output is &sigma;(0.45) = 0.611. A single sigmoid neuron is exactly logistic regression (<a href="ml-learning.html#logistic">chapter 10</a>).</p>
+
+<h3 id="activations">Activation functions</h3>
+<div class="tbl-wrap"><table>
+<tr><th>Name</th><th>Formula</th><th>f(&minus;2), f(0), f(2)</th><th>Slope</th></tr>
+<tr><td>sigmoid</td><td>1 / (1 + <var>e</var><sup>&minus;<var>z</var></sup>)</td><td class="num">0.119, 0.5, 0.881</td><td>a(1 &minus; a), at most 0.25</td></tr>
+<tr><td>tanh</td><td>(<var>e</var><sup><var>z</var></sup> &minus; <var>e</var><sup>&minus;<var>z</var></sup>) / (<var>e</var><sup><var>z</var></sup> + <var>e</var><sup>&minus;<var>z</var></sup>)</td><td class="num">&minus;0.964, 0, 0.964</td><td>1 &minus; a<sup>2</sup>, at most 1</td></tr>
+<tr><td><a class="g" href="glossary.html#relu">ReLU</a></td><td>max(0, <var>z</var>)</td><td class="num">0, 0, 2</td><td>0 for negative z, 1 for positive</td></tr>
+</table></div>
+<p>Modern language models use smooth cousins of ReLU (named GELU and SwiGLU) in their MLP layers. <a href="ml-history.html#vanishing">Chapter 14</a> explains why ReLU-style activations replaced the sigmoid.</p>
+
+<h3 id="why-nonlinear">Why the bend is essential</h3>
+<p>Without activations, two layers compute <span class="math"><var>W</var><sub>2</sub>(<var>W</var><sub>1</sub><var>x</var>)</span>, which equals <span class="math">(<var>W</var><sub>2</sub><var>W</var><sub>1</sub>)<var>x</var></span>: one matrix, so one linear layer. Worked: if layer 1 doubles its input and layer 2 triples it, together they multiply by 6, a single straight line. However many linear layers you stack, you only ever get a straight decision boundary. The activation between layers is what lets a network bend its boundary.</p>
+
+<h2 id="layers">Layers</h2>
+<p>Put several neurons side by side and they form a <b>layer</b>; in matrix form a whole layer is <span class="math"><var>h</var> = <var>f</var>(<var>W</var><var>x</var> + <var>b</var>)</span> (<a href="maths-vectors-matrices.html#in-ai">chapter 4</a>). Layers between the input and the output are <b>hidden layers</b>. A network of fully connected layers is called a multilayer perceptron, or <a class="g" href="glossary.html#mlp">MLP</a>.</p>
+<p><b>Counting parameters.</b> A layer from <var>n</var> inputs to <var>m</var> neurons has <var>m</var> &times; <var>n</var> weights and <var>m</var> biases. A network 2 &rarr; 4 &rarr; 1 has (4 &times; 2 + 4) + (1 &times; 4 + 1) = 12 + 5 = 17 parameters. A transformer layer with width 4,096 has tens of millions.</p>
+<p>A remarkable result, the <b>universal approximation theorem</b>, says that one hidden layer with enough neurons can approximate any reasonable function as closely as you like. It promises that a network exists, not that gradient descent will find it or that it will be small; in practice deeper networks learn the same functions with far fewer neurons.</p>
+
+<h2 id="forward">A forward pass by hand</h2>
+<p>Our network: 2 inputs, 2 hidden sigmoid neurons, 1 sigmoid output. The task is to output 1 for the input <var>x</var> = (0.5, 1.0).</p>
+<div class="tbl-wrap"><table>
+<tr><th>Parameter</th><th>Value</th></tr>
+<tr><td>hidden neuron 1: weights, bias</td><td class="num">(0.1, 0.4), 0</td></tr>
+<tr><td>hidden neuron 2: weights, bias</td><td class="num">(&minus;0.3, 0.2), 0.1</td></tr>
+<tr><td>output neuron: weights, bias</td><td class="num">(0.5, &minus;0.6), 0.2</td></tr>
+</table></div>
+<ol>
+<li>Hidden sums: <var>z</var><sub>1</sub> = 0.1&times;0.5 + 0.4&times;1.0 + 0 = 0.45; <var>z</var><sub>2</sub> = &minus;0.3&times;0.5 + 0.2&times;1.0 + 0.1 = 0.15.</li>
+<li>Hidden outputs: <var>h</var><sub>1</sub> = &sigma;(0.45) = 0.6106; <var>h</var><sub>2</sub> = &sigma;(0.15) = 0.5374.</li>
+<li>Output sum: <var>z</var><sub>out</sub> = 0.5&times;0.6106 &minus; 0.6&times;0.5374 + 0.2 = 0.1829.</li>
+<li>Output: <var>a</var> = &sigma;(0.1829) = 0.5456.</li>
+<li>Loss (binary cross-entropy, target 1): &minus;ln 0.5456 = 0.6059.</li>
+</ol>
+
+<h2 id="backprop">Backpropagation by hand</h2>
+<p><a class="g" href="glossary.html#backpropagation">Backpropagation</a> applies the chain rule (<a href="maths-derivatives.html#chain-rule">chapter 5</a>) from the loss backwards, one layer at a time. Call the slope of the loss with respect to any quantity its "delta".</p>
+<ol>
+<li><b>Output delta.</b> For sigmoid with cross-entropy the slope with respect to <var>z</var><sub>out</sub> is <var>a</var> &minus; <var>y</var> = 0.5456 &minus; 1 = <b>&minus;0.4544</b>.</li>
+<li><b>Output weights.</b> <var>z</var><sub>out</sub> = <var>w</var><sub>1</sub><var>h</var><sub>1</sub> + &hellip;, so &part;<var>L</var>/&part;<var>w</var><sub>1</sub> = delta &times; <var>h</var><sub>1</sub> = &minus;0.4544 &times; 0.6106 = <b>&minus;0.2775</b>, and for <var>w</var><sub>2</sub>: &minus;0.4544 &times; 0.5374 = <b>&minus;0.2442</b>. The bias gets the delta itself: <b>&minus;0.4544</b>.</li>
+<li><b>Back into the hidden layer.</b> Each hidden output reached the loss through its output weight: &part;<var>L</var>/&part;<var>h</var><sub>1</sub> = &minus;0.4544 &times; 0.5 = &minus;0.2272; &part;<var>L</var>/&part;<var>h</var><sub>2</sub> = &minus;0.4544 &times; (&minus;0.6) = 0.2726.</li>
+<li><b>Through the hidden sigmoids.</b> Multiply by each sigmoid's slope <var>h</var>(1 &minus; <var>h</var>): 0.6106 &times; 0.3894 = 0.2378 and 0.5374 &times; 0.4626 = 0.2486. Hidden deltas: &minus;0.2272 &times; 0.2378 = <b>&minus;0.0540</b> and 0.2726 &times; 0.2486 = <b>0.0678</b>.</li>
+<li><b>Hidden weights.</b> Delta times the input that weight multiplied. Hidden neuron 1: (&minus;0.0540 &times; 0.5, &minus;0.0540 &times; 1.0) = (&minus;0.0270, &minus;0.0540). Hidden neuron 2: (0.0339, 0.0678). The biases get the deltas.</li>
+</ol>
+<p><b>Check by nudging.</b> Raise hidden neuron 1's second weight from 0.4 to 0.400001 and rerun the forward pass: the loss falls by 0.000000054, a slope of &minus;0.0540. The chain rule was right. This "gradient check" is how people test hand-written backprop code.</p>
+<p><b>Update.</b> With learning rate 0.5, every parameter moves by &minus;0.5 &times; its gradient. For example the output weight 0.5 becomes 0.5 + 0.5 &times; 0.2775 = 0.6387, and hidden neuron 1's second weight becomes 0.4 + 0.5 &times; 0.0540 = 0.4270. Running the forward pass again gives an output of 0.6408 and a loss of 0.4451, down from 0.6059. One step of learning, done by hand.</p>
+<div class="callout note"><span class="title">Notice</span><p>Each delta was computed once and reused for every weight that feeds it. That reuse is why backpropagation costs only about twice a forward pass, instead of one forward pass per weight. Libraries such as PyTorch record the forward computation and run this backward sweep automatically.</p></div>
+
+<div class="callout note"><span class="title">Try it</span><p>In the worked example, what is the gradient for hidden neuron 2's bias, and which way does a gradient step move it?</p></div>
+<details><summary>Answer</summary><div><p>Its delta, 0.0678. A gradient step subtracts 0.5 &times; 0.0678, so the bias falls from 0.1 to 0.066. That lowers h<sub>2</sub>, which helps, because h<sub>2</sub> reaches the output through a negative weight.</p></div></details>
+
+<h2 id="trainer">Train one yourself</h2>
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>A neural network trainer in the browser</h4></div>
+<p class="hint">Start with XOR and 0 hidden layers: logistic regression draws one straight line and is stuck at about 50% accuracy, however long it trains. Switch to 1 hidden layer with 4 neurons and train again. Then try the ring and the spiral; the spiral needs 2 hidden layers and patience. Push the learning rate to 2 to see training become unstable.</p>
+<div id="w-nntrain"></div>
+</div>
+<p>The widget runs plain full-batch gradient descent with exactly the backpropagation above, written out in <code class="path">assets/widgets/nntrain.js</code>. <a href="project-neural-net.html">Chapter 15</a> has you write the same thing in Python with NumPy.</p>
+
+<h2 id="forward-only">Forward passes in everyday systems</h2>
+<p>Most applications built on trained models only ever run the forward pass: no backward pass, no training. Some call hosted language models over the network. Others also run small networks on their own machine. A local embedding model turns text into vectors; a named-entity model, such as the spaCy model inside the Presidio library, spots names and places in a message so a scrubber can mask them. When you store vectors, check the configured dimension against the model's real output size at start-up. A stored vector of the wrong length would make every search silently wrong.</p>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>How many parameters does a 3 &rarr; 5 &rarr; 2 network have?</summary><div><p>(5 &times; 3 + 5) + (2 &times; 5 + 2) = 20 + 12 = 32.</p></div></details>
+<details><summary>Why does a network with no activation functions behave like one linear layer?</summary><div><p>A product of matrices is one matrix, so W<sub>2</sub>(W<sub>1</sub>x) = (W<sub>2</sub>W<sub>1</sub>)x. Without a bend between layers, depth adds nothing.</p></div></details>
+<details><summary>In backprop, how do you get the gradient for a weight from its neuron's delta?</summary><div><p>Multiply the delta by the input that the weight multiplied in the forward pass.</p></div></details>
+<details><summary>What is a gradient check, and why use it?</summary><div><p>Nudge one parameter by a tiny amount, rerun the forward pass and compare the change in loss with the computed gradient. If they disagree, the backprop code has a bug.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi" target="_blank" rel="noopener noreferrer">Neural networks (3Blue1Brown playlist)</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">The well-known visual series on neurons, layers, gradient descent, backpropagation and onward to transformers.</span></li>
+<li><a href="https://www.youtube.com/watch?v=tIeHLnjs5U8" target="_blank" rel="noopener noreferrer">Backpropagation calculus | Deep Learning Chapter 4</a> <span class="pill">video</span> <span class="pill">intermediate</span><br><span class="res-note">The chain-rule maths behind backprop, written out for a tiny network so each term is traceable.</span></li>
+<li><a href="https://www.youtube.com/watch?v=VMj-3S1tku0" target="_blank" rel="noopener noreferrer">The spelled-out intro to neural networks and backpropagation: building micrograd</a> <span class="pill">video</span> <span class="pill">intermediate</span><br><span class="res-note">Karpathy codes an autograd engine from scratch, so backprop becomes code you wrote rather than a formula.</span></li>
+<li><a href="https://developers.google.com/machine-learning/crash-course/neural-networks/activation-functions" target="_blank" rel="noopener noreferrer">Neural networks: Activation functions</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Why non-linear activations are needed and how sigmoid, tanh and ReLU differ.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-ml-neural-networks">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/nntrain.js"></script>
+</body>
+</html>

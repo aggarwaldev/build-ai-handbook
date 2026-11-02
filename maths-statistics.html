@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>8. Mean, variance and normalisation &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part I &middot; Maths &middot; Chapter 8</p>
+<h1>Mean, variance and normalisation</h1>
+<p class="lead">A handful of summary numbers describe a pile of data: where its middle is and how spread out it is. Normalisation uses them to put numbers on a common scale, which neural networks need in order to train, and error bars use them to say how far to trust a measured rate.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Layer normalisation, inside every transformer, is the z-score from this chapter applied to each token's vector. Evaluation numbers such as "the grader passed 92% of answers" are worthless without knowing how much they would wobble on a different sample. And a pipeline that collects figures from several web sources can choose between them with a median, for a reason this chapter explains.</p></div>
+
+<h2 id="centre">The middle: mean and median</h2>
+<p>Five banks quote savings rates of 4.1, 4.4, 4.0, 4.3 and 4.2 percent.</p>
+<ul>
+<li>The <a class="g" href="glossary.html#mean">mean</a> (average) adds them and divides by the count: (4.1 + 4.4 + 4.0 + 4.3 + 4.2) / 5 = 21.0 / 5 = 4.2.</li>
+<li>The <b>median</b> sorts them (4.0, 4.1, 4.2, 4.3, 4.4) and takes the middle one: 4.2.</li>
+</ul>
+<p>Now a sixth page shows 9.5, perhaps a typo, perhaps a promotional rate, perhaps text planted to mislead. The mean jumps to 30.5 / 6 = 5.08. The median, now the average of the two middle values 4.2 and 4.3, barely moves to 4.25. The median is <b>robust</b>: one wild value cannot drag it far. The mean is not.</p>
+<div class="formula"><var>&mu;</var> = <span class="frac"><span>1</span><span><var>n</var></span></span> <span class="big">&Sigma;</span><sub><var>i</var>=1</sub><sup><var>n</var></sup> <var>x</var><sub><var>i</var></sub><span class="cap">&mu; (mu) is the usual symbol for a mean.</span></div>
+
+<h2 id="spread">The spread: variance and standard deviation</h2>
+<p>Two lists can share a mean and look nothing alike: (4, 4, 4) and (1, 4, 7) both average 4. To measure spread, look at how far each value sits from the mean, square those distances so negatives do not cancel positives, and average them. That is the <a class="g" href="glossary.html#variance">variance</a>. Worked with the five bank rates (mean 4.2):</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>value</th><td class="num">4.1</td><td class="num">4.4</td><td class="num">4.0</td><td class="num">4.3</td><td class="num">4.2</td></tr>
+<tr><th>value &minus; mean</th><td class="num">&minus;0.1</td><td class="num">0.2</td><td class="num">&minus;0.2</td><td class="num">0.1</td><td class="num">0</td></tr>
+<tr><th>squared</th><td class="num">0.01</td><td class="num">0.04</td><td class="num">0.04</td><td class="num">0.01</td><td class="num">0</td></tr>
+</table></div>
+<p>Sum of squares 0.10, divided by 5 gives a variance of 0.02. Its square root is the <a class="g" href="glossary.html#standard-deviation">standard deviation</a>: &radic;0.02 = 0.141 percentage points, back in the original units.</p>
+<div class="formula"><var>&sigma;</var><sup>2</sup> = <span class="frac"><span>1</span><span><var>n</var></span></span> <span class="big">&Sigma;</span><sub><var>i</var></sub> (<var>x</var><sub><var>i</var></sub> &minus; <var>&mu;</var>)<sup>2</sup> &nbsp;&nbsp;&nbsp; <var>&sigma;</var> = &radic;<var>&sigma;</var><sup>2</sup><span class="cap">&sigma; (sigma) is the standard deviation. When estimating from a sample, statisticians often divide by n &minus; 1 instead of n, which gives 0.025 and 0.158 here; for large n the difference vanishes.</span></div>
+
+<h2 id="z-score">Z-scores and normalisation</h2>
+<p>A <a class="g" href="glossary.html#z-score">z-score</a> says how many standard deviations a value sits from the mean: <span class="math"><var>z</var> = (<var>x</var> &minus; <var>&mu;</var>) / <var>&sigma;</var></span>. For the rate 4.4: (4.4 &minus; 4.2) / 0.141 = 1.41. Converting every value this way is called standardising or <a class="g" href="glossary.html#normalisation">normalising</a>: the new list always has mean 0 and standard deviation 1, whatever units it started in.</p>
+<p>Why bother? Picture a model with two inputs, salary in rupees (around 1,000,000) and age in years (around 35). Gradient steps that suit the age weight are absurdly small for the salary weight and vice versa, which is the lopsided valley of <a href="maths-gradient-descent.html#many-params">chapter 6</a>. Normalising both inputs puts them on the same scale and makes the valley round.</p>
+<p>A simpler alternative is <b>min-max scaling</b>: (<var>x</var> &minus; min) / (max &minus; min) squeezes values into 0 to 1. The rates become 0.25, 1, 0, 0.75 and 0.5. It is easy, but one outlier squashes everything else into a corner.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Mean, median and z-scores</h4></div>
+<p class="hint">Edit the numbers, or add the outlier. Watch the blue mean line jump while the green median barely moves. The lower strip is always centred on 0 with spread 1.</p>
+<div id="w-zscore"></div>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>Normalise the vector (2, 4, 6) to mean 0 and standard deviation 1.</p></div>
+<details><summary>Answer</summary><div><p>Mean 4. Deviations &minus;2, 0, 2; squares 4, 0, 4; variance 8/3 = 2.667; standard deviation 1.633. Result: (&minus;1.225, 0, 1.225). This is exactly what layer normalisation does to each token's vector, before it rescales with learned numbers (<a href="ml-training-deep.html#norms">chapter 13</a>).</p></div></details>
+
+<h3 id="outliers">Spotting outliers</h3>
+<p>In bell-shaped data about 68% of values lie within 1 standard deviation of the mean, about 95% within 2, and 99.7% within 3. So a value with |<var>z</var>| above 3 is unusual. But be careful with small samples: the outlier 9.5 itself inflates the standard deviation, so its own z-score is only 2.23. In fact with 6 values no z-score can ever exceed &radic;5 &asymp; 2.24. Robust checks (the median, or fixed limits set in advance) are safer when the data are few.</p>
+
+<h2 id="uncertainty">How sure is a measured rate?</h2>
+<p>An evaluation finds 8 bad answers in a sample of 100: a rate of 8%. Take another 100 and you might find 5 or 12. The <b>standard error</b> estimates that wobble. For a proportion <var>p</var> measured on <var>n</var> items:</p>
+<div class="formula">SE = &radic;( <var>p</var>(1 &minus; <var>p</var>) / <var>n</var> ) = &radic;(0.08 &times; 0.92 / 100) = 0.027</div>
+<p>A rough 95% <a class="g" href="glossary.html#confidence-interval">confidence interval</a> is the rate plus or minus 1.96 standard errors: 8% &plusmn; 5.3%, or about 2.7% to 13.3%. With 1,000 items and the same 8% it shrinks to 6.3% to 9.7%. The width falls with &radic;<var>n</var>: four times the data, half the width. <a href="hallucination.html#measuring">Chapter 36</a> uses a better interval (Wilson's) that behaves properly for small counts and rates near 0.</p>
+
+<h2 id="robust-pipelines">Medians and fixed limits in a pipeline</h2>
+<p>Take a pipeline that collects a market figure, such as a savings rate, from several websites. A median is the robust way to settle on one value. A careful rule accepts a figure from sites outside a trusted list only when at least three independent sites give one, sorts the values and takes the middle. With an even count it takes the lower of the two middle values rather than their average, so the accepted number is always one a real source published. The reason is simple: one page can carry planted text or a typing error, and the median ignores it.</p>
+<p>A second layer uses fixed limits rather than z-scores. Each kind of figure gets a band (a savings rate must lie between 0 and 8 percent, for example) and a jump limit from the last accepted value. Fixed limits suit a pipeline that sees a few figures at a time, where a standard deviation would be too noisy to trust.</p>
+<p>The same rule helps when you present scenarios. A projection tool can make its middle scenario the median of several firms' central estimates, and its cautious and strong scenarios the lowest and highest.</p>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>When would you report a median instead of a mean?</summary><div><p>When the data may contain extreme values, for example incomes, response times or figures scraped from many websites. The median describes the typical value without being dragged by a few extremes.</p></div></details>
+<details><summary>A list has mean 50 and standard deviation 10. What is the z-score of 35?</summary><div><p>(35 &minus; 50) / 10 = &minus;1.5. It sits one and a half standard deviations below the mean.</p></div></details>
+<details><summary>Why does normalising inputs help gradient descent?</summary><div><p>It puts every input on a similar scale, so the loss surface is closer to a round bowl and one learning rate suits every weight.</p></div></details>
+<details><summary>An eval finds 2 failures in 50 answers. Is "4% failure rate" a solid claim?</summary><div><p>No. The standard error is &radic;(0.04 &times; 0.96 / 50) = 0.028, so the rough interval runs from about 0% to 9.4%. Small samples give wide intervals.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/watch?v=SzZ6GpcfoQY" target="_blank" rel="noopener noreferrer">Calculating the Mean, Variance and Standard Deviation, Clearly Explained!!!</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Computes the three summary numbers step by step and explains what each one tells you.</span></li>
+<li><a href="https://www.khanacademy.org/math/statistics-probability/summarizing-quantitative-data" target="_blank" rel="noopener noreferrer">Summarizing quantitative data (Khan Academy)</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Unit on measures of centre and spread, including population versus sample variance.</span></li>
+<li><a href="https://www.khanacademy.org/math/statistics-probability/modeling-distributions-of-data" target="_blank" rel="noopener noreferrer">Modeling data distributions (Khan Academy)</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Covers z-scores, percentiles and the normal distribution, the basis of standardising data.</span></li>
+<li><a href="https://developers.google.com/machine-learning/crash-course/numerical-data/normalization" target="_blank" rel="noopener noreferrer">Numerical data: Normalization</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Shows why features are rescaled before training and compares z-score, min-max and log scaling.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-maths-statistics">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/zscore.js"></script>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>23. Embeddings and similarity &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 23</p>
+<h1>Embeddings and similarity</h1>
+<p class="lead">An embedding model turns a whole piece of text into one vector, a list of a few hundred numbers, arranged so that texts with similar meaning get vectors pointing in similar directions. Comparing meaning becomes comparing directions, which a computer can do millions of times a second. That is the foundation of semantic search and of retrieval-augmented generation.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Keyword search finds "fixed deposit" only where those words appear. Embedding search can match "How long would my savings last without a salary?" to "I was laid off. How many months can I live on my savings?", which share almost no words. Retrieval systems use embeddings to find the passages a model reads before it answers (<a href="rag.html">chapter 24</a>).</p></div>
+
+<h2 id="from-tokens">From token vectors to one text vector</h2>
+<p>A transformer gives one vector per token (<a href="llm-transformer.html">chapter 18</a>). An embedding model is a transformer, usually one that reads without a causal mask, plus a <b>pooling</b> step that turns those many vectors into one: take the vector of a special first token, or average all of them. It is then trained so that the pooled vectors of related texts are close.</p>
+<p>The training is usually <b>contrastive</b>: show the model pairs that belong together (a question and the passage that answers it, two paraphrases) and push their vectors together, while pushing apart pairs that do not. Worked with three unit vectors in two dimensions: a question <var>q</var> = (0.6, 0.8), its answer <var>a</var> = (0.8, 0.6) and an unrelated passage <var>u</var> = (1, 0). The similarities are <var>q</var>&middot;<var>a</var> = 0.96 and <var>q</var>&middot;<var>u</var> = 0.6. A softmax over these two scores (<a href="maths-softmax-entropy.html#softmax">chapter 9</a>), scaled by a temperature of 0.1, gives the right answer probability e<sup>9.6</sup> / (e<sup>9.6</sup> + e<sup>6</sup>) = 0.973, and the loss is &minus;ln 0.973 = 0.027. Training lowers that loss over millions of pairs, each batch using the other examples as the "unrelated" ones.</p>
+
+<h2 id="similarity">Measuring similarity</h2>
+<p>Three measures are common (<a href="maths-vectors-matrices.html#dot-product">chapter 4</a>):</p>
+<ul>
+<li><a class="g" href="glossary.html#cosine-similarity">Cosine similarity</a>: the cosine of the angle between two vectors, from &minus;1 to 1. It ignores length and compares direction only.</li>
+<li><b>Dot product</b>: the sum of products. For vectors of length 1 it equals the cosine.</li>
+<li><b>Euclidean distance</b>: the straight-line distance. For unit vectors, distance<sup>2</sup> = 2 &minus; 2 &times; cosine, so it ranks results in exactly the same order as cosine.</li>
+</ul>
+<p>Most embedding models return unit-length vectors, which makes the three equivalent for ranking. Databases often store <a class="g" href="glossary.html#cosine-distance">cosine distance</a>, 1 &minus; cosine, so that smaller means closer.</p>
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Cosine similarity of two vectors</h4></div>
+<p class="hint">Drag the tips. Make the vectors longer without changing their direction and watch the cosine stay put while the dot product grows.</p>
+<div class="w-vectors"></div>
+</div>
+
+<h2 id="real">Real embeddings, real scores</h2>
+<p>The widget below uses real vectors. Twelve short personal-finance questions, and three search queries, were embedded with <code>BAAI/bge-small-en-v1.5</code>, a small open embedding model that runs on a laptop, giving 384 numbers each. The first eight numbers of "How much should I keep in an emergency fund?" are &minus;0.041, &minus;0.041, &minus;0.044, &minus;0.029, 0.026, 0.001, 0.025, 0.008. No single number means anything on its own; meaning lives in the direction of all 384 together. The vectors were computed once for this book from the model's full-precision weights and stored in the widget rounded to three places.</p>
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Nearest neighbours with a real embedding model</h4></div>
+<p class="hint">Pick a query and read the ranking. Click any sentence to search with it instead. The map on the right squeezes 384 dimensions into 2, keeping only about 31% of the spread, so trust the scores, not the picture.</p>
+<div id="w-nnsearch"></div>
+</div>
+<p>Three lessons from these numbers:</p>
+<ol>
+<li><b>Meaning beats wording.</b> "I was laid off. How many months can I live on my savings?" finds "How long would my savings last without a salary?" first (0.790), with no key words in common beyond "savings".</li>
+<li><b>Scores are relative.</b> Across all the pairs here, the lowest similarity between two different sentences is 0.444; nothing comes near 0. A score of 0.6 is not "60% relevant". Thresholds must be set per model, from data.</li>
+<li><b>Abbreviations hurt.</b> "best FD rates" ranks "Which bank has the best term deposit rate?" first (0.680), but puts the emergency-fund question (0.639) just above "What rate does a one-year fixed deposit pay?" (0.637). The small model does not reliably know that FD means fixed deposit. Fixes include query rewriting, a bigger model and combining with keyword search (<a href="vector-search.html#hybrid">chapter 25</a>).</li>
+</ol>
+
+<h2 id="choosing">Choosing and changing an embedding model</h2>
+<ul>
+<li><b>Dimensions.</b> More numbers can hold finer distinctions but cost storage and search time: 384 numbers at 4 bytes is 1.5 KB per passage, 1,024 numbers is 4 KB.</li>
+<li><b>Maximum input.</b> Text past the model's limit is cut off (512 tokens for this small model), so passages must be split to fit (<a href="rag.html#chunking">chapter 24</a>).</li>
+<li><b>Query and passage modes.</b> Some models embed questions and passages differently, because a short question and a long passage look different. Use the right mode for each.</li>
+<li><b>Never mix models.</b> Vectors from two models, or two versions of one model, live in different spaces; comparing them is meaningless. Changing the model means re-embedding every stored passage. Record the model name and vector size beside the index, and refuse to search when the setting no longer matches what the index was built with.</li>
+<li><b>Hosted or local.</b> A hosted embedding service is convenient and sends your text to someone else, so send only text you are willing to share. Retry briefly on rate-limit and server errors, wait longer when indexing offline than when a user is waiting, and check the length of every vector that comes back.</li>
+<li><b>Evaluate on your data.</b> Public benchmarks are a starting point. What matters is whether the right passage comes first for your questions (<a href="rag-eval.html">chapter 26</a>).</li>
+<li><b>Scores in a database.</b> Vector databases usually store cosine <i>distance</i> and sort ascending; turn it back into similarity (1 minus the distance) before you show a score or apply a threshold.</li>
+</ul>
+
+<div class="callout note"><span class="title">Try it</span><p>Two unit vectors have cosine similarity 0.8. What is the Euclidean distance between them? And what is the cosine distance?</p></div>
+<details><summary>Answer</summary><div><p>distance<sup>2</sup> = 2 &minus; 2 &times; 0.8 = 0.4, so the distance is &radic;0.4 &asymp; 0.632. The cosine distance is 1 &minus; 0.8 = 0.2.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-rag.html">Lab 3</a> you chunk a small document set, turn each chunk into a vector, rank the chunks against a question by cosine similarity and answer with citations.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why can you not compare a vector from one embedding model with a vector from another?</summary><div><p>Each model learns its own space; the same direction means different things in each. Changing models means re-embedding everything.</p></div></details>
+<details><summary>For unit vectors, why do cosine similarity and Euclidean distance give the same ranking?</summary><div><p>Because distance<sup>2</sup> = 2 &minus; 2 &times; cosine: a higher cosine always means a smaller distance.</p></div></details>
+<details><summary>A retrieval system returns nothing because "no score was above 0.8". What went wrong?</summary><div><p>The threshold was not calibrated for the model. Similarity scores are relative and model-specific; for some models related texts rarely score above 0.8. Set thresholds from labelled data, or rank and take the top k.</p></div></details>
+<details><summary>What should a retrieval system do if someone changes the embedding model but forgets to re-index?</summary><div><p>Refuse to search, saying the index was built with a different model, instead of comparing vectors from two spaces. That needs the model name and vector size to be stored with the index, so the check is possible.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://simonwillison.net/2023/Oct/23/embeddings/" target="_blank" rel="noopener noreferrer">Embeddings: What they are and why they matter</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Simon Willison&#x27;s plain-English intro to text embeddings and cosine similarity with practical uses.</span></li>
+<li><a href="https://arxiv.org/abs/1908.10084" target="_blank" rel="noopener noreferrer">Sentence-BERT: Sentence Embeddings using Siamese BERT-Networks (2019)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">The paper behind sentence-level embedding models compared with cosine similarity.</span></li>
+<li><a href="https://sbert.net/" target="_blank" rel="noopener noreferrer">SentenceTransformers Documentation</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Docs for the main Python library for computing and comparing sentence embeddings.</span></li>
+<li><a href="https://huggingface.co/BAAI/bge-small-en-v1.5" target="_blank" rel="noopener noreferrer">BAAI/bge-small-en-v1.5</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Model card for the BGE embedding family, with usage snippets and notes on query instructions.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-embeddings">All resources for this chapter</a> and 1 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/vectors.js"></script>
+<script src="assets/widgets/nnsearch.js"></script>
+</body>
+</html>

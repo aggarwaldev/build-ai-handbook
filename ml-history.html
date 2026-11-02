@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>14. From perceptron to transformer: the bottlenecks &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part II &middot; ML foundations &middot; Chapter 14</p>
+<h1>From perceptron to transformer: the bottlenecks</h1>
+<p class="lead">The road from a single artificial neuron to the transformer is a chain of bottlenecks, each removed by one idea. Knowing the chain explains why today's models look the way they do, and which limits they still have.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>The transformer's design is a list of answers to old problems: residual connections for vanishing gradients, attention for the fixed-size memory of recurrent networks, parallel processing for slow training. Its own bottleneck, the cost of attention over long inputs, is why context windows are limited and why <a href="context-engineering.html">context engineering</a> exists.</p></div>
+
+<h2 id="timeline">The chain at a glance</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Era</th><th>Idea</th><th>The bottleneck it hit</th><th>What removed it</th></tr>
+<tr><td>1958</td><td>Perceptron: one neuron with a learning rule</td><td>Only straight boundaries; cannot learn XOR</td><td>Hidden layers trained by backpropagation</td></tr>
+<tr><td>1986</td><td>Backpropagation through multilayer networks</td><td>Deep stacks of sigmoids stop learning (vanishing gradients)</td><td>ReLU, careful initialisation, normalisation, residual connections</td></tr>
+<tr><td>1990s</td><td>Recurrent networks (RNNs) for sequences</td><td>Forget anything more than a few steps back</td><td>LSTM gates</td></tr>
+<tr><td>2014</td><td>Sequence-to-sequence: one network reads, another writes</td><td>The whole input squeezed into one fixed-size vector</td><td>Attention</td></tr>
+<tr><td>2017</td><td>The transformer: attention without recurrence</td><td>Attention cost grows with the square of the input length</td><td>Still open: longer windows, cheaper attention, retrieval</td></tr>
+</table></div>
+
+<h2 id="perceptron">The perceptron and XOR</h2>
+<p>The perceptron of 1958 is one neuron with a step activation: output 1 if <span class="math"><var>w</var><sub>1</sub><var>x</var><sub>1</sub> + <var>w</var><sub>2</sub><var>x</var><sub>2</sub> + <var>b</var> &gt; 0</span>, else 0. Its learning rule is simple: when it is wrong, add (target &minus; prediction) &times; input to the weights. For AND it finds a line within a few passes. For XOR, which outputs 1 when exactly one input is 1, it never settles.</p>
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Perceptron learning rule</h4></div>
+<p class="hint">Learn AND: after a few passes the line separates the orange 1 from the blue 0s. Switch to XOR and run as long as you like; the line keeps jumping.</p>
+<div id="w-perceptron"></div>
+</div>
+<p>Why XOR is impossible for one line: we would need (0,1) and (1,0) above the line, so <var>w</var><sub>2</sub> + <var>b</var> &gt; 0 and <var>w</var><sub>1</sub> + <var>b</var> &gt; 0, and (0,0) and (1,1) below, so <var>b</var> &le; 0 and <var>w</var><sub>1</sub> + <var>w</var><sub>2</sub> + <var>b</var> &le; 0. Add the first two: <var>w</var><sub>1</sub> + <var>w</var><sub>2</sub> + 2<var>b</var> &gt; 0. But the last two give <var>w</var><sub>1</sub> + <var>w</var><sub>2</sub> + 2<var>b</var> &le; <var>b</var> &le; 0. A contradiction. The 1969 book "Perceptrons" made limits like this famous, and funding for neural networks dried up for years.</p>
+
+<h3 id="xor-solved">A hidden layer solves it</h3>
+<p>Two hidden neurons are enough. Let <var>h</var><sub>1</sub> compute OR (fire if <var>x</var><sub>1</sub> + <var>x</var><sub>2</sub> &minus; 0.5 &gt; 0), let <var>h</var><sub>2</sub> compute AND (fire if <var>x</var><sub>1</sub> + <var>x</var><sub>2</sub> &minus; 1.5 &gt; 0), and let the output fire if <var>h</var><sub>1</sub> &minus; <var>h</var><sub>2</sub> &minus; 0.5 &gt; 0: "OR but not AND".</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>x<sub>1</sub>, x<sub>2</sub></th><th>h<sub>1</sub> (OR)</th><th>h<sub>2</sub> (AND)</th><th>h<sub>1</sub> &minus; h<sub>2</sub> &minus; 0.5</th><th>output</th></tr>
+<tr><td>0, 0</td><td class="num">0</td><td class="num">0</td><td class="num">&minus;0.5</td><td class="num">0</td></tr>
+<tr><td>0, 1</td><td class="num">1</td><td class="num">0</td><td class="num">0.5</td><td class="num">1</td></tr>
+<tr><td>1, 0</td><td class="num">1</td><td class="num">0</td><td class="num">0.5</td><td class="num">1</td></tr>
+<tr><td>1, 1</td><td class="num">1</td><td class="num">1</td><td class="num">&minus;0.5</td><td class="num">0</td></tr>
+</table></div>
+<p>The hidden layer moves the points into a new space where one line works. But a step function has zero slope, so these weights cannot be learned by gradient descent. The 1986 paper "Learning representations by back-propagating errors" popularised smooth activations and backpropagation (<a href="ml-neural-networks.html#backprop">chapter 12</a>), so hidden layers could be trained. The trainer in chapter 12 learns XOR this way.</p>
+
+<h2 id="vanishing">Vanishing gradients and ReLU</h2>
+<p>With backprop, people tried deeper networks and found the early layers barely learned. The chain rule multiplies one factor per layer, and a sigmoid's slope is at most 0.25. Through 10 sigmoid layers the gradient shrinks by up to 0.25<sup>10</sup> &asymp; 10<sup>&minus;6</sup>. The early layers, which should learn the basic features everything else builds on, receive almost nothing. The opposite problem, <b>exploding gradients</b>, happens when the factors are larger than 1.</p>
+<p>The fixes arrived over a decade:</p>
+<ul>
+<li><b>ReLU</b> (widely adopted around 2010 to 2012): its slope is exactly 1 for positive inputs, so it does not shrink the gradient where it is active.</li>
+<li><b>Initialisation</b> that keeps signal sizes steady (<a href="ml-training-deep.html#init">chapter 13</a>).</li>
+<li><b>Normalisation layers</b> (2015 and 2016) that keep each layer's inputs well scaled.</li>
+<li><b>Residual connections</b>, from "Deep Residual Learning for Image Recognition" (2015), which add a direct path for the gradient around each layer. Networks of over a hundred layers became trainable.</li>
+</ul>
+<p>Two outside changes mattered as much: large labelled datasets such as ImageNet, and GPUs. In 2012 a deep convolutional network trained on GPUs won the ImageNet image-recognition competition by a wide margin, and the field turned towards deep learning.</p>
+
+<h2 id="rnn">Sequences: recurrent networks and LSTMs</h2>
+<p>Text is a sequence. A <a class="g" href="glossary.html#rnn">recurrent neural network</a> reads it one token at a time and carries a <b>hidden state</b> forward, a vector that is meant to summarise everything so far:</p>
+<div class="formula"><var>h</var><sub><var>t</var></sub> = tanh(<var>W</var> <var>h</var><sub><var>t</var>&minus;1</sub> + <var>U</var> <var>x</var><sub><var>t</var></sub> + <var>b</var>)</div>
+<p>Training it means backpropagating through time, and the same multiplication problem returns, now along the sequence. If each step back multiplies the gradient by about 0.5, the signal from 20 tokens ago arrives scaled by 0.5<sup>20</sup> &asymp; 0.000001. In "The money I lent to my sister, who lives in Lisbon and works as a nurse, has not been paid back", a plain RNN struggles to connect "paid back" to "money".</p>
+<p>The <a class="g" href="glossary.html#lstm">LSTM</a> ("Long Short-Term Memory", 1997) adds a separate cell state updated by addition rather than repeated multiplication, with learned gates that decide what to forget, what to write and what to read. When the forget gate is near 1, the gradient passes back almost unchanged, the same trick as a residual connection. LSTMs powered machine translation and speech recognition through the mid-2010s.</p>
+<p>Two bottlenecks remained. Every step depends on the previous one, so an RNN cannot process the tokens of a sentence in parallel, and training on huge text collections is slow. And in sequence-to-sequence translation ("Sequence to Sequence Learning with Neural Networks", 2014), the encoder squeezes the whole source sentence into one fixed-size vector before the decoder begins. A 5-word sentence and a 50-word sentence get the same few hundred numbers.</p>
+
+<h2 id="attention">Attention</h2>
+<p>"Neural Machine Translation by Jointly Learning to Align and Translate" (2014) let the decoder look back at every encoder state when producing each word, weighting them by relevance. To translate one word, the model scores each source position, turns the scores into weights with a softmax (<a href="maths-softmax-entropy.html#softmax">chapter 9</a>), and takes the weighted average of the source states. Nothing has to be squeezed into one vector; the model learns where to look.</p>
+
+<h2 id="transformer">The transformer</h2>
+<p>"Attention Is All You Need" (2017) removed recurrence entirely. Every token attends to every other token directly, and a whole sequence is processed in parallel, which suits GPUs perfectly. Residual connections and layer normalisation, the fixes for deep training, are built into every block. This made it practical to train on far more text than before, and the GPT line of models followed: "Language Models are Few-Shot Learners" (2020) showed a model that could do new tasks from a few examples in its prompt, and "Training language models to follow instructions with human feedback" (2022) described the tuning that turned such models into assistants (<a href="llm-training.html">chapter 19</a>).</p>
+<p>The transformer has its own bottleneck. Attention compares every token with every other, so its cost grows with the square of the input length: doubling the input from 1,000 to 2,000 tokens quadruples the attention work from 1 million to 4 million comparisons. That is why context windows have limits, why long prompts cost more and slow down, and why systems retrieve a few relevant passages instead of pasting in every document (<a href="rag.html">chapter 24</a>).</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A gradient passes back through 15 layers, each multiplying it by 0.6. Roughly how much of it is left? What if each layer had a residual connection and its own factor of 0.6 were added to 1 instead?</p></div>
+<details><summary>Answer</summary><div><p>Without: 0.6<sup>15</sup> &asymp; 0.00047. With residuals each factor is 1 + 0.6 = 1.6, so nothing vanishes (in practice normalisation keeps it from exploding instead).</p></div></details>
+
+<h3 id="bounded-inputs">Keeping inputs bounded</h3>
+<p>Almost every model a developer calls today is a transformer: the hosted language models and the embedding models alike. Well-built applications keep each call's input bounded, which keeps that quadratic cost small. They reject or shorten an overlong question (a cap of 2,000 characters is typical for a chat box), and they retrieve a handful of passages, three to five, rather than reading whole documents.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-rag.html">Lab 3</a> you retrieve only the best few passages for each question instead of pasting in the whole document set.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why can a single perceptron not learn XOR?</summary><div><p>Its decision boundary is one straight line, and no straight line puts (0,1) and (1,0) on one side with (0,0) and (1,1) on the other.</p></div></details>
+<details><summary>What problem did ReLU help with, and how?</summary><div><p>Vanishing gradients. Its slope is 1 for positive inputs, so it does not shrink the gradient the way a sigmoid (slope at most 0.25) does.</p></div></details>
+<details><summary>What was the bottleneck of 2014 sequence-to-sequence models, and what removed it?</summary><div><p>The whole input had to be compressed into one fixed-size vector. Attention removed it by letting the decoder look at every encoder state directly.</p></div></details>
+<details><summary>What is the transformer's own bottleneck?</summary><div><p>Attention cost grows with the square of the sequence length, which limits context windows and makes long prompts slow and expensive.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://en.wikipedia.org/wiki/Perceptron" target="_blank" rel="noopener noreferrer">Perceptron (Wikipedia)</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">History and mechanics of the perceptron, including the XOR limitation that stalled early neural network research.</span></li>
+<li><a href="http://neuralnetworksanddeeplearning.com/chap5.html" target="_blank" rel="noopener noreferrer">Why are deep neural networks hard to train? (Neural Networks and Deep Learning, chapter 5)</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Michael Nielsen&#x27;s free chapter showing the vanishing gradient problem with experiments and a derivation.</span></li>
+<li><a href="https://proceedings.mlr.press/v15/glorot11a.html" target="_blank" rel="noopener noreferrer">Deep Sparse Rectifier Neural Networks (2011)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Early paper arguing for ReLU units over sigmoid and tanh in deep networks.</span></li>
+<li><a href="https://karpathy.github.io/2015/05/21/rnn-effectiveness/" target="_blank" rel="noopener noreferrer">The Unreasonable Effectiveness of Recurrent Neural Networks</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Karpathy&#x27;s classic post on what character-level RNNs can learn, a snapshot of the pre-transformer era.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-ml-history">All resources for this chapter</a> and 3 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/perceptron.js"></script>
+</body>
+</html>

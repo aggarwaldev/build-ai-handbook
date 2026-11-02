@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>30. MCP, basic and advanced &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 30</p>
+<h1>MCP, basic and advanced</h1>
+<p class="lead">The Model Context Protocol (MCP) is an open standard for connecting AI applications to tools and data. A service writes one MCP server, and every application that speaks MCP can use it. This chapter covers the basics (who talks to whom, about what), then the advanced parts (the wire format, HTTP transport, authorization, security and versioning), and ends with a tiny server you can run.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>MCP is how a growing number of tools and data sources are connected to AI applications. It also changes quickly: its current revision removed the handshake that most tutorials still teach. Knowing the protocol, and which revision a piece of advice is about, saves days of confusion.</p></div>
+
+<div class="callout note"><span class="title">Which revision</span><p>Protocol details here follow the official specification. The current revision is <b>2026-07-28</b>; the one before it, <b>2025-11-25</b>, is called "legacy" by the specification and is still widely deployed. Where they differ, both are shown and labelled.</p></div>
+
+<h2 id="why">The problem it solves</h2>
+<p>Without a standard, every AI application writes its own connector for every service. With <var>N</var> applications and <var>M</var> services, that is <var>N</var> &times; <var>M</var> connectors. With a shared protocol, each application implements the client side once and each service the server side once: <var>N</var> + <var>M</var>. Worked: 5 applications and 20 services need 100 connectors without a standard and 25 implementations with one. The same arithmetic made USB and HTTP worth standardising.</p>
+
+<h2 id="roles">Hosts, clients and servers</h2>
+<ul>
+<li><b>Host</b>: the application the user runs, such as a chat app or a coding tool. It decides which servers to connect, asks the user for consent, and controls what reaches the model.</li>
+<li><b>Client</b>: created by the host, one per server connection. It speaks the protocol to exactly one server and keeps that server separate from the others.</li>
+<li><b>Server</b>: a program that offers capabilities. It can run locally, as a child process, or remotely, over HTTP. A server should not see the whole conversation or other servers.</li>
+</ul>
+<p>A server offers three kinds of thing, distinguished by who decides to use them:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Primitive</th><th>Controlled by</th><th>Example</th></tr>
+<tr><td><b>Tools</b></td><td>the model</td><td>A function the model may call: <code>compound_value(principal, rate_pct, years)</code></td></tr>
+<tr><td><b>Resources</b></td><td>the application</td><td>Read-only content identified by a URI, which the host may show or attach: <code>rates://all</code></td></tr>
+<tr><td><b>Prompts</b></td><td>the user</td><td>Ready-made request templates, often offered as slash commands: <code>compare_banks(amount)</code></td></tr>
+</table></div>
+<p>Clients can offer features back. The main current one is <b>elicitation</b>: a server asks the user for input, either through a form (which must never ask for passwords, keys or payment details) or by sending the user to a URL. Two older client features, <b>sampling</b> (the server borrows the client's model) and <b>roots</b> (the client says which folders to work in), are deprecated in 2026-07-28, as is server <b>logging</b>.</p>
+
+<h2 id="wire">On the wire</h2>
+<p>Every MCP message is a JSON-RPC 2.0 object, of four kinds: a <b>request</b> (has an <code>id</code> and a <code>method</code>), a <b>result</b> or an <b>error</b> answering a request (same <code>id</code>), and a <b>notification</b> (a <code>method</code> with no <code>id</code>, never answered). The <code>id</code> is a string or an integer, never null. Two transports carry the messages:</p>
+<ul>
+<li><b>stdio.</b> The client starts the server as a child process and writes one JSON message per line to its standard input; the server answers on standard output. Messages contain no newlines. Anything the server writes to standard error is a log, not an error. The client ends the session by closing the server's input.</li>
+<li><b>Streamable HTTP.</b> The server has one endpoint (such as <code>/mcp</code>) that accepts POST. A request gets back either a JSON body or a stream of server-sent events; a notification gets HTTP 202.</li>
+</ul>
+
+<h2 id="handshake">The conversation, step by step</h2>
+<p>In <b>2025-11-25</b> a connection starts with a handshake. The client sends <code>initialize</code> with the revision it wants, its capabilities and its name; the server replies with the revision it agrees to, its own capabilities and name; the client confirms with the notification <code>notifications/initialized</code>. Only then do requests such as <code>tools/list</code> and <code>tools/call</code> flow.</p>
+<p>In <b>2026-07-28</b> there is no handshake and no session. Every request carries the revision, the client's capabilities and (recommended) its name inside <code>params._meta</code>, so any request can be understood on its own. A server must implement <code>server/discover</code>, which a client may call to learn the supported revisions and capabilities; every result carries a <code>resultType</code>. Statelessness makes servers easy to scale behind a load balancer: no request depends on a previous one.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Step through a real MCP conversation</h4></div>
+<p class="hint">These are real messages, captured from this book's tiny server (built with the official Python SDK) by the <code>wire.py</code> script below. Step through the legacy handshake, then switch revision and compare. Which fields moved into <code>_meta</code>?</p>
+<div id="w-mcpwire"></div>
+</div>
+
+<h2 id="tools-detail">Tools in detail</h2>
+<ul>
+<li>A tool has a <code>name</code>, a <code>description</code>, an <code>inputSchema</code> (a JSON Schema whose root is an object), and optionally an <code>outputSchema</code> and <code>annotations</code>.</li>
+<li>A result holds <code>content</code> (text, images, audio, links or embedded resources) for the model, optional <code>structuredContent</code> for code, and <code>isError</code>.</li>
+<li><b>Two kinds of failure.</b> A protocol error, such as a malformed request, is a JSON-RPC error. The specification puts an unknown tool in this group too, but SDKs differ: the Python SDK 2.3.0 answered an unknown tool with an <code>isError: true</code> result reading "Unknown tool: nope" when this book was written, so handle both. A failure while running the tool is a normal result with <code>isError: true</code> and a message the model can read and act on.</li>
+<li><b>Annotations are hints</b>: <code>readOnlyHint</code> (default false), <code>destructiveHint</code> (default true), <code>idempotentHint</code> (default false) and <code>openWorldHint</code> (default true). A client must not trust them from a server it does not trust.</li>
+<li>The specification asks that a person be able to see tool calls and refuse them. A host should show which tool is being called with which arguments, and ask before anything with side effects.</li>
+</ul>
+
+<h2 id="http">Streamable HTTP in detail</h2>
+<ul>
+<li>The client's <code>Accept</code> header lists both <code>application/json</code> and <code>text/event-stream</code>.</li>
+<li>In 2026-07-28 every request also carries the header <code>MCP-Protocol-Version</code>, which must match the revision in <code>_meta</code> (a mismatch gets HTTP 400), and <code>Mcp-Method</code>; calls that name a tool, resource or prompt add <code>Mcp-Name</code>, so gateways can route and filter without parsing the body.</li>
+<li>In 2025-11-25 the server could open a session by returning an <code>MCP-Session-Id</code> header, the client echoed it on later requests and ended it with HTTP DELETE, and a GET on the endpoint opened a stream for server-initiated messages. 2026-07-28 removed sessions and the GET stream.</li>
+<li><b>Origin checks.</b> A server must validate the <code>Origin</code> header to stop DNS rebinding, where a web page tricks your browser into calling a server on your own machine, and answer 403 to an invalid one. A local server should bind to 127.0.0.1, not to all interfaces. (Inside a container it may bind to all interfaces if the published port is reachable only on the host's own 127.0.0.1.)</li>
+</ul>
+
+<h2 id="auth">Authorization</h2>
+<p>Authorization is optional and applies to HTTP servers; a stdio server takes its credentials from its environment. When used, it is built on OAuth 2.1:</p>
+<ul>
+<li>The MCP server is an OAuth <b>resource server</b>; the MCP client is an OAuth <b>client</b>; a separate authorization server issues tokens.</li>
+<li>The server publishes Protected Resource Metadata (RFC 9728) naming its authorization server; a 401 response points to it.</li>
+<li>The client names the server it wants a token for, with the <code>resource</code> parameter (RFC 8707), in both the authorization and token requests. The token travels in the <code>Authorization: Bearer</code> header, never in a URL.</li>
+<li>The server must check that each token was issued for it (its audience) and reject others with 401. It must never pass a client's token on to another service: <b>token passthrough</b> is forbidden, because it bypasses the other service's checks and breaks the audit trail.</li>
+</ul>
+
+<h2 id="security">Security</h2>
+<p>The specification's security best-practices page covers, among others: the confused deputy problem (a proxy server with one shared identity at a third party, tricked into sending an authorization code to an attacker), token passthrough, server-side request forgery (a server fetching URLs an attacker chose, including internal ones), hijacking of state handles, compromise of local servers, and keeping scopes minimal. Two lessons apply to every MCP setup:</p>
+<ul>
+<li><b>Everything from a server is untrusted input to the model.</b> Tool descriptions and results can carry instructions aimed at the model. Install servers you trust, review their tool descriptions, and keep data marked as data (<a href="security.html">chapter 35</a>).</li>
+<li><b>Least privilege.</b> Give each server only the access its tools need, and prefer read-only tools.</li>
+<li><b>Identity comes from outside the model.</b> Take the caller's identity from a header or the authenticated session, never from a tool argument. Arguments are written by the model, which text in the conversation can steer; a header is set by the calling code. Refuse a request with a missing or unknown identity.</li>
+</ul>
+
+<h2 id="versions">Living with a moving standard</h2>
+<p>2026-07-28 is a large change: it removed the handshake, sessions, <code>ping</code> and the HTTP GET stream, moved tasks into an extension, and deprecated roots, sampling and logging, which can be removed no earlier than the first revision released on or after 2027-07-28. Practical rules: note which revision any tutorial assumes, pin your SDK version, and test against both revisions while servers and clients upgrade at different speeds. The official Python SDK 2 implements 2026-07-28 and still answers 2025-11-25 clients, as the widget above shows.</p>
+
+<h2 id="project">Project: a tiny MCP server</h2>
+<p>The folder <code class="path">labs/06-mcp-server/</code> holds a server with two read-only tools, one resource and one prompt, about a page of Python, and two ways to talk to it:</p>
+<ul>
+<li><code>server.py</code>: the server, built with <code>MCPServer</code> from the official SDK. Run over stdio by default, or <code>--http</code> for Streamable HTTP on 127.0.0.1.</li>
+<li><code>client.py</code>: starts the server as a child process with the SDK's <code>Client</code>, lists the tools, calls both, reads the resource, gets the prompt, and finally breaks a rule on purpose to show an <code>isError</code> result.</li>
+<li><code>wire.py</code>: standard library only. Writes raw JSON-RPC lines to the server and prints every message both ways, for both revisions. The widget above shows its output.</li>
+</ul>
+<div class="tbl-wrap"><table>
+<tr><th>Needs</th><th>Time</th><th>Hardware</th></tr>
+<tr><td>Python 3.10 or newer and <code>pip install -r labs/06-mcp-server/requirements.txt</code> (the <code>mcp</code> package) in a fresh virtual environment</td><td>About 10 minutes to install and run; an hour to add your own tool</td><td>Any laptop. No GPU, no API key, and no network once installed</td></tr>
+</table></div>
+<div class="out"># from the repository root
+python -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install -r labs/06-mcp-server/requirements.txt
+python labs/06-mcp-server/client.py      # the SDK client
+python labs/06-mcp-server/wire.py        # the raw messages, both revisions</div>
+<p>When this book was written, both scripts ran cleanly against <code>mcp</code> 2.3.0. <code>client.py</code> ended with:</p>
+<div class="out">compound_value with years=99 isError: True
+Error executing tool compound_value: principal and rate_pct must be &gt;= 0, and years between 0 and 50</div>
+<p>The message reaches the model because the tool raises the SDK's <code>ToolError</code>, the exception for a failure you expected. Any other exception counts as a crash, and the model sees only "Error executing tool compound_value", without the reason. The HTTP mode also refused a request with a foreign <code>Origin</code> header with HTTP 403. The official MCP Inspector (<code>npx @modelcontextprotocol/inspector</code>, which needs Node.js) gives a web interface for the same exploration; it was not run here.</p>
+<p>Ideas to extend it: add a tool that returns an error your client handles; add a resource template such as <code>rates://{bank}</code>; connect the server to an MCP host you use and watch the model choose between the two tools; write a smoke test that starts the server in process and calls every tool once for each kind of caller.</p>
+<p>One pattern is worth copying. Keep each tool's schema fixed and put the data behind it. Start with invented data, as here, and later point the same tools at a real service without changing any host. A client can also fall back to in-process data when the server is down, and show a badge saying which source answered.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A company has 4 AI applications and 15 internal services, and plans 5 more services next year. How many connectors does each approach need after the expansion, and how many new pieces of work does the expansion itself cost each way?</p></div>
+<details><summary>Answer</summary><div><p>Without a standard: 4 &times; 20 = 80 connectors, of which the expansion adds 4 &times; 5 = 20. With MCP: 4 + 20 = 24 implementations, of which the expansion adds 5 servers.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-mcp.html">Lab 6</a> you build an MCP server of your own, with a tool, a resource and a prompt, and call it from a client you also write.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Who decides when a tool is used, when a resource is used, and when a prompt is used?</summary><div><p>Tools: the model. Resources: the application. Prompts: the user.</p></div></details>
+<details><summary>What replaced the initialize handshake in 2026-07-28?</summary><div><p>Every request carries the protocol revision, the client's capabilities and its identity in <code>_meta</code>; an optional <code>server/discover</code> call reports what the server supports.</p></div></details>
+<details><summary>A tool fails because an argument is out of range. How should the server report it?</summary><div><p>As a normal result with <code>isError: true</code> and a clear message, so the model can read it and correct its call. JSON-RPC errors are for protocol problems such as a malformed request.</p></div></details>
+<details><summary>Why should a server take the caller's identity from a header or session, not from a tool argument?</summary><div><p>Arguments are written by the model, which can be steered by text in the conversation. A header is set by the calling code, outside the model's reach.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://modelcontextprotocol.io/docs/getting-started/intro" target="_blank" rel="noopener noreferrer">What is the Model Context Protocol (MCP)?</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Official starting page explaining what MCP is for and its building blocks.</span></li>
+<li><a href="https://modelcontextprotocol.io/docs/learn/architecture" target="_blank" rel="noopener noreferrer">Architecture overview - Model Context Protocol</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Hosts, clients, servers, the data and transport layers, and the primitives each side exposes.</span></li>
+<li><a href="https://modelcontextprotocol.io/specification/2026-07-28" target="_blank" rel="noopener noreferrer">Specification - Model Context Protocol (2026-07-28)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Front page of the latest spec revision, linking every section below.</span></li>
+<li><a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog" target="_blank" rel="noopener noreferrer">Key Changes - Model Context Protocol (2026-07-28)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">What changed in the latest revision: the initialize handshake is gone, server/discover added, Roots and Sampling deprecated.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-mcp">All resources for this chapter</a> and 12 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/mcpwire.js"></script>
+</body>
+</html>

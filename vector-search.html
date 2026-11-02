@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>25. Vector search internals &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 25</p>
+<h1>Vector search internals</h1>
+<p class="lead">Finding the stored vectors closest to a query vector sounds simple: measure the distance to each one and sort. At a few thousand passages that is exactly what you should do. At millions it is too slow, and search engines switch to approximate methods that look at a small fraction of the vectors and usually, not always, find the true nearest ones. This chapter opens up those methods, then adds the two tools that most improve retrieval in practice: keyword scoring and reranking.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Every vector database exposes settings such as "lists", "probes", "m" and "ef". Without knowing what they do, you cannot tell whether a missed passage is the embedding model's fault or the index's, and you cannot trade speed for accuracy on purpose.</p></div>
+
+<h2 id="exact">Exact search and what it costs</h2>
+<p>Exact (brute-force) search computes the similarity between the query and every stored vector. Each similarity of two <var>d</var>-dimensional vectors is <var>d</var> multiplications and additions, so one query costs <var>N</var> &times; <var>d</var>.</p>
+<ul>
+<li>The demo corpus of <a href="rag.html">chapter 24</a>: 68 sections &times; 384 numbers = 26,112 multiply-adds per question. Nothing.</li>
+<li>One million passages &times; 384 = 384 million multiply-adds per question. Still feasible on one machine, but it adds up under load, and every stored vector must be read from memory for every query.</li>
+<li>A hundred million passages: no longer practical per query.</li>
+</ul>
+<p>Exact search has one great property: it is always right. Use it until it is too slow, and use it as the ground truth when you tune an approximate index.</p>
+
+<h2 id="ann">Approximate search</h2>
+<p>An approximate nearest-neighbour (ANN) index organises the vectors ahead of time so a query can skip most of them. Its quality is measured by <b>recall@k</b>: of the true <var>k</var> nearest neighbours, what fraction did it return? An index with recall@10 of 0.95 misses, on average, half a true neighbour per query. Two designs dominate.</p>
+
+<h3 id="ivf">IVF: search only the nearby cells</h3>
+<p>An inverted-file index (IVF) clusters the vectors with k-means (<var>lists</var> clusters, each with a centre). Every vector is stored in the list of its nearest centre. A query compares itself with all the centres, picks the <var>probes</var> nearest, and searches only those lists.</p>
+<p>Worked with pgvector's suggested starting points: for 1,000,000 rows, <var>lists</var> = rows / 1,000 = 1,000, and <var>probes</var> &asymp; &radic;1,000 &asymp; 32. A query computes 1,000 distances to centres plus about 32 &times; 1,000 = 32,000 to vectors in the probed lists: 33,000 in all, about 30 times fewer than exact search. The risk: a true neighbour that sits just across the border of an unprobed cell is never seen. More probes, fewer misses, slower queries. IVF needs data to train its clusters, so it is built after the table is filled, and it drifts as the data changes.</p>
+
+<h3 id="hnsw">HNSW: walk a graph</h3>
+<p>A hierarchical navigable small-world graph (<a class="g" href="glossary.html#hnsw">HNSW</a>) links each vector to a handful of its near neighbours (up to <var>m</var> per layer). Search starts at an entry point and repeatedly moves to whichever neighbour is closer to the query, like asking for directions. A few upper layers hold only a sample of the points with longer links, like an express line that gets you to the right district before you change to the local stops.</p>
+<p>The search keeps a list of the best <var>ef</var> candidates found so far, not just one, so it can step around a dead end. Larger <var>ef</var> finds more true neighbours and costs more distance computations. Building takes longer and uses more memory than IVF, but there is no training step, so the index can be built on an empty table and grows as rows arrive. pgvector's defaults are <var>m</var> = 16, <code>ef_construction</code> = 64 while building, and <code>hnsw.ef_search</code> = 40 at query time.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Exact, IVF and graph search on 300 points</h4></div>
+<p class="hint">Click anywhere to place the query. With IVF at 1 probe, move the query near the edge of a cell and watch a true neighbour get missed; raise the probes. With the graph at ef = 5, then 20, compare recall and work. "Average over 200 queries" gives the trade-off as numbers.</p>
+<div id="w-vsearch"></div>
+</div>
+<p>Averaged over the same 200 random queries in this toy: IVF with 1 probe finds 79% of the true five nearest points while computing 34 distances instead of 300, and with 2 probes 98% for 53. The graph search finds 60% with <var>ef</var> = 5, 91% with 20 and 99% with 40, for 61, 87 and 106 distances. Real indexes show the same shape at much larger scale: each step towards perfect recall costs more work than the last.</p>
+
+<h3 id="filters">Filters and approximate indexes</h3>
+<p>Real queries often add a condition: only one customer's documents, only policies. An approximate index finds candidates first and the filter runs afterwards, so a narrow filter can leave fewer than <var>k</var> results, or none, even though matching rows exist. pgvector's documentation describes this and offers iterative index scans as a remedy: with <code>hnsw.iterative_scan</code> set, the scan keeps walking the graph until it has <var>k</var> rows that pass the filter. With a small table, exact search with the filter is simpler and always correct.</p>
+
+<h2 id="bm25">Keyword search: BM25 by hand</h2>
+<p>Before embeddings, search engines scored documents by the words they share with the query. The standard formula, <b>BM25</b>, is still hard to beat on queries full of names, codes and rare terms. For each query word it multiplies two things:</p>
+<ul>
+<li><b>How rare the word is</b> across the collection (inverse document frequency): idf = ln(1 + (<var>N</var> &minus; <var>n</var> + 0.5) / (<var>n</var> + 0.5)), where <var>N</var> is the number of documents and <var>n</var> the number containing the word. Rare words count for more.</li>
+<li><b>How often it appears in this document</b>, with diminishing returns and a correction for length: <var>f</var>(<var>k</var><sub>1</sub> + 1) / (<var>f</var> + <var>k</var><sub>1</sub>(1 &minus; <var>b</var> + <var>b</var> &middot; len / avglen)), with the usual <var>k</var><sub>1</sub> = 1.2 and <var>b</var> = 0.75.</li>
+</ul>
+<p>Worked with three tiny documents and the query "fixed deposit":</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Document</th><th>Words</th><th>Contains</th><th>Score</th></tr>
+<tr><td>d1 "fixed deposit rates for one year"</td><td class="num">6</td><td>fixed, deposit</td><td class="num">0.894</td></tr>
+<tr><td>d2 "deposit insurance covers your savings"</td><td class="num">5</td><td>deposit</td><td class="num">0.482</td></tr>
+<tr><td>d3 "fixed income funds hold bonds"</td><td class="num">5</td><td>fixed</td><td class="num">0.482</td></tr>
+</table></div>
+<p>Each word is in 2 of 3 documents, so idf = ln(1 + 1.5 / 2.5) = ln 1.6 = 0.470. The average length is 16 / 3 = 5.33 words. For d1 (length 6, each word once) the word part is 2.2 / (1 + 1.2 &times; (0.25 + 0.75 &times; 6 / 5.33)) = 2.2 / 2.3125 = 0.951, so its score is 2 &times; 0.470 &times; 0.951 = 0.894. d2 and d3 match one word each and are slightly shorter than average, scoring 0.470 &times; 1.026 = 0.482.</p>
+<p>BM25 knows nothing about meaning: "FD" and "fixed deposit" share no words. Embeddings know nothing about exact codes: "DGBND" is just a few odd tokens. That is why the two are combined.</p>
+
+<h2 id="hybrid">Hybrid search and reciprocal rank fusion</h2>
+<p>Run both searches and merge the two ranked lists. Their scores are on different scales, so the usual merge ignores scores and uses ranks. <b>Reciprocal rank fusion</b> (RRF) gives each document 1 / (60 + rank) from each list it appears in and adds them up; the constant 60 keeps one list's first place from overwhelming everything else.</p>
+<p>Worked: passage A is 1st by vectors and 3rd by keywords: 1/61 + 1/63 = 0.03227. Passage B is 2nd by vectors and 1st by keywords: 1/62 + 1/61 = 0.03252. B wins, because it is near the top of both lists.</p>
+<p>Fusion is not automatically better. On the ten retrieval questions of the demo corpus in <a href="rag.html">chapter 24</a> (embedding the section body only), vector search and a BM25 written for this book each put the right section in the top 3 for 5 questions, and their RRF fusion for only 4: when both lists are weak, merging them does not help. With the heading path added to every section, all three reach 10 out of 10, and BM25 ranks the right section first every time, partly because these questions reuse the headings' own words. These counts were measured on the corpus's original wording, before some invented names in it were changed, so treat them as illustrative.</p>
+<p>RRF is not the only way to merge. You can also pool the best candidates from several searches, for example the 20 best vector hits plus the sections a table-of-contents search picked, and let a reranker order the whole pool in one pass (next section).</p>
+
+<h2 id="rerank">Reranking with a cross-encoder</h2>
+<p>An embedding model is a <b>bi-encoder</b>: it encodes the query and each passage separately, which is what makes searching millions of stored vectors possible. A <b>cross-encoder</b> reads the query and one passage together, so its attention can compare them word by word, and outputs one relevance score. It is much more accurate and much more expensive, because it runs once per pair and nothing can be precomputed.</p>
+<p>The standard pattern is two stages: retrieve generously with cheap methods (say the top 50 by hybrid search), rerank those 50 with a cross-encoder, and keep the best 3 to 5. Fifty cross-encoder runs per question is affordable; fifty thousand is not.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>Passage C is 5th in the vector list and 2nd in the keyword list. Passage D is 1st in the vector list and missing from the keyword list. Which ranks higher under RRF with the constant 60?</p></div>
+<details><summary>Answer</summary><div><p>C: 1/65 + 1/62 = 0.01538 + 0.01613 = 0.03151. D: 1/61 = 0.01639. C ranks higher: appearing in both lists beats topping one.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-rag.html">Lab 3</a> you build the retrieval step yourself: turn chunks into vectors, rank them against a question and keep the top <var>k</var>. In <a href="lab-retrieval-eval.html">Lab 4</a> you then score TF-IDF, BM25 and their reciprocal rank fusion on labelled questions, so you can check this chapter's claims on data.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>What does recall@10 = 0.9 mean for an approximate index?</summary><div><p>On average it returns 9 of the 10 true nearest neighbours that exact search would return.</p></div></details>
+<details><summary>In IVF, what do "lists" and "probes" control?</summary><div><p>Lists is the number of clusters the vectors are divided into; probes is how many of the nearest clusters a query searches. More probes, better recall, slower queries.</p></div></details>
+<details><summary>Why can a filtered query on an approximate index return fewer than k rows?</summary><div><p>The index produces its candidates first and the filter removes some afterwards; if few candidates match the filter, fewer than k survive.</p></div></details>
+<details><summary>Why are cross-encoders used only on a short list?</summary><div><p>They score each query and passage pair together, so nothing can be precomputed: the cost grows with every passage scored. Cheap retrieval narrows the field first.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://arxiv.org/abs/1603.09320" target="_blank" rel="noopener noreferrer">Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs (2016)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">The HNSW paper: layered proximity graphs for fast approximate search.</span></li>
+<li><a href="https://www.pinecone.io/learn/series/faiss/hnsw/" target="_blank" rel="noopener noreferrer">Hierarchical Navigable Small Worlds (HNSW) | Pinecone</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Free illustrated explanation of how HNSW is built and searched, with FAISS code.</span></li>
+<li><a href="https://arxiv.org/abs/2401.08281" target="_blank" rel="noopener noreferrer">The Faiss library (2024)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Overview of FAISS and the index families it offers, including IVF and product quantisation.</span></li>
+<li><a href="https://github.com/facebookresearch/faiss/wiki" target="_blank" rel="noopener noreferrer">facebookresearch/faiss wiki</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Practical wiki for choosing and tuning FAISS indexes.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-vector-search">All resources for this chapter</a> and 4 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/vsearch.js"></script>
+</body>
+</html>

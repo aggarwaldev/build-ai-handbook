@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>28. Tools and function calling &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 28</p>
+<h1>Tools and function calling</h1>
+<p class="lead">A language model can only write text. It cannot read a database, check a price or do exact arithmetic. Tool calling (also called function calling) closes that gap: the model writes a small structured request, your code runs it, and the result goes back to the model as its next input. Almost everything useful an AI application does passes through this one mechanism.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Tools are where a model touches the real world, so they decide what the model can know, what it can do, and what it can break. A well-designed tool makes the right answer easy; a vague or over-powerful one invites mistakes the model cannot see.</p></div>
+
+<h2 id="what">What a tool call is</h2>
+<p>When you call a model with tools, you send three extra things with the conversation: each tool's <b>name</b>, a <b>description</b> of when to use it, and an <b>input schema</b> saying what arguments it takes. The model can then reply in one of two ways: with ordinary text (its answer), or with a <b>tool request</b> that names a tool and gives arguments that fit its schema. A tool request is not an action. Nothing happens until your code reads it, decides to run it, and sends back the result.</p>
+<div class="tbl-wrap"><table>
+<tr><th>Turn</th><th>Who writes it</th><th>Content</th></tr>
+<tr><td>1</td><td>Your code</td><td>The question, plus the tools <code>list_rates</code> and <code>compound_value</code></td></tr>
+<tr><td>2</td><td>The model</td><td>Tool request: <code>compound_value</code> with <code>{"principal": "10000", "rate_pct": "4.10", "years": 1}</code></td></tr>
+<tr><td>3</td><td>Your code</td><td>Runs the function, sends back <code>{"value": "10410.00", ...}</code></td></tr>
+<tr><td>4</td><td>The model</td><td>The answer, using the value it was given</td></tr>
+</table></div>
+<p>The model learned this request format in post-training (<a href="llm-training.html">chapter 19</a>): it has seen many examples of tool definitions, requests and results, so it knows the pattern. It still chooses, by predicting tokens, whether to call a tool, which one, and with what arguments. Every one of those choices can be wrong.</p>
+
+<h2 id="schemas">Describing a tool: names, descriptions, schemas</h2>
+<p>The input schema is written in JSON Schema, a standard way to describe the shape of JSON. This is the schema the Python MCP SDK generated for the <code>compound_value</code> tool in the project of <a href="mcp.html#project">chapter 30</a>, as it went over the wire:</p>
+<div class="out">{"type": "object",
+ "properties": {"principal": {"type": "string", "title": "Principal"},
+                "rate_pct":  {"type": "string", "title": "Rate Pct"},
+                "years":     {"type": "integer", "title": "Years"}},
+ "required": ["principal", "rate_pct", "years"]}</div>
+<p>The schema was built from the Python function's type hints, and the description from its docstring. Money is a string, not a number, on purpose: a JSON number may be read as a binary floating-point value, and 0.1 cannot be stored exactly in binary, so decimal strings keep cents exact.</p>
+<p>Good tool design is mostly good naming and narrow scope:</p>
+<ul>
+<li><b>Name and describe for the model.</b> The description is the only manual the model gets. Say what the tool returns and when to use it, not how it works inside.</li>
+<li><b>Narrow and typed.</b> <code>get_order(order_id)</code> is better than <code>run_sql(query)</code>: the model cannot ask for something you did not mean to expose, and bad arguments fail at the schema.</li>
+<li><b>Read-only by default.</b> A tool that only reads cannot do damage when the model calls it at the wrong moment. Anything that writes, pays or sends needs a person's confirmation outside the model.</li>
+<li><b>State the limits.</b> A description should say where the data stops: "the shop's stock, not the warehouse's"; "a null value is unknown, not zero". Accept an identifier in the forms people use (an id or a code, in any case), and record a failed call in the trace as well as a successful one.</li>
+<li><b>Bind per request.</b> The user's identity and the trace recorder belong to one request. Pass them through request-scoped context, not globals, so tools running at the same time cannot read each other's data or trace.</li>
+<li><b>Few at a time.</b> Every tool definition costs tokens on every call, and the more similar tools there are, the more often the model picks the wrong one. Offer each step only the tools it needs.</li>
+<li><b>Errors the model can act on.</b> "years must be between 0 and 50" lets the model fix its call; "internal error" does not. Return the error as a result instead of crashing the loop.</li>
+<li><b>Results marked as data.</b> A tool result may contain text from a document or web page. Label it as data, never instructions (<a href="security.html">chapter 35</a>).</li>
+</ul>
+
+<h2 id="loop">The tool loop and its cost</h2>
+<p>One question often needs several tools in sequence: read the order, then the stock level, then compute. The loop is: call the model; if it asks for tools, run them, append the requests and results to the conversation, and call it again; stop when it answers in text. Because a model keeps no memory between calls, <b>each call resends the whole conversation so far</b>.</p>
+<p>Worked: the first call sends 3,000 tokens (instructions, tool definitions, question). Each tool round adds a 50-token request and a 500-token result. With four tool rounds before the answer, the five calls send 3,000, 3,550, 4,100, 4,650 and 5,200 tokens: 20,500 input tokens for one answer, almost seven times the first call. That arithmetic series is why tool results should be small, and why a cap on the number of rounds is also a cap on cost.</p>
+<p>Every loop needs a <b>turn limit</b>. A model can get stuck calling the same tool again, or wander. When the limit is hit, the loop stops instead of running forever, and your code decides what the user sees. One useful choice is a last call with no tools at all: the model has to answer from what it has already read.</p>
+<p>Two smaller guards keep a loop from ending badly. A <b>repeated call</b>, the same tool with the same arguments, can be answered with the earlier result and a note to answer now, so the tool does not run twice and the model is pushed on. And an <b>argument that fails the schema</b> can go back to the model as an error result, naming the field and what was wrong, instead of ending the call: the model fixes its call, as it would after any other error result. Name the field and the kind of error, but do not echo the value: a validation message can quote private details.</p>
+
+<h2 id="fenced">Fencing a tool that reaches outside</h2>
+<p>A tool that searches or fetches from the web is the riskiest kind, because it brings untrusted text into the conversation. Fence it:</p>
+<ul>
+<li><b>An allow-list of hosts.</b> A search hit off the list is dropped before anything is fetched, and a fetch of any other address is refused.</li>
+<li><b>A budget.</b> For example 2 searches, 3 fetches and 20 seconds per lookup. When a budget is spent, the tool says so in words the model can act on.</li>
+<li><b>Quotes must be on the page.</b> Keep a quote only when its text appears in a page the tool really fetched, and return each quote with its URL, the page title and the date it was read.</li>
+<li><b>Fail in the open.</b> If the lookup fails, the model reads "web lookup is unavailable" and answers without it, instead of guessing what the page would have said.</li>
+</ul>
+
+<h2 id="structured">Structured output and one repair</h2>
+<p>The final answer can be constrained too: you send an output schema and ask the model to reply with matching JSON. Code then validates the reply. Models follow schemas well but not perfectly, so a common pattern is <b>validate, then repair once</b>: if the reply does not validate, send the validation error back with the conversation and ask for corrected JSON only. If the second reply also fails, give up cleanly. One repair fixes most slips; a loop of repairs mostly burns money on a model that has misunderstood the task.</p>
+
+<h2 id="references">Let code own the numbers</h2>
+<p>A model that copies a figure from a tool result into its prose can mistype it, round it, or invent one that was never there, and a reader cannot tell. A stronger design keeps digits out of the model's prose entirely: wherever a figure belongs, the model writes a <b>typed reference</b>, naming a tool and a path to a field in that tool's result, and code fills in the value. Code can then check every reference: the tool was really called, the field exists, the source is dated. The same idea runs through the formula tool of <a href="knowledge-base.html#official-texts">chapter 27</a>, where the model writes formulas over named inputs and code does the arithmetic.</p>
+<p>Go one step further and let code choose the amount as well. A tool can compute a whole proposal, for example the size of a refund, or the one item to swap to close a gap, together with the before and after values; the model never picks the number, it explains the one the tool returned. Answers may list proposed actions, but draw them as descriptions or as buttons that only ask a person. Nothing a model returns should move money, send a message or delete data by itself.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Typed references and the checks</h4></div>
+<p class="hint">The model's answer is made of text segments and references. Pick each example and read the block reasons. Then edit a field path (try <code>lines.1.line_total</code>), change a format, or type a digit into the prose.</p>
+<div id="w-toolref"></div>
+</div>
+
+<h2 id="calculators">Calculators: exact maths in code</h2>
+<p>Arithmetic is the clearest case for a tool. A model predicts digits as tokens and can slip on long multiplications; code cannot. Worked with the future-value formula used for savings: a lump sum of 10,000 plus 500 a month, at 6% a year compounded monthly, for 10 years. The monthly rate is 0.06 / 12 = 0.005 over 120 months, so the growth factor is 1.005<sup>120</sup> = 1.819397.</p>
+<ul>
+<li>The lump sum grows to 10,000 &times; 1.819397 = 18,193.97.</li>
+<li>The contributions grow to 500 &times; (1.819397 &minus; 1) / 0.005 = 81,939.67, the sum of a geometric series (each month's 500 grows for one month fewer than the one before).</li>
+<li>Total: 100,133.64.</li>
+</ul>
+<p>Asking a model to produce 100,133.64 by itself invites an answer that is close but wrong. Asking it to call a calculator with four inputs, each of which it can read off the question, makes the number exact and checkable.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>Use the same formula for 2,000 now plus 200 a month at 5% a year for 5 years. The growth factor 1.0041667<sup>60</sup> is 1.283359. What are the two parts and the total?</p></div>
+<details><summary>Answer</summary><div><p>Lump sum: 2,000 &times; 1.283359 = 2,566.72. Contributions: 200 &times; 0.283359 / 0.0041667 = 13,601.22 (the monthly rate is 0.05 / 12). Total 16,167.93. A calculator that works in decimal arithmetic gives the same to the cent.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-agent.html">Lab 5</a> you write the tool loop by hand for a small parts-desk agent: tools with JSON-schema inputs that are checked before each one runs, exact arithmetic, errors the model can act on, a step limit, and one tool with a side effect that waits for a person's yes.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Does a tool request from the model run anything by itself?</summary><div><p>No. It is text in a fixed format. Your code decides whether and how to run it, which is where permissions and checks belong.</p></div></details>
+<details><summary>Why does each extra tool round cost more than the one before?</summary><div><p>The model keeps no state between calls, so every call resends the whole conversation, including all earlier requests and results.</p></div></details>
+<details><summary>Why are money amounts passed as strings in these schemas?</summary><div><p>So they stay exact decimals. A JSON number may be read as binary floating point, which cannot represent most decimal fractions exactly.</p></div></details>
+<details><summary>What does a typed reference let code check that a typed number does not?</summary><div><p>That the value came from a tool that was really called in this answer, from a field that exists, with a dated source. A number in prose has no source to check.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview" target="_blank" rel="noopener noreferrer">Tool use with Claude</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Anthropic&#x27;s guide to defining tools with JSON schemas and handling tool calls and results.</span></li>
+<li><a href="https://developers.openai.com/api/docs/guides/function-calling" target="_blank" rel="noopener noreferrer">Function calling | OpenAI API</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">OpenAI&#x27;s equivalent guide, useful for comparing how providers shape tool calls.</span></li>
+<li><a href="https://www.anthropic.com/research/writing-tools-for-agents" target="_blank" rel="noopener noreferrer">Writing effective tools for AI agents</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Advice on naming, scoping and describing tools, and evaluating them with real tasks.</span></li>
+<li><a href="https://arxiv.org/abs/2302.04761" target="_blank" rel="noopener noreferrer">Toolformer: Language Models Can Teach Themselves to Use Tools (2023)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Research showing a model can learn when to call APIs by self-labelling its training data.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-tools">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/toolref.js"></script>
+</body>
+</html>

@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>44. Evaluating LLM output: judges and agreement &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 44</p>
+<h1>Evaluating LLM output: judges and agreement</h1>
+<p class="lead">How do you know the answers are good, and how do you know the thing that grades them is any good? This chapter covers building a test set, checking with code what code can check, using a model as a judge for the rest, and testing that judge against people: agreement, Cohen's kappa, its precision and recall on planted defects, and its biases. It ends with thresholds on small samples, offline suites against live sampling, and what evaluations cost.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>A change to a prompt or a model can make answers better on the question you tried and worse on twenty you did not. Evaluations are how you find out before your users do. And a model judge is itself a model: until it agrees with careful people and catches defects you planted on purpose, its scores are only opinions.</p></div>
+
+<h2 id="why-evaluate">Why evaluate</h2>
+<p>An <a class="g" href="glossary.html#eval">eval</a> is a repeatable test of an AI system: a fixed set of cases, a way to run the system on each, and a scoring rule. You need one because three kinds of change alter a model application's behaviour without any error message:</p>
+<ul>
+<li><b>Prompt changes.</b> You fix one bad answer by adding a sentence to the prompt. That sentence also changes how the model handles every other question. Some answers get better and some get worse; without a test set you see only the one you fixed.</li>
+<li><b>Model swaps.</b> A new model version, a cheaper model for an easy step, or a provider updating the model behind a name. Each answers differently, and the question is whether your cases still pass.</li>
+<li><b>Changes around the model.</b> New documents in the index, a different chunk size, a new tool, a changed output schema. The model is the same; what it sees is not.</li>
+</ul>
+<p>A <b>regression</b> is a case that passed before a change and fails after it. An eval suite turns regressions into a number per change instead of complaints a week later. Run it before every change ships, compare with the last good run, and read the cases that flipped, not only the total.</p>
+
+<h2 id="test-sets">Test sets</h2>
+<p>A test case is an input plus a description of what a good output must do. For a city library's help desk assistant, which answers questions from the library's policy documents, one case might be:</p>
+<pre><code>{
+  "id": "renew-07",
+  "question": "Can I renew a book that someone else has reserved?",
+  "expect": "answer",
+  "must_cite": ["loans-policy#renewals"],
+  "notes": "Reserved items cannot be renewed; the answer must say so."
+}</code></pre>
+<p>The expected behaviour is one of "answer", "refuse" (out of scope or unsafe) or "not in the documents". The ids it must cite let code check the citations. The notes are for whoever grades the free text, a person or a judge.</p>
+
+<h3 id="sources">Where cases come from</h3>
+<div class="tbl-wrap"><table>
+<tr><th>Source</th><th>Good for</th><th>Watch out for</th></tr>
+<tr><td>Real questions from users, masked</td><td>What people actually ask, in their own words: short, misspelt, missing context</td><td>Personal data; most real questions are the common, easy ones</td></tr>
+<tr><td>Failures you have seen (bug reports, thumbs-down)</td><td>Regressions: each one becomes a case so it cannot come back unnoticed</td><td>Each needs a written description of what a right answer is</td></tr>
+<tr><td>Hand-written edge cases</td><td>Rare but important behaviour: refusals, out-of-scope questions, questions the documents do not cover</td><td>The limits of your own imagination</td></tr>
+<tr><td>Model-written (synthetic) questions</td><td>Volume, varied wording, topics nobody has asked about yet</td><td>They tend to be well formed, alike and easy for a model, because a model wrote them</td></tr>
+<tr><td>Seeded defects (below)</td><td>Testing a grader: you know the right verdict in advance</td><td>The defects must be the kind a model really makes</td></tr>
+</table></div>
+<p><b>Synthetic or real?</b> Real questions tell you what the system will face. Synthetic ones fill the gaps. A good set starts with real questions, adds hand-written edge cases, and uses synthetic ones to cover topics the others miss, with a person reading every synthetic case before it goes in. Fifty careful cases beat five hundred unread ones.</p>
+
+<h3 id="seeded">Seeded defects: one defect per case</h3>
+<p>To test a grader, a code check or a judge, you need cases where you already know the right verdict. The cheapest way is to take answers you know are good and break each one on purpose: a <a class="g" href="glossary.html#seeded-defect">seeded defect</a>. Record which criterion each defect should fail.</p>
+<div class="tbl-wrap"><table>
+<tr><th>Defect</th><th>Example in a library answer</th><th>Should fail</th></tr>
+<tr><td>Wrong number</td><td>"You can borrow 12 books at a time" when the policy says 8</td><td>faithful</td></tr>
+<tr><td>Unsupported claim</td><td>Adds "late fees are waived for students", which no document says</td><td>faithful</td></tr>
+<tr><td>Bad citation</td><td>Cites a real document id that does not hold the claim</td><td>faithful</td></tr>
+<tr><td>Ignores the question</td><td>Asked about renewals, answers about opening hours</td><td>answers_question</td></tr>
+<tr><td>Unexplained jargon</td><td>"Your hold is in transit pending ILL fulfilment", with no word on what ILL means</td><td>clear</td></tr>
+</table></div>
+<p><b>One defect per case.</b> If a copy has a wrong number and an unsupported claim and the judge fails it, you do not know which defect it saw; if it passes, you do not know which it missed. With one defect per case every result is attributable: a miss is a miss of that defect class, and you can report a catch rate per class. Copies like these can be built by code with no model call (change a number, swap a citation, insert a sentence), so they are cheap and the same every time.</p>
+
+<h3 id="held-out">Tune on one part, report on another</h3>
+<p>Split the cases in two, exactly as for any model you tune (<a href="ml-generalisation.html#splits">chapter 11</a>):</p>
+<ul>
+<li>The <b>development set</b> is the one you look at. Read its failures, change the prompt, the rubric or the retrieval, and rerun it as often as you like.</li>
+<li>The <b>held-out set</b> is run only to report a number, once the tuning is done. You do not read its individual failures while you are still tuning.</li>
+</ul>
+<p>Every change you make because of a held-out failure fits the system a little to those exact cases. Do it a few times and the held-out score measures how well you have learnt the held-out set, not how the system does on new questions. That is <a href="ml-generalisation.html#leakage">leakage</a>, and it always makes the number look better than the truth. When you have used a held-out set up, move it into the development set and write fresh held-out cases. Two thirds for development and one third held out is a common start. The same rule applies to the human labels you use to calibrate a judge (<a href="#calibrate">below</a>): tune the rubric on one part of them and report agreement on the other.</p>
+
+<h2 id="deterministic">Deterministic checks first</h2>
+<p>Before you ask a model to grade, check everything code can check. Code checks are free, fast and exact, and they give the same verdict every time. Run them on every case, first; a case that fails one needs no judge.</p>
+<div class="tbl-wrap"><table>
+<tr><th>Check</th><th>How code does it</th></tr>
+<tr><td>The output parses and matches its schema</td><td>Parse the JSON, validate it against the schema (<a href="llm-tokens.html#structured-output">chapter 16</a>)</td></tr>
+<tr><td>Every cited id was retrieved for this question</td><td>Set membership: cited ids are a subset of retrieved ids</td></tr>
+<tr><td>The expected citations are there</td><td>The case's <code>must_cite</code> ids are a subset of the cited ids</td></tr>
+<tr><td>It refused when it should, and only then</td><td>Compare with the case's expected behaviour</td></tr>
+<tr><td>Numbers match the tool's output</td><td>Parse the numbers and compare them with the tool result</td></tr>
+<tr><td>Required wording present, banned wording absent</td><td>String match</td></tr>
+<tr><td>Length within the limit</td><td>Count words or tokens</td></tr>
+</table></div>
+<p>Many of these same checks run live as output guardrails (<a href="guardrails.html#output">chapter 34</a>). What is left for a judge is what needs reading: is every claim supported by the passages, does it answer the question, is it clear? Those become the rubric. Keeping the judge's job small makes it cheaper and makes its mistakes easier to see.</p>
+
+<h2 id="judge">LLM-as-judge</h2>
+<p>An LLM <a class="g" href="glossary.html#judge">judge</a> is a model asked to grade another model's output against written criteria. It reads like a person, works at machine speed and costs a fraction of a person's time. It also makes mistakes, has biases, and can change when its own model is updated. Treat it as a measuring instrument that has to be calibrated.</p>
+
+<h3 id="rubric">The rubric</h3>
+<p>A <a class="g" href="glossary.html#rubric">rubric</a> lists the criteria and says, for each one, what earns each verdict. Vague criteria ("is it good?") give vague, unstable scores; specific ones give scores that people and judges agree on. A rubric for the library assistant:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Criterion</th><th>Pass when</th><th>Fail when</th></tr>
+<tr><td><code>faithful</code></td><td>Every claim, number and date is supported by the retrieved passages</td><td>Any claim is missing from the passages or contradicts them</td></tr>
+<tr><td><code>answers_question</code></td><td>It answers what was asked, or says plainly that the documents do not cover it</td><td>It answers a different question, or hedges without answering</td></tr>
+<tr><td><code>clear</code></td><td>A member of the public can follow it; any special term is explained</td><td>It uses unexplained jargon or buries the answer</td></tr>
+</table></div>
+<p>Write the rubric before you look at judge results, try it on a handful of answers with two people, and tighten any criterion they disagree on. Version it like a prompt (<a href="prompt-engineering.html#versions">chapter 21</a>): a score means nothing without the rubric version that produced it.</p>
+
+<h3 id="pointwise-pairwise">Pointwise or pairwise</h3>
+<ul>
+<li><b>Pointwise</b>: show one answer and the rubric, get a verdict per criterion. This suits a regression suite, because every case gets a verdict you can compare across runs.</li>
+<li><b>Pairwise</b>: show two answers to the same question, say from prompt v6 and prompt v7, and ask which is better on a criterion, or whether they tie. Comparing is easier than scoring on an absolute scale, for judges and people alike, so pairwise suits choosing between two versions. It cannot tell you whether either answer is good enough, and it is open to position bias (<a href="#biases">below</a>).</li>
+</ul>
+
+<h3 id="verdicts">Binary verdicts with a reason, as JSON</h3>
+<p>Prefer a binary verdict, pass or fail, per criterion over a score from 1 to 10. On a ten-point scale two careful people rarely give the same number, and nobody can say what separates a 6 from a 7; on pass or fail with a written rule they usually agree. If you need more than two levels, use three (0, 1, 2), with a sentence describing each.</p>
+<p>Ask for a short reason with each verdict, written before the verdict. The reason shows you why the judge failed an answer, which is how you find problems in the rubric, and asking for it first makes the verdict follow from the reasoning instead of the other way round. Ask for the result as <a class="g" href="glossary.html#structured-output">structured output</a>, JSON that matches a schema, so code can read it:</p>
+<pre><code>{
+  "faithful":         {"reason": "The answer says 12 books; the loans policy says 8.", "verdict": "fail"},
+  "answers_question": {"reason": "It deals with renewing a reserved book directly.",   "verdict": "pass"},
+  "clear":            {"reason": "Short and plain; no jargon.",                         "verdict": "pass"}
+}</code></pre>
+<p>Validate the reply. If it does not parse or a criterion is missing, ask once more; if it fails again, record the case as a judge error, never as a pass. A grader that counts its own failure as a pass is worse than no grader: it should <a class="g" href="glossary.html#fail-closed">fail closed</a>.</p>
+<p>Give the judge what it needs and nothing more: the question, the passages the answer was given, the answer and the rubric. A judge asked about faithfulness without the passages can only guess.</p>
+
+<h2 id="calibrate">Calibrating a judge against people</h2>
+<p>A judge earns trust the way a new colleague does: by agreeing with careful people on cases where the answer is known. The procedure:</p>
+<ol>
+<li>Take 50 to 200 answers, a mix of real answers and seeded defects, and shuffle them.</li>
+<li>Have one or two people label them against the rubric, blind: they do not see which answers are seeded, which system wrote them, or what the judge said. Give each answer a sheet id and keep the key that maps ids back to their source in a separate file.</li>
+<li>Run the judge on the same answers.</li>
+<li>Measure agreement per criterion: the people against each other, and the judge against the people.</li>
+</ol>
+<p>The agreement between two people is the ceiling. A judge cannot be expected to agree with a person more often than two people agree with each other, and if the people disagree a lot, the rubric is the problem, not the judge.</p>
+
+<h3 id="kappa">Agreement and Cohen's kappa</h3>
+<p>Two raters scoring the same answers will agree some of the time by luck alone, so raw agreement flatters. <a class="g" href="glossary.html#cohen-kappa">Cohen's kappa</a> (from "A Coefficient of Agreement for Nominal Scales", 1960) subtracts the agreement you would expect by chance.</p>
+<p>Worked: two people score the same 20 library answers on <code>answers_question</code>, using the three-level scale 0, 1, 2. In the table, row = person A's score, column = person B's.</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th></th><th>B: 0</th><th>B: 1</th><th>B: 2</th><th>A total</th></tr>
+<tr><th>A: 0</th><td class="num">3</td><td class="num">1</td><td class="num">0</td><td class="num">4</td></tr>
+<tr><th>A: 1</th><td class="num">1</td><td class="num">4</td><td class="num">2</td><td class="num">7</td></tr>
+<tr><th>A: 2</th><td class="num">0</td><td class="num">1</td><td class="num">8</td><td class="num">9</td></tr>
+<tr><th>B total</th><td class="num">4</td><td class="num">6</td><td class="num">10</td><td class="num">20</td></tr>
+</table></div>
+<ol>
+<li><b>Observed agreement.</b> The diagonal counts the answers they scored the same: 3 + 4 + 8 = 15, so 15 / 20 = 0.75.</li>
+<li><b>Chance agreement.</b> A gives 0 to 4/20 of answers and B to 4/20; if they scored at random with those shares, they would both give 0 to (4/20)(4/20) = 0.04 of answers. Likewise (7/20)(6/20) = 0.105 for 1 and (9/20)(10/20) = 0.225 for 2. Total: 0.37.</li>
+<li><b>Kappa.</b> Of the agreement that was possible beyond chance (1 &minus; 0.37 = 0.63), they achieved 0.75 &minus; 0.37 = 0.38. So &kappa; = 0.38 / 0.63 &asymp; 0.603.</li>
+</ol>
+<p>In symbols, with <i>n</i> answers, and <i>a</i><sub><i>s</i></sub> and <i>b</i><sub><i>s</i></sub> the number of answers each rater gave score <i>s</i>:</p>
+<p class="math">p<sub>o</sub> = (answers on the diagonal) / <i>n</i></p>
+<p class="math">p<sub>e</sub> = &Sigma;<sub><i>s</i></sub> (<i>a</i><sub><i>s</i></sub>/<i>n</i>)(<i>b</i><sub><i>s</i></sub>/<i>n</i>)</p>
+<p class="math">&kappa; = (p<sub>o</sub> &minus; p<sub>e</sub>) / (1 &minus; p<sub>e</sub>)</p>
+<p>&kappa; = 1 is perfect agreement, 0 is no better than chance, and below 0 is worse than chance. A rough reading that is widely quoted (Landis and Koch, 1977) calls 0.41 to 0.60 moderate, 0.61 to 0.80 substantial and above 0.80 almost perfect. Those bands are a convention, not a test: decide the bar your judge must clear before you measure it. When both raters gave every answer the same score, p<sub>e</sub> = 1 and kappa is not defined.</p>
+
+<div class="widget" id="w-kappa">
+<div class="widget-head"><span class="tag">Try it</span><h4>Agreement table to kappa</h4></div>
+<p class="hint">Type counts into the cells, or pick a preset. Green cells are agreements. Watch how p<sub>e</sub> grows when both raters use one score most of the time. The pass/fail presets also show the judge's precision and recall on fails.</p>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>Two people each give 90% of 100 answers a 2 and the other 10% a 1. They agree on 82 answers. What is kappa? What does that tell you about "82% agreement"?</p></div>
+<details><summary>Answer</summary><div><p>p<sub>o</sub> = 0.82. p<sub>e</sub> = 0.9 &times; 0.9 + 0.1 &times; 0.1 = 0.82. &kappa; = (0.82 &minus; 0.82) / (1 &minus; 0.82) = 0. When nearly every answer gets the same score, two people agree most of the time by chance alone, so 82% agreement here means nothing.</p></div></details>
+
+<h3 id="confusion">The judge as a defect detector: precision and recall</h3>
+<p>Kappa says how well the judge and a person agree overall. For a pass/fail criterion you also want to know which way the judge errs. Treat "fail" as the thing being detected, take the person's label as the truth, and count four cells, as for any check that flags things (<a href="guardrails.html#maths">chapter 34</a>).</p>
+<p>Worked: a person and the judge both grade the same 100 answers on <code>faithful</code>. The person fails 30 of them.</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th></th><th>Judge: fail</th><th>Judge: pass</th><th>Person total</th></tr>
+<tr><th>Person: fail</th><td class="num">24 (caught)</td><td class="num">6 (missed)</td><td class="num">30</td></tr>
+<tr><th>Person: pass</th><td class="num">7 (false alarm)</td><td class="num">63</td><td class="num">70</td></tr>
+<tr><th>Judge total</th><td class="num">31</td><td class="num">69</td><td class="num">100</td></tr>
+</table></div>
+<ul>
+<li><b>Recall</b> on defects: of the 30 answers the person failed, the judge failed 24, so 24 / 30 = 0.80. One defect in five gets through.</li>
+<li><b>Precision</b>: of the 31 answers the judge failed, 24 really were bad, so 24 / 31 &asymp; 0.774. The other 7 (about 23%) are false alarms: good answers marked down.</li>
+<li><b>Agreement and kappa</b>: p<sub>o</sub> = (24 + 63) / 100 = 0.87; p<sub>e</sub> = (30/100)(31/100) + (70/100)(69/100) = 0.093 + 0.483 = 0.576; &kappa; = (0.87 &minus; 0.576) / (1 &minus; 0.576) = 0.294 / 0.424 &asymp; 0.693.</li>
+</ul>
+<p>Which error matters more depends on the job. A judge that gates releases needs high recall, because a missed defect ships. A judge that reports a quality trend can live with lower recall if it is stable, because a trend compares the judge with itself. See <a class="g" href="glossary.html#precision-recall">precision and recall</a>.</p>
+<p>Seeded defects give you recall without labelling: every seeded copy is a known fail, so the share the judge fails is its recall on that defect class, its catch rate. A judge that catches 26 of 30 wrong numbers but 2 of 10 unsupported claims needs work on faithfulness, whatever its overall kappa. Seeded copies cannot measure precision, because they contain no good answers; that is why the calibration set mixes seeded copies with real answers.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-judge.html">Lab 8</a> you build an LLM judge, plant known defects in good answers and measure its agreement with your own labels with Cohen's kappa.</p></div>
+
+<h2 id="biases">Judge biases and how to test for them</h2>
+<p>A judge should grade what an answer says, not how it is presented. Three biases are well documented (Zheng and others, 2023, in further reading):</p>
+<div class="tbl-wrap"><table>
+<tr><th>Bias</th><th>What it looks like</th><th>How to test for it</th></tr>
+<tr><td>Position</td><td>In pairwise judging, the judge prefers whichever answer is shown first (or second)</td><td>Judge every pair twice, once in each order. A verdict that flips with the order was decided by position.</td></tr>
+<tr><td>Verbosity</td><td>The judge prefers longer answers, even when the extra text adds nothing</td><td>Compare answers of matched length. Add one true but useless sentence to an answer (a padding probe): no verdict should change.</td></tr>
+<tr><td>Self-preference</td><td>The judge rates answers from its own model, or its own model family, higher than people do</td><td>Compare the judge's pass rate with people's on answers from each model. Where you can, use a judge from a different family from the model under test.</td></tr>
+</table></div>
+<p>Worked: a judge compares 50 pairs, each in both orders. On 41 pairs it picks the same answer both times. On 9 it flips, and in all 9 it picks whichever answer came first. A flip rate of 9 / 50 = 18%, all in one direction, is position bias. The usual remedy is to keep the double judging: count a win only when both orders agree, and call the rest a tie. That doubles the cost of pairwise judging (<a href="#cost">below</a>).</p>
+<p>A <a class="g" href="glossary.html#bias-probe">bias probe</a> is a test like any other: it passes when every verdict is unchanged. A probe that reorders the sources in an answer, or pads it, should leave every score where it was. Keep the probes in the suite and rerun them whenever the judge's model or prompt changes.</p>
+
+<h2 id="thresholds">Thresholds and small samples</h2>
+<p>An eval ends in a decision: ship or not, keep the judge or not. Write the rule down before you run the eval, so the number cannot argue you into a new rule. For example: "the held-out pass rate on <code>faithful</code> may not drop by more than 2 points"; "every case tagged must-pass must pass"; "the judge needs &kappa; of at least 0.6 against people, and a catch rate of at least 0.8 on every defect class".</p>
+<p>Then remember how few cases you have. A catch rate of 26 out of 30 is 0.867, but the 95% <a class="g" href="glossary.html#wilson-interval">Wilson interval</a> runs from about 0.703 to 0.947. With three to five copies per defect class, a single class's rate is rougher still. Likewise, prompt v7 passing 46 of 50 cases (92%, interval 81.2% to 96.8%) and v6 passing 43 of 50 (86%, interval 73.8% to 93.0%) does not prove v7 is better: the intervals overlap widely. <a href="hallucination.html#measuring">Chapter 36</a> works these intervals by hand and has a widget for them.</p>
+<p>Two things help. Compare the versions on the same cases and count only the cases where they disagree (<a href="rag-eval.html#uncertainty">chapter 26</a> shows how). And read the flipped cases: three cases that went from pass to fail tell you more than the total, because each is a specific thing the change broke.</p>
+
+<h2 id="offline-online">Offline suites and online sampling</h2>
+<div class="tbl-wrap"><table>
+<tr><th></th><th>Offline suite</th><th>Online sampling</th></tr>
+<tr><th>Inputs</th><td>A fixed test set you wrote</td><td>A sample of real traffic, for example 1 answer in 50</td></tr>
+<tr><th>When it runs</th><td>Before every change ships</td><td>All the time, in the background</td></tr>
+<tr><th>Right answers</th><td>Known: expected behaviour, cited ids, seeded defects</td><td>Unknown: only the judge and user feedback</td></tr>
+<tr><th>Good for</th><td>Catching regressions, comparing versions</td><td>Drift, new kinds of question, problems your set does not cover</td></tr>
+<tr><th>Watch out for</th><td>The set goes stale as usage changes</td><td>Personal data in what the judge reads; never make the user wait</td></tr>
+</table></div>
+<p>Offline, the suite is a test like any other: the same cases and the same rubric version, compared with the last good run. Online, a background job judges a sample of answers after they have been sent, so the user never waits for it. Mask personal data before an answer reaches the judge, as for any other model call (<a href="guardrails.html#input">chapter 34</a>), and store the judge's verdicts with the trace of the answer they grade, so you can open the answer behind a bad score (<a href="observability.html">chapter 45</a>).</p>
+<p>The two feed each other. An online failure, once masked and labelled, becomes a new offline case, so the same mistake cannot return unnoticed.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-prompt-bench.html">Lab 2</a> you build a prompt test bench: a fixed set of cases, two versions of a prompt and a score for each. Rerun it after every change and it is a regression suite.</p></div>
+
+<h2 id="cost">What evals cost</h2>
+<p>An eval suite pays for model calls every time it runs, and a judge call is often bigger than the call it grades, because it reads the question, the passages, the answer and the rubric. Worked, with the prices per million input and output tokens of Claude Haiku 5.5 ($0.10 and $0.50) and Claude Sonnet 5.5 ($2 and $10): a suite of 200 cases, each answered by Haiku with 1,500 input and 300 output tokens, and graded by a Sonnet judge reading 2,000 tokens and writing 200.</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Part</th><th>Per case</th><th>200 cases</th></tr>
+<tr><td>Answers (Haiku 5.5)</td><td>(1,500 &times; 0.10 + 300 &times; 0.50) / 10<sup>6</sup> = $0.0003</td><td class="num">$0.06</td></tr>
+<tr><td>Judge (Sonnet 5.5)</td><td>(2,000 &times; 2 + 200 &times; 10) / 10<sup>6</sup> = $0.006</td><td class="num">$1.20</td></tr>
+</table></div>
+<p>Here the judge costs twenty times as much as the answers. Pairwise judging in both orders, reading two answers each time (about 3,500 input tokens), would cost 2 &times; 200 &times; (3,500 &times; 2 + 200 &times; 10) / 10<sup>6</sup> = $3.60. Current Claude models think before they answer, and that thinking is billed as output, so take real token counts from a few calls before you budget (<a href="observability.html#cost">chapter 45</a>).</p>
+<p>Ways to spend less:</p>
+<ul>
+<li>Run the code checks first and skip the judge for cases they have already failed.</li>
+<li>Record each model call of an eval run, keyed by a hash of its request, and replay the recording when the request has not changed. A rubric change then reruns only the judge, not the answers.</li>
+<li>Try a smaller judge model. A Haiku judge on the same 200 cases would cost $0.06, but calibrate it against people again before you trust it; never assume it agrees as well as the bigger one.</li>
+<li>Run a small smoke set on every change and the full suite nightly or before a release.</li>
+</ul>
+<p>People's time is a cost too. Labelling takes a careful person a minute or more per answer per criterion. It is the one part you cannot automate, and the one that makes every other number mean something.</p>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why run code checks before the judge?</summary><div><p>They are free, fast, exact and repeatable, and a case that fails one needs no judge call. They also leave the judge only the criteria that need reading, which makes it cheaper and its mistakes easier to see.</p></div></details>
+<details><summary>Why plant only one defect in each seeded copy?</summary><div><p>So every result can be attributed. With two defects, a fail does not say which one the judge saw and a pass does not say which it missed; with one, you get a catch rate per defect class.</p></div></details>
+<details><summary>You changed the prompt to fix three cases that failed in the held-out set. What is wrong with reporting the held-out score now?</summary><div><p>The held-out cases have leaked into the tuning, so the score now overstates how the system does on new questions. Move those cases into the development set and write fresh held-out cases.</p></div></details>
+<details><summary>People and the judge agree on 90% of answers. Why might kappa still be low?</summary><div><p>If both pass nearly every answer, chance agreement p<sub>e</sub> is close to 0.9 too, and kappa measures only the agreement beyond chance.</p></div></details>
+<details><summary>A pairwise judge, shown each pair in one order only, picks the first answer in 30 of 40 pairs. Is that position bias?</summary><div><p>You cannot tell yet: the first answers may really have been better. Judge every pair again in the other order. If the verdicts flip, the order decided them; count a win only when both orders agree.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://arxiv.org/abs/2306.05685" target="_blank" rel="noopener noreferrer">Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena (2023)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Tests how well strong models agree with human raters and lists judge biases such as position and verbosity.</span></li>
+<li><a href="https://eugeneyan.com/writing/llm-evaluators/" target="_blank" rel="noopener noreferrer">Evaluating the Effectiveness of LLM-Evaluators (aka LLM-as-Judge)</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Eugene Yan&#x27;s long review of judge designs, metrics and what the research says works.</span></li>
+<li><a href="https://github.com/huggingface/evaluation-guidebook" target="_blank" rel="noopener noreferrer">huggingface/evaluation-guidebook</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Practical guide to evaluating LLMs: benchmarks, human and model judges, and common pitfalls.</span></li>
+<li><a href="https://en.wikipedia.org/wiki/Cohen%27s_kappa" target="_blank" rel="noopener noreferrer">Cohen&#x27;s kappa (Wikipedia)</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Definition and worked example of agreement corrected for chance, used to compare a judge with humans.</span></li>
+<li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC3900052/" target="_blank" rel="noopener noreferrer">Interrater reliability: the kappa statistic</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Free open-access paper explaining kappa, how to interpret it and its limits.</span></li>
+<li><a href="https://langfuse.com/docs/evaluation/evaluation-methods/llm-as-a-judge" target="_blank" rel="noopener noreferrer">LLM-as-a-Judge - Langfuse</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">How to set up model-based evaluators on traces and datasets in one open-source tracing tool.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-evals">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/kappa.js"></script>
+</body>
+</html>

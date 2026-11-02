@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>38. Frameworks and model providers &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 38</p>
+<h1>Frameworks and model providers</h1>
+<p class="lead">You can call a model with a plain HTTP request. Frameworks exist because real systems need more around that request: switching providers, running tool loops, validating structured output, tracing, and wiring many steps into a flow. This chapter sorts the options into layers, says what each layer buys and costs, and covers running open models on your own hardware.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>A framework decides how much of your system you can see and change. Pick one that hides the parts you never want to think about, and exposes the parts you must control: what is sent, what it costs, and when it stops.</p></div>
+
+<h2 id="layers">The layers</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Layer</th><th>Examples</th><th>What it gives you</th></tr>
+<tr><td>Provider SDK</td><td>Anthropic's and OpenAI's Python libraries</td><td>Typed requests to one provider, every feature it has</td></tr>
+<tr><td>Gateway or unified client</td><td>OpenRouter (a hosted service), LiteLLM (a library)</td><td>One API shape for many models and providers; routing and fallbacks</td></tr>
+<tr><td>Application framework</td><td>Genkit, LangChain</td><td>Prompts, tool loops, structured output, plugins, tracing hooks</td></tr>
+<tr><td>Orchestration graph</td><td>LangGraph</td><td>Steps as nodes, shared state, branches, parallel fan-out, streaming</td></tr>
+<tr><td>Serving engine</td><td>vLLM, Ollama</td><td>Run open-weight models on your own machines</td></tr>
+</table></div>
+<p>Most systems use two or three layers. The trade is always the same: each layer saves code and adds something you must learn, pin and debug through.</p>
+
+<h2 id="gateways">Gateways and routing</h2>
+<p>A gateway puts many models behind one API. You change a model by changing a string, and you can say which providers may serve a request, in what order, and whether to fall back. That is also where data rules live: some providers keep prompts and some do not, and a gateway can be told to use only those that keep nothing (zero data retention). The cost is one more company in your data path, so its own terms matter as much as the model's.</p>
+
+<h2 id="graphs">Graphs for multi-step flows</h2>
+<p>When one answer takes several steps (check the input, plan, call several tools or sub-agents, merge, check the output), a graph keeps the flow readable. Each node is a function that reads the shared state and returns updates; edges, some conditional, say what runs next; parallel branches run together and their results are combined by a reducer.</p>
+<p>Worked: three parallel lookups take 4, 6 and 5 seconds. Run one after another they take 4 + 6 + 5 = 15 seconds. Run in parallel the answer waits only for the slowest, max(4, 6, 5) = 6 seconds. Parallel branches cost the same tokens; they save time.</p>
+
+<h2 id="self-host">Running open models yourself</h2>
+<p><b>vLLM</b> is a serving engine built for throughput. Its PagedAttention manages the attention key and value memory in pages, the way an operating system manages memory, which lets it pack many requests onto one GPU, and continuous batching adds new requests to a running batch instead of waiting. <code>vllm serve &lt;model&gt;</code> starts an OpenAI-compatible server, on <code>http://localhost:8000</code> by default.</p>
+<p><b>Ollama</b> is built for convenience on one machine. <code>ollama run &lt;model&gt;</code> downloads and runs a model; its API is at <code>http://localhost:11434/api</code>, with an OpenAI-compatible one at <code>/v1</code>, and a Modelfile (starting with <code>FROM</code>) describes a custom model. Neither is run in this chapter, because both need model downloads; Ollama is one of the backends the labs can use (<a href="lab-setup.html">Lab 0</a>).</p>
+<p>The first question is memory. Worked: a 7-billion-parameter model at 16 bits per weight needs 7 &times; 10<sup>9</sup> &times; 2 bytes = 14 GB for the weights alone, before the key and value cache that grows with every token in flight. At 4 bits it is about 3.5 GB (<a href="quantisation.html#memory">chapter 39</a>).</p>
+
+<h2 id="choosing">Choosing</h2>
+<ul>
+<li><b>Can you see the request?</b> You should be able to log exactly what was sent and what came back.</li>
+<li><b>Can you control the loop?</b> Turn limits, timeouts and spend caps must be yours to set.</li>
+<li><b>How fast does it change?</b> Young frameworks change their APIs often. Pin exact versions and upgrade on purpose.</li>
+<li><b>Can you leave?</b> Keep your own types for answers and tools, so a framework is an adapter at the edge, not the shape of your whole system.</li>
+</ul>
+
+<h2 id="patterns">Patterns that keep you in control</h2>
+<p>Whichever layers you pick, a few patterns keep the choice reversible:</p>
+<ul>
+<li><b>Name jobs, not models.</b> Code asks for a job ("classify", "write", "check"). Settings map each job to a model reference whose prefix picks the route, for example a gateway, a direct provider call or a local server. Moving a job to another model or provider is then a settings change and a restart, with no code edit.</li>
+<li><b>Keep provider rules in one route object.</b> Gateways accept per-request preferences: zero data retention, which quantisations are allowed (<a href="quantisation.html#quality">chapter 39</a>), a price ceiling, speed targets, and an optional provider order and fallback rule. Build that object in one place from the job's settings.</li>
+<li><b>Read the cost from the response and record it per call.</b> When calls overlap on one client, carry each call's route and cost in a per-call context (a context variable in Python), so overlapping calls each keep their own route and each cost is counted once. Put the provider's generation id on the trace span.</li>
+<li><b>Mind how a provider handles structured output.</b> Some models are sent plain JSON mode with the schema pasted into the prompt; others accept a strict <code>json_schema</code> response format. Prefer the strict format where it exists, and then add no schema text to the prompt.</li>
+<li><b>Keep one gateway under the graph.</b> A graph decides the order of steps; model calls inside its nodes should still go through the same single gateway (<a href="harness.html#single-gateway">chapter 33</a>), so scrubbing, caps and cost records apply to every call.</li>
+<li><b>Use a heavy library only where it is needed.</b> If one tool needs an extra client library (an indexer that expects a particular unified client, say), keep it in that tool and out of the request path.</li>
+<li><b>Pin exact versions, and wait before upgrading.</b> Pin the model, graph, scrubber, embedding and protocol packages exactly, and let fast-moving packages resolve only to releases at least two weeks old. Upgrade on purpose, with the tests.</li>
+</ul>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-first-call.html">Lab 1</a> you call a model through a small adapter that can talk to Claude, to a local Ollama model or to a scripted fake backend, which is the gateway idea in miniature.</p></div>
+
+<div class="callout note"><span class="title">Try it</span><p>An answer runs a 1-second gate, then three tool calls in parallel taking 5, 7 and 4 seconds, then a 2-second check. How long does it take, and how long if the three calls ran one after another?</p></div>
+<details><summary>Answer</summary><div><p>Parallel: 1 + max(5, 7, 4) + 2 = 10 seconds. Sequential: 1 + 5 + 7 + 4 + 2 = 19 seconds.</p></div></details>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>What does a gateway add, and what does it cost?</summary><div><p>One API for many models, with routing and fallbacks; it adds a company and a hop to your data path, with its own terms.</p></div></details>
+<details><summary>Why does running branches in parallel not save tokens?</summary><div><p>Each branch makes the same calls either way; parallel running only overlaps their waiting time.</p></div></details>
+<details><summary>Roughly how much memory do the weights of a 13-billion-parameter model need at 16 bits?</summary><div><p>13 &times; 10<sup>9</sup> &times; 2 bytes = 26 GB.</p></div></details>
+<details><summary>Why keep your own answer and tool types instead of the framework's?</summary><div><p>So a framework change or replacement touches only the adapter at the edge, not the whole system.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://docs.langchain.com/oss/python/langgraph/overview" target="_blank" rel="noopener noreferrer">LangGraph overview - Docs by LangChain</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Entry point for LangGraph, the graph-based orchestration library for stateful agents.</span></li>
+<li><a href="https://docs.langchain.com/oss/python/langchain/overview" target="_blank" rel="noopener noreferrer">LangChain overview - Docs by LangChain</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Entry point for LangChain&#x27;s model, tool and agent abstractions built on LangGraph.</span></li>
+<li><a href="https://genkit.dev/" target="_blank" rel="noopener noreferrer">Genkit</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Google&#x27;s open-source framework for AI features, with flows, tools and structured output.</span></li>
+<li><a href="https://openrouter.ai/docs/guides/routing/provider-selection" target="_blank" rel="noopener noreferrer">Provider Routing - Smart Multi-Provider Request Management</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">How OpenRouter picks among providers for one model and how to steer that choice per request.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-frameworks">All resources for this chapter</a> and 2 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

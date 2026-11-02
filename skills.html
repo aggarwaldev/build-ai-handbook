@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>31. Skills &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 31</p>
+<h1>Skills</h1>
+<p class="lead">A skill is a folder of instructions, and optionally scripts and reference files, that an agent loads only when a task needs it. Skills let you teach an agent a procedure once, such as "how we add an environment variable here", without paying for those instructions in every conversation. This chapter explains how they work, how to write one, and walks through an example skill you can run.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>An agent that works in a codebase needs the team's habits: which files change together, which checks to run, what never to touch. Writing them into every prompt wastes context; leaving them out produces work that ignores them. Skills are the middle path, loaded on demand.</p></div>
+
+<h2 id="what">What a skill is</h2>
+<p>A skill is a directory with a file called <code>SKILL.md</code>. The file starts with YAML frontmatter holding two required fields, then a Markdown body with the instructions:</p>
+<div class="out">keeping-env-docs-in-step/
+  SKILL.md                  frontmatter (name, description) + the steps
+  scripts/check_env_docs.py a deterministic check the steps tell the agent to run</div>
+<ul>
+<li><code>name</code>: at most 64 characters, lowercase letters, digits and hyphens only, and it must not contain the reserved words "anthropic" or "claude". Names in the gerund form, such as <code>processing-pdfs</code>, are recommended.</li>
+<li><code>description</code>: at most 1,024 characters, saying both <b>what</b> the skill does and <b>when</b> to use it, written in the third person, because it is inserted into the agent's system prompt.</li>
+</ul>
+<p>Skills were introduced for Claude and published as an open standard in December 2025. The details in this chapter come from Anthropic's documentation.</p>
+
+<h2 id="disclosure">Progressive disclosure</h2>
+<p>A skill is loaded in three levels, each only when needed:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Level</th><th>What</th><th>When it enters the context</th><th>Typical cost</th></tr>
+<tr><td>1</td><td>The name and description</td><td>Always, at start-up</td><td>About 100 tokens per skill</td></tr>
+<tr><td>2</td><td>The body of <code>SKILL.md</code></td><td>When the agent decides the skill applies</td><td>Under 5,000 tokens</td></tr>
+<tr><td>3</td><td>Bundled files and scripts</td><td>Only when the instructions point to them</td><td>Nothing until read; a script's output, not its source, enters the context</td></tr>
+</table></div>
+<p>Worked: an agent with 40 skills installed pays about 40 &times; 100 = 4,000 tokens for their descriptions in every conversation. If the instructions were pasted into the system prompt instead, at up to 5,000 tokens each, the same 40 would cost up to 200,000 tokens, more than many context windows. A task that triggers two skills adds about 10,000 tokens, and only for that task.</p>
+<p>The description is doing the selecting, so it decides whether the skill is ever used. A vague one ("helps with config") is skipped or fires at the wrong time; a specific one names the trigger ("Use when a change introduces, renames or drops an environment variable").</p>
+
+<h2 id="where">Where skills run</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Surface</th><th>How skills get there</th><th>Notes</th></tr>
+<tr><td>Claude API</td><td>Uploaded through the Skills API, then listed in a request's container, with the code execution tool enabled</td><td>Up to 20 skills per request; the container has no network access</td></tr>
+<tr><td>Claude Code</td><td>Folders in <code>~/.claude/skills/</code> (personal) or <code>.claude/skills/</code> (project), or from a plugin</td><td>A skill also becomes a slash command; scripts can use the network</td></tr>
+<tr><td>claude.ai</td><td>Uploaded as a zip in the settings, on plans with code execution</td><td>Per user, not shared across an organisation</td></tr>
+<tr><td>Claude Agent SDK</td><td>Folders on disk, found through the setting sources</td><td>An explicit tool list must include "Skill"</td></tr>
+</table></div>
+<p>Custom skills do not sync between these surfaces: each one is installed separately.</p>
+
+<h2 id="writing">Writing a good skill</h2>
+<ul>
+<li><b>Only what the agent lacks.</b> The context window is shared, and the agent is already capable. Skip general knowledge; write the local facts and the order of steps.</li>
+<li><b>Short body, linked detail.</b> Keep <code>SKILL.md</code> under 500 lines and move detail into files it links to directly (one level deep). Give a long reference file a table of contents.</li>
+<li><b>Scripts for anything exact.</b> A comparison, a format check or a calculation belongs in a script the agent runs, which gives the same answer every time and handles its own errors.</li>
+<li><b>Evaluate it.</b> Write at least three realistic tasks before polishing the text, and check the skill fires on them, does not fire on near misses, and helps on every model you will use.</li>
+<li><b>Paths with forward slashes</b>, and full names for tools from MCP servers (<code>ServerName:tool_name</code>).</li>
+</ul>
+
+<h2 id="security">Trust</h2>
+<p>A skill is instructions plus code that an agent will follow and run with its own permissions. Install skills only from sources you trust: ones you wrote or ones from the vendor. Before using any other, read every file it bundles, looking for unexpected network calls, file access, or instructions to fetch content from outside URLs. A skill that says it formats tables and also asks the agent to upload a file is exactly what to look for.</p>
+
+<h2 id="compare">Skills, tools, MCP and subagents</h2>
+<p>Note the audience. A skill guides an agent that works on your code, such as a coding agent in a repository. It is not part of the running application, whose own tools and prompts serve its users.</p>
+<div class="tbl-wrap"><table>
+<tr><th>Mechanism</th><th>What it gives the agent</th><th>Use it for</th></tr>
+<tr><td>Tool</td><td>A function it can call</td><td>An action or a lookup (<a href="tools.html">chapter 28</a>)</td></tr>
+<tr><td>MCP server</td><td>A packaged set of tools, resources and prompts behind a protocol</td><td>Connecting a service to many applications (<a href="mcp.html">chapter 30</a>)</td></tr>
+<tr><td>Skill</td><td>Instructions and scripts, loaded on demand</td><td>A procedure, house rules, a workflow</td></tr>
+<tr><td>Subagent</td><td>A separate agent with its own context</td><td>Delegating a self-contained task (<a href="subagents.html">chapter 32</a>)</td></tr>
+<tr><td>System prompt</td><td>Text present in every call</td><td>Rules that apply to everything</td></tr>
+</table></div>
+
+<h2 id="example">Example: keeping environment-variable docs in step</h2>
+<p>Many projects list every environment variable twice: in <code>.env.example</code> (the name with a blank or default value) and in a README table under "Environment variables", in the same group. Adding a variable to the code and forgetting one of the lists is an easy mistake. The folder <code class="path">labs/skill-example/keeping-env-docs-in-step/</code> holds a skill for exactly this job, and <code class="path">labs/skill-example/demo/</code> holds an invented recipe-site project to run it against: <code>in-step</code> passes, and <code>drifted</code> has two deliberate mistakes.</p>
+<ul>
+<li><b>The frontmatter.</b> The description says what (adds, renames or removes a variable and keeps the two lists in step with the code) and when (a change introduces, renames or drops a variable, or the lists disagree).</li>
+<li><b>The rules.</b> Never open <code>.env</code>; a secret gets a blank value and "yes" in the README's Secret column; the same group in both files.</li>
+<li><b>The steps.</b> Find every place the variable is read; edit <code>.env.example</code>; add the README row in the table's own column order; run the checker; show the user the two changes and the checker's output.</li>
+<li><b>The script.</b> The skill's own <code class="path">scripts/check_env_docs.py</code>, inside that folder (standard library only), collects the names in <code>.env.example</code> and in the README's environment tables, prints each name found in only one of them, and exits with 1 if there is any. It reads names only and never prints anything after an "=", so a real value pasted into the example file by mistake cannot leak through its output.</li>
+</ul>
+<p>Run from the repository root against the two demo projects, it printed the following (the second run exited with status 1):</p>
+<div class="out">python labs/skill-example/keeping-env-docs-in-step/scripts/check_env_docs.py --repo labs/skill-example/demo/in-step
+.env.example: 6 names; README tables: 6 names
+in step
+
+python labs/skill-example/keeping-env-docs-in-step/scripts/check_env_docs.py --repo labs/skill-example/demo/drifted
+.env.example: 6 names; README tables: 6 names
+only in .env.example: DATABASE_POOL_SIZE
+only in README: CACHE_TTL_SECONDS</div>
+<p>The checker has five tests, which also run offline: <code>cd labs &amp;&amp; python -m pytest skill-example</code> printed "5 passed". One of them pastes a fake secret into an example file and checks it never reaches the output.</p>
+<p>To use the skill with Claude Code, copy the folder to <code>.claude/skills/</code> in a project of your own (or to <code>~/.claude/skills/</code> for yourself); nothing installs itself. Time: 15 minutes to read and run; any laptop, no API key.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A team has 25 skills whose descriptions average 120 tokens and whose bodies average 3,000 tokens. A typical task triggers one skill and reads one 800-token reference file. How many skill tokens does the task use, and how many would it use if every body were in the system prompt instead?</p></div>
+<details><summary>Answer</summary><div><p>With skills: 25 &times; 120 = 3,000 for the descriptions, plus 3,000 for one body and 800 for the reference file: 6,800 tokens. With every body in the system prompt: 25 &times; 3,000 = 75,000 tokens, before any reference file, on every task.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <code class="path">labs/skill-example/</code> you can run the checker against the demo projects, change a README row to make it fail, and then write a second skill of your own with a script that checks something exact. Copy the folder into <code>.claude/skills/</code> to try it in a coding agent.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Which part of a skill is in the context all the time?</summary><div><p>Only its name and description, about 100 tokens. The body loads when the skill is triggered, and bundled files only when read.</p></div></details>
+<details><summary>What two things must a description say?</summary><div><p>What the skill does and when the agent should use it.</p></div></details>
+<details><summary>Why does the example skill use a script for the comparison instead of asking the agent to compare the files?</summary><div><p>A script gives the same exact answer every time, costs no reasoning, and can be trusted not to print secret values. Comparing dozens of names by eye is where an agent slips.</p></div></details>
+<details><summary>What should you check before installing a skill someone else wrote?</summary><div><p>Every bundled file, for unexpected network calls, file access or instructions to fetch outside content, because the agent will follow and run them with its own permissions.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview" target="_blank" rel="noopener noreferrer">Agent Skills (Claude API docs)</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">What Agent Skills are, how they load on demand, and where they can be used.</span></li>
+<li><a href="https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices" target="_blank" rel="noopener noreferrer">Skill authoring best practices</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Guidance on concise instructions, structure and testing when writing a skill.</span></li>
+<li><a href="https://www.anthropic.com/research/equipping-agents-for-the-real-world-with-agent-skills" target="_blank" rel="noopener noreferrer">Equipping agents with Agent Skills</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Anthropic&#x27;s post on the design idea: folders of instructions and scripts loaded only when relevant.</span></li>
+<li><a href="https://github.com/anthropics/skills" target="_blank" rel="noopener noreferrer">anthropics/skills</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Public repository of example skills to read and adapt.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-skills">All resources for this chapter</a> and 1 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

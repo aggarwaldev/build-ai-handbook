@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>1. How to read this book &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Start here &middot; Chapter 1</p>
+<h1>How to read this book</h1>
+<p class="lead">What the five parts cover, what the boxes, widgets and checklists mean, how the book keeps your progress, how to ask an AI about a passage, and how to keep the book correct when you change it.</p>
+
+<h2 id="shape">The shape of the book</h2>
+<p>The book climbs a ladder. Each rung uses only what the rungs below it taught, and the labs in Part V let you build what the rungs describe.</p>
+<div class="tbl-wrap"><table>
+<tr><th>Part</th><th>What you learn</th><th>You can skip it if</th></tr>
+<tr><td><a href="maths-functions.html">I. Maths</a></td><td>Functions, logs, vectors, matrices, derivatives, gradient descent, probability, statistics, softmax and entropy. Everything later needs these.</td><td>You are comfortable with calculus and probability. Try each chapter's self-check to be sure.</td></tr>
+<tr><td><a href="ml-learning.html">II. ML foundations</a></td><td>What it means for a program to learn from data, how neural networks train, and the history of the problems that shaped them. Ends with a network you train yourself.</td><td>You have trained a neural network before.</td></tr>
+<tr><td><a href="llm-tokens.html">III. How LLMs work</a></td><td>Tokens, embeddings, attention, the transformer and how large language models are trained and tuned. Ends with a tiny language model you train yourself.</td><td>You know how a transformer works inside.</td></tr>
+<tr><td><a href="prompt-engineering.html">IV. Applied concepts</a></td><td>The building blocks of an AI application: prompts, context, retrieval, tools, agents, MCP, guardrails, security, hallucination, memory, frameworks, quantisation, fine-tuning, production, evaluation and observability.</td><td>Never: these are the ideas the labs put to work.</td></tr>
+<tr><td><a href="lab-setup.html">V. Build it</a></td><td>Eleven labs in Python. You make a model call, test prompts, build retrieval with citations and measure it, write an agent and an MCP server, add guardrails, a judge and tracing, and put them together.</td><td>Never, if you want hands-on experience: this is the point of the book.</td></tr>
+</table></div>
+<p>The cover gives three <a href="index.html#reading-paths">reading paths</a>: <b>Build now</b> starts with the labs and dips into the concepts each one needs, <b>Foundations</b> reads Parts I to III in order, and <b>Shipping</b> covers running AI that other people rely on.</p>
+
+<h2 id="conventions">Conventions</h2>
+<h3 id="citing-code">How the book names files</h3>
+<p>A file path looks like <code class="path">labs/03-rag/rag.py</code>. Paths are relative to the book's own folder, the one that holds <code class="path">index.html</code>. When a function or class matters, the book names it too. It never cites line numbers: they change with every edit, and a wrong line number is worse than none. To find a name, search the file for it.</p>
+
+<h3 id="boxes">The boxes</h3>
+<div class="callout why"><span class="title">Why it matters</span><p>Explains the problem an idea solves. If you remember only one thing from a section, remember this.</p></div>
+<div class="callout warn"><span class="title">Careful</span><p>A common mistake, or a rule that must not be broken.</p></div>
+<div class="callout note"><span class="title">Note</span><p>A side remark that helps but is not essential.</p></div>
+<div class="callout build"><span class="title">Build it</span><p>Sends you to the lab where you build the idea yourself. For example, <a href="lab-setup.html">Lab 0</a> sets up Python and a model backend for every other lab.</p></div>
+
+<h3 id="maths-style">How the maths is written</h3>
+<p>Every formula comes after a worked example with real numbers, so you see the arithmetic before the symbols. Formulas are written in plain HTML, like this one for the average of three numbers:</p>
+<div class="formula">mean = <span class="frac"><span>2 + 4 + 9</span><span>3</span></span> = <span class="frac"><span>15</span><span>3</span></span> = 5
+<span class="cap">Numbers first.</span></div>
+<div class="formula"><var>&mu;</var> = <span class="frac"><span>1</span><span><var>n</var></span></span> <span class="big">&Sigma;</span><sub><var>i</var>=1</sub><sup><var>n</var></sup> <var>x</var><sub><var>i</var></sub>
+<span class="cap">Then the symbols: &mu; (the Greek letter mu) is the mean, &Sigma; means "add up", and x<sub>i</sub> is the i-th number.</span></div>
+<p>The maths chapters end each idea with a <b>Try it</b> exercise. The answer sits in a box that opens on click. Work it out first; that is where the learning happens.</p>
+
+<h3 id="widgets">Interactive widgets</h3>
+<p>Widgets are labelled <span class="pill">Try it</span>. They run in your browser, use no network, and send nothing anywhere. Some use toy data, which the widget says plainly: a widget about embeddings, for example, uses vectors of six hand-picked numbers, not the hundreds of numbers a real embedding model produces. The ideas are the same; only the size differs.</p>
+
+<h3 id="selfchecks">Self-checks</h3>
+<p>Each chapter ends with three or four questions. Answer in your head, then click a question to see its answer. The progress page counts the answers you have opened, so you can see which chapters you checked yourself on.</p>
+<details><summary>Example: why does the book show numbers before symbols?</summary><div><p>Because a formula is a summary of arithmetic you have already done. Seeing the arithmetic first makes each symbol name something you have met.</p></div></details>
+
+<h2 id="progress">Checklists and your progress</h2>
+<p>The book keeps a record of your reading and building, so you can stop and pick up where you left off. There is no account and nothing leaves your computer.</p>
+<ul>
+<li><b>Checklists.</b> Each lab lists its steps as a checklist. Tick a step when you have done it and seen the result the lab describes. When every step on a page is ticked, the page is marked done for you; the message that says so has an <b>Undo</b> button.</li>
+<li><b>Done.</b> Every chapter and lab has a <b>Mark this chapter done</b> box above its previous and next links. Tick it when you have finished; it shows the date. Untick it to take it back.</li>
+<li><b>My notes.</b> Beside it is a notes box for that page. It saves as you type.</li>
+<li><b>The sidebar</b> shows a tick beside pages you have finished, a dot beside pages you have opened but not finished, and done/total for each part. The progress link in the top bar shows the percentage of chapters and labs done.</li>
+<li><a href="progress.html"><b>Your progress</b></a> shows it all: where to continue, each part and lab, recent activity, your notes and the self-check answers you opened.</li>
+</ul>
+<p>Progress is stored in this browser, in its IndexedDB storage (or its local storage if IndexedDB is not available). Clearing the site's data deletes it, and another browser or device starts empty. To back it up or move it, use <b>Export</b> on the progress page, then <b>Import</b> on the other side: an import merges, keeping the newer record wherever both sides have one.</p>
+<div class="callout warn"><span class="title">Careful</span><p>Opened straight from disk, the book keeps progress in Chrome and Edge, but Firefox and Safari may refuse storage for such pages or keep each page separately. If your ticks do not survive a reload, or every page shows a notice that progress is not being saved, serve the book instead: run <code>python3 tools/serve.py</code> in the book's folder and open <code>http://127.0.0.1:8765/</code>. Progress belongs to the address, so the book from disk and the book from the server keep separate records; export from one and import into the other to join them.</p></div>
+
+<h2 id="ask-ai">Ask AI about any passage</h2>
+<p>Select some text on any page and an <b>Ask AI</b> button appears beside it. It opens a small panel with your selection, the chapter title and a box for your question. Only those three things are ever sent anywhere: the book's own text and what you type.</p>
+<h3 id="ask-ai-default">The default: Claude in a new tab</h3>
+<p>The panel builds one prompt from the chapter title, the selection (trimmed to 1,500 characters) and your question, and offers three ways to use it:</p>
+<ul>
+<li><b>Copy prompt</b>, the reliable way: it copies the prompt and opens a new Claude chat in a new tab, and you paste it there.</li>
+<li><b>Open in Claude</b> opens <code>claude.ai/new</code> with the prompt passed in the address as <code>?q=</code>. Anthropic does not document this link, so the box may arrive empty or the behaviour may change; if it does, use Copy prompt.</li>
+<li><b>Open in Claude Desktop</b> uses the desktop app's documented link, <code>claude://claude.ai/new?q=</code>, which fills the prompt in for you to read and send. It needs the Claude desktop app installed.</li>
+</ul>
+<p>You need to be signed in to Claude. Nothing else is needed: no key and no server.</p>
+<h3 id="ask-ai-helper">Optional: serve the book, with answers inside the page</h3>
+<p><code class="path">tools/serve.py</code> serves the book on your own machine. It uses only the Python standard library. Without a key it simply serves the book, which also makes progress tracking work in every browser. With your own Anthropic key it answers Ask AI questions inside the panel.</p>
+<pre><code>python3 tools/serve.py                      # serve the book
+export ANTHROPIC_API_KEY=...                # optional: your own key; never write it into a file here
+python3 tools/serve.py --port 8765 --cap 50 --model claude-haiku-5-5
+# then open http://127.0.0.1:8765/</code></pre>
+<ul>
+<li>It listens on <code>127.0.0.1</code> only. It serves files from the book's folder and only of these kinds: HTML, CSS, JavaScript, SVG, PNG, JPEG, WOFF2, JSON, text, Markdown and Python. Any path with a part that starts with a dot, such as <code>.git</code> or <code>.env</code>, is refused, and so are folder listings.</li>
+<li>The panel shows an <b>Ask here</b> button when the page is served by the helper and a key is set. The page calls the helper's own <code>/ask</code> route, which calls the Anthropic Messages API with the model <code>claude-haiku-5-5</code> (change it with <code>--model</code>) and a limit of 2,048 output tokens. Current Claude models think before they answer and the thinking counts toward that limit, which is why it is not smaller. The helper shows only the text of the answer.</li>
+<li>The key is read from the <code>ANTHROPIC_API_KEY</code> environment variable. It never reaches the page and is never printed or logged.</li>
+<li>Every request must carry the helper's own address as its Host, and <code>/ask</code> must also come from the helper's own origin. A request from any other site is refused, and there are no CORS headers.</li>
+<li>Each run allows at most <code>--cap</code> questions (50 by default). The panel shows how many are left.</li>
+<li>Without a key, <code>/ask</code> answers "no API key set" and the panel offers the three buttons of the default mode instead.</li>
+</ul>
+<div class="callout warn"><span class="title">Careful</span><p>Answers in the page use your own Anthropic key and cost a little each, as any API call does. The cap keeps a run's cost small; restart the helper to reset it.</p></div>
+
+<h2 id="labs">Running the labs</h2>
+<p>The labs in <code class="path">labs/</code> are small Python programs with tests. <a href="lab-setup.html">Lab 0</a> walks through the setup; in short:</p>
+<pre><code>python3 -m venv .venv
+source .venv/bin/activate              # on Windows: .venv\Scripts\activate
+pip install -r labs/requirements.txt
+python labs/01-first-call/first_call.py "Say hello in five words"
+cd labs &amp;&amp; python -m pytest           # every lab's tests, offline</code></pre>
+<ul>
+<li>Python 3.10 or newer. The numbered labs need only <code>anthropic</code>, <code>numpy</code> and <code>pytest</code>; the projects in chapters 15, 20, 30 and 41 list their own extras in their folders.</li>
+<li>The environment variable <code>LLM_BACKEND</code> picks who answers: <code>anthropic</code> (Claude, with your <code>ANTHROPIC_API_KEY</code>), <code>ollama</code> (a free model running on your computer) or <code>fake</code> (a scripted stand-in that needs nothing). The tests always use the fake backend, so they cost nothing and need no network.</li>
+<li>Every lab page says what a run costs on Claude and how that was worked out. Ollama and the fake backend cost nothing.</li>
+</ul>
+
+<h2 id="keeping-current">Keeping this book current</h2>
+<p>The book is plain HTML, CSS and JavaScript, with helper scripts in <code class="path">tools/</code>. Each runs with plain <code>python3</code> and needs nothing installed.</p>
+<div class="tbl-wrap"><table>
+<tr><th>Script</th><th>What it does</th><th>Run it when</th></tr>
+<tr><td><code class="path">tools/build_search_index.py</code></td><td>Reads every page's headings, the glossary and the lab checklists into <code class="path">assets/search-index.js</code>, which the search box, the glossary hover and the progress page use. <code>--check</code> only reports whether the file is stale.</td><td>After you add a page, a heading, a checklist item or a glossary entry.</td></tr>
+<tr><td><code class="path">tools/check_links.py</code></td><td>Checks that every internal link points at a file that exists, and at an <code>id</code> that exists in it.</td><td>Before every commit.</td></tr>
+<tr><td><code class="path">tools/check_book.py</code></td><td>Checks the book's structure: every page is in the contents list and loads the shared files, titles follow the pattern, heading ids are unique, checklist ids are unique and named after their page, callouts use the four kinds above, and every path in a <code>code class="path"</code> under <code class="path">labs/</code> exists.</td><td>Before every commit.</td></tr>
+<tr><td><code class="path">tools/serve.py</code></td><td>Optional: serves the book on 127.0.0.1, with in-page Ask AI answers if you set a key (see <a href="#ask-ai-helper">above</a>).</td><td>When you want reliable progress tracking or answers inside the page.</td></tr>
+<tr><td><code class="path">tools/tests/</code></td><td>Tests for the progress tracker's logic, run with <code>node --test tools/tests/*.test.js</code>.</td><td>After you change <code class="path">assets/progress.js</code>.</td></tr>
+</table></div>
+<pre><code>python3 tools/build_search_index.py
+python3 tools/check_links.py
+python3 tools/check_book.py
+node --test tools/tests/*.test.js
+cd labs &amp;&amp; python -m pytest</code></pre>
+<p>The repository's continuous integration runs the same checks, and the lab tests, on every push and pull request.</p>
+
+<h3 id="add-a-page">Adding a page</h3>
+<ol>
+<li>Copy an existing page, such as this one, and change its title, kicker and body. Keep the <code>head</code>, the sidebar <code>nav</code> and the pager <code>nav</code> as they are. The title ends with <code>&amp;middot; Build AI handbook</code>.</li>
+<li>Add the page to the <code>BOOK</code> list at the top of <code class="path">assets/handbook.js</code>, on one line like its neighbours. The sidebar, the previous and next links, the search and the progress tracker all follow that list.</li>
+<li>Add a card for it to the contents on <code class="path">index.html</code>.</li>
+<li>Give every <code>h2</code> and <code>h3</code> an <code>id</code>, so search can link to it.</li>
+<li>For a lab, end its steps with <code>&lt;ul class="checklist"&gt;</code>, one <code>&lt;li data-check="page-name:step"&gt;</code> per step, where <code>page-name</code> is the file name without <code>.html</code>.</li>
+<li>Run the search index, the link check and the book check.</li>
+</ol>
+<p>Widgets live in <code class="path">assets/widgets/</code>, one file per widget, each loaded only by the pages that use it. They use the small helpers in <code class="path">assets/handbook.js</code> (<code>HB.el</code>, <code>HB.svg</code>, <code>HB.fmt</code>) and read colours from the CSS variables, so they follow the light and dark themes.</p>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why does the book never cite line numbers?</summary><div><p>Line numbers change with every edit above them, so they go stale quickly and send readers to the wrong place. A file and a function name stay correct much longer, and a search finds them.</p></div></details>
+<details><summary>You add a new chapter file. What else must change for it to appear in the sidebar?</summary><div><p>The <code>BOOK</code> list in <code class="path">assets/handbook.js</code>. Then add a card to the contents in <code class="path">index.html</code>, and rerun <code class="path">tools/build_search_index.py</code> so search finds its headings.</p></div></details>
+<details><summary>You ticked steps in a lab, opened the book on another computer, and the ticks are gone. Why, and what do you do?</summary><div><p>Progress lives only in the browser where you made it. Export it from the progress page on the first computer and import the file on the second; the import keeps the newer record wherever both have one.</p></div></details>
+<details><summary>A widget shows six-number vectors for embeddings. Is that what real systems use?</summary><div><p>No. Real embedding models produce hundreds or thousands of numbers per text. The widget uses six so you can read every number; the maths is identical.</p></div></details>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

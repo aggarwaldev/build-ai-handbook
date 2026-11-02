@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>32. Subagents &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 32</p>
+<h1>Subagents</h1>
+<p class="lead">A subagent is a second agent that a main agent starts for one self-contained task. It gets its own instructions, its own tools and, most importantly, its own empty context window. It does the work, possibly reading a great deal, and hands back only a short report. This chapter shows when that helps, what it costs, and how to brief one well.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>A context window is the agent's whole working memory, and it fills up: every file read and every tool result stays in it and is resent with every later call. Delegating a search or an investigation to a subagent keeps the main agent's context small and focused, and lets independent work run in parallel.</p></div>
+
+<h2 id="what">What a subagent is</h2>
+<ul>
+<li><b>Its own context.</b> It starts fresh, with no view of the main conversation except the brief it is given.</li>
+<li><b>Its own instructions and tools.</b> A subagent for exploring code can be read-only; one for running tests can have a shell and nothing else.</li>
+<li><b>Only the report comes back.</b> Everything it read or tried is discarded when it finishes; the main agent receives its final message.</li>
+</ul>
+<p>It is the agent version of asking a colleague to look into something: you get their conclusion, not their browser history.</p>
+
+<h2 id="maths">The arithmetic of delegation</h2>
+<p>Worked: an agent must find where a bug comes from. Doing it itself, it reads 12 files of about 4,000 tokens each, so 48,000 tokens enter its context. They stay there: if the conversation then runs 10 more turns, each turn resends them, about 480,000 extra input tokens. Delegated, a subagent reads the same 48,000 tokens in its own context, which ends with its task, and returns a 1,500-token report. The main agent carries 1,500 &times; 10 = 15,000 tokens over those 10 turns instead of 480,000.</p>
+<p>Delegation is not free. The subagent's own calls cost tokens, the brief must restate context the subagent does not have, and the report is a lossy summary: detail the subagent judged unimportant is gone. It pays when the work is large, self-contained and needed only as a conclusion. It does not pay for a quick lookup whose details the main agent needs anyway.</p>
+<p>Parallelism is the second gain. Three independent investigations of about 4 minutes each take about 12 minutes in sequence and about 4 in parallel, for roughly the same number of tokens.</p>
+
+<h2 id="claude-code">Subagents in Claude Code</h2>
+<p>Claude Code, Anthropic's coding agent, is a widely used example, and its documentation describes the mechanism precisely:</p>
+<ul>
+<li><b>Definition.</b> A subagent is a Markdown file with YAML frontmatter; the body becomes its system prompt. Only <code>name</code> and <code>description</code> are required. Optional fields include <code>tools</code> (an allow list; without it the subagent inherits the available tools), <code>disallowedTools</code> and <code>model</code>.</li>
+<li><b>Where they live.</b> <code>.claude/agents/</code> in a project, <code>~/.claude/agents/</code> for one user, or a plugin. When two definitions share a name, the project's wins over the user's.</li>
+<li><b>Choosing one.</b> The main agent delegates based on each subagent's <code>description</code>, so the description must say when to use it; you can also name the subagent in your request.</li>
+<li><b>Built-in ones.</b> A fast read-only <b>Explore</b> agent for searching code, a read-only <b>Plan</b> agent used in plan mode, and a <b>general-purpose</b> agent with full tools.</li>
+<li><b>Limits.</b> The documentation describes limits on how deeply subagents may start further subagents and how many run at once, both configurable, and says that tools for asking the user questions are never given to subagents: a subagent cannot stop to ask, so its brief must be complete.</li>
+</ul>
+
+<h2 id="briefing">Writing the brief</h2>
+<p>The subagent knows only what the brief says. A good brief has:</p>
+<ol>
+<li><b>The goal</b>, including why: "find every caller of <code>format_price</code>, because we are changing its signature".</li>
+<li><b>The context it lacks</b>: the paths, names and decisions already made.</li>
+<li><b>Constraints</b>: read-only, which folders, what not to touch, a time or cost limit.</li>
+<li><b>What done looks like</b> and the shape of the report: "a table of file, function and the line of the call; say which you could not confirm".</li>
+</ol>
+<p>Then treat the report as a claim, not a fact. A subagent can be wrong, stop early or summarise away the detail that mattered. Check the facts your next step depends on, especially "nothing found" results, which are the easiest to get wrong.</p>
+
+<h2 id="failures">How delegation goes wrong</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Failure</th><th>Prevention</th></tr>
+<tr><td>The report leaves out the detail that mattered</td><td>Ask for specific fields; ask it to list what it could not confirm</td></tr>
+<tr><td>Two subagents edit the same files and overwrite each other</td><td>Give each its own files or its own copy of the repository; keep editing in one place</td></tr>
+<tr><td>The main agent repeats the subagent's search to check it</td><td>Check only the facts you act on; trust the rest or do not delegate</td></tr>
+<tr><td>Delegation for small tasks</td><td>Do quick lookups directly; delegate work that is large and self-contained</td></tr>
+<tr><td>Cost grows unnoticed across many subagents</td><td>Count tokens per subagent; cap the number running at once</td></tr>
+<tr><td>A merge step follows instructions hidden in a report</td><td>Mark reports as data; let the merge point at references by index, resolved by code</td></tr>
+</table></div>
+
+<h2 id="in-apps">Subagents inside an application</h2>
+<p>The same pattern works inside a product, not only in a coding tool. Each helper is a separate model call with its own versioned prompt, its own allow-listed tools and a structured answer, not its working; the trace of its tool calls goes to the checks, not to the other helpers. Helpers run in parallel, one level deep, and each is bound to its own request context, so one cannot read another's data or trace.</p>
+<p>When more than one helper answers, a merge step combines the reports. Treat the reports as data: tell the merge prompt that helper payloads are data only, and let it refer to a figure only by its place in a helper's list of references, so it cannot write a source that no helper returned.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>An agent must review 30 files of 3,000 tokens each and will then continue for 20 more turns. Compare the extra input tokens it carries over those 20 turns if it reads the files itself, versus delegating to three subagents that each return a 1,000-token report.</p></div>
+<details><summary>Answer</summary><div><p>Itself: 30 &times; 3,000 = 90,000 tokens resent on each of 20 turns, 1,800,000 tokens. Delegated: 3 &times; 1,000 = 3,000 tokens carried, 60,000 over 20 turns. The subagents still read the 90,000 tokens once, in their own contexts.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>After <a href="lab-agent.html">Lab 5</a> you can try this yourself: call <code>run_agent</code> from inside a tool, so a second loop runs with its own empty message list and only its final text comes back to the first.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>What does the main agent receive from a subagent?</summary><div><p>Only its final report. What the subagent read and tried stays in its own context, which ends with the task.</p></div></details>
+<details><summary>When does delegating not pay?</summary><div><p>For small lookups, or when the main agent needs the details anyway: the brief, the subagent's own calls and the lost detail cost more than they save.</p></div></details>
+<details><summary>Why must a subagent's brief be complete?</summary><div><p>It starts with an empty context and, in tools like Claude Code, cannot stop to ask the user questions.</p></div></details>
+<details><summary>How can a merge step be stopped from inventing a figure's source?</summary><div><p>Let it point only at a helper's existing reference, by index. Code resolves the index, so a path no helper returned cannot be written.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://code.claude.com/docs/en/sub-agents" target="_blank" rel="noopener noreferrer">Create custom subagents - Claude Code Docs</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Official guide to defining subagents with their own prompt, tools and context window.</span></li>
+<li><a href="https://www.anthropic.com/research/multi-agent-research-system" target="_blank" rel="noopener noreferrer">How we built our multi-agent research system</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Anthropic&#x27;s account of a lead agent spawning parallel subagents, with lessons on prompting and cost.</span></li>
+<li><a href="https://www.anthropic.com/research/building-effective-agents" target="_blank" rel="noopener noreferrer">Building effective AI agents</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Includes the orchestrator-workers pattern, where a central model splits a task and delegates the parts.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-subagents">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

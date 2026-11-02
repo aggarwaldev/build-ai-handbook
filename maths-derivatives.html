@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>5. Derivatives and gradients &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part I &middot; Maths &middot; Chapter 5</p>
+<h1>Derivatives and gradients</h1>
+<p class="lead">A derivative is the slope of a curve at one point: how fast the output changes when you nudge the input. Training a model is nothing more than following derivatives downhill, so this is the most important chapter of Part I.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Every model in Part II and Part III learns by asking, for each of its parameters, "if I nudge this number up a little, does the error go up or down, and by how much?" That question is a derivative. The chain rule lets a computer answer it for billions of parameters at once; the answer is called the gradient.</p></div>
+
+<h2 id="slope-of-curve">The slope of a curve</h2>
+<p>A straight line has one slope everywhere (<a href="maths-functions.html#lines">chapter 2</a>). A curve like <span class="math"><var>f</var>(<var>x</var>) = <var>x</var><sup>2</sup></span> is steeper in some places than others. To find its slope at <var>x</var> = 3, take a second point a small gap <var>h</var> to the right and compute rise over run, then shrink the gap:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>gap h</th><th>f(3 + h)</th><th>rise = f(3 + h) &minus; 9</th><th>rise / h</th></tr>
+<tr><td class="num">1</td><td class="num">16</td><td class="num">7</td><td class="num">7</td></tr>
+<tr><td class="num">0.1</td><td class="num">9.61</td><td class="num">0.61</td><td class="num">6.1</td></tr>
+<tr><td class="num">0.01</td><td class="num">9.0601</td><td class="num">0.0601</td><td class="num">6.01</td></tr>
+<tr><td class="num">0.001</td><td class="num">9.006001</td><td class="num">0.006001</td><td class="num">6.001</td></tr>
+</table></div>
+<p>The answers close in on 6. That limit is the <a class="g" href="glossary.html#derivative">derivative</a> of <var>x</var><sup>2</sup> at 3. The line through the point with that slope just touches the curve; it is called the <b>tangent</b>.</p>
+<div class="formula"><var>f</var>&prime;(<var>x</var>) = limit as <var>h</var> &rarr; 0 of <span class="frac"><span><var>f</var>(<var>x</var> + <var>h</var>) &minus; <var>f</var>(<var>x</var>)</span><span><var>h</var></span></span><span class="cap">Read f&prime; as "f prime". Another notation is df/dx: "the change in f per change in x".</span></div>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Tangent-line slider</h4></div>
+<p class="hint">Slide x along the curve. Then shrink the gap h and watch the dashed line through two points turn into the solid tangent. Try the sigmoid: its slope is never more than 0.25, which matters in <a href="ml-history.html#vanishing">chapter 14</a>.</p>
+<div id="w-tangent"></div>
+</div>
+
+<h2 id="rules">Rules that save the limit</h2>
+<p>Nobody computes limits by hand every time. A handful of rules cover everything in this book:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Function</th><th>Derivative</th><th>Worked check</th></tr>
+<tr><td>a constant, <var>c</var></td><td>0</td><td>A flat line has no slope.</td></tr>
+<tr><td><var>x</var><sup><var>n</var></sup> (power rule)</td><td><var>n</var><var>x</var><sup><var>n</var>&minus;1</sup></td><td><var>x</var><sup>2</sup> &rarr; 2<var>x</var>, which is 6 at <var>x</var> = 3, as the table found.</td></tr>
+<tr><td><var>c</var> &times; <var>f</var>(<var>x</var>)</td><td><var>c</var> &times; <var>f</var>&prime;(<var>x</var>)</td><td>5<var>x</var><sup>2</sup> &rarr; 10<var>x</var>.</td></tr>
+<tr><td><var>f</var>(<var>x</var>) + <var>g</var>(<var>x</var>)</td><td><var>f</var>&prime;(<var>x</var>) + <var>g</var>&prime;(<var>x</var>)</td><td><var>x</var><sup>3</sup> &minus; 3<var>x</var> &rarr; 3<var>x</var><sup>2</sup> &minus; 3.</td></tr>
+<tr><td><var>e</var><sup><var>x</var></sup></td><td><var>e</var><sup><var>x</var></sup></td><td>The slope equals the height (<a href="maths-exp-log.html#e">chapter 3</a>).</td></tr>
+<tr><td>ln <var>x</var></td><td>1 / <var>x</var></td><td>At <var>x</var> = 0.5 the slope is 2: small probabilities make ln change fast.</td></tr>
+<tr><td>sigmoid &sigma;(<var>x</var>) = 1 / (1 + <var>e</var><sup>&minus;<var>x</var></sup>)</td><td>&sigma;(<var>x</var>)(1 &minus; &sigma;(<var>x</var>))</td><td>At 0: 0.5 &times; 0.5 = 0.25, the largest it ever gets.</td></tr>
+</table></div>
+<p>Where the derivative is zero the curve is flat: at the bottom of a valley, the top of a hill, or a plateau. For <var>x</var><sup>3</sup> &minus; 3<var>x</var>, 3<var>x</var><sup>2</sup> &minus; 3 = 0 at <var>x</var> = 1 (a valley) and <var>x</var> = &minus;1 (a hill).</p>
+<div class="callout note"><span class="title">Try it</span><p>Find the derivative of <span class="math">4<var>x</var><sup>3</sup> + 2<var>x</var> &minus; 7</span>, and its value at <var>x</var> = 1.</p></div>
+<details><summary>Answer</summary><div><p>12<var>x</var><sup>2</sup> + 2. At <var>x</var> = 1 it is 14.</p></div></details>
+
+<h2 id="chain-rule">The chain rule</h2>
+<p>A neural network is a chain of functions (<a href="maths-functions.html#curves">chapter 2</a>). The <a class="g" href="glossary.html#chain-rule">chain rule</a> says how slopes pass along a chain: multiply the slope of each link.</p>
+<p>Worked example. Let <span class="math"><var>h</var>(<var>x</var>) = (2<var>x</var> + 1)<sup>2</sup></span>. Split it: the inner link is <span class="math"><var>u</var> = 2<var>x</var> + 1</span> and the outer link is <span class="math"><var>u</var><sup>2</sup></span>. At <var>x</var> = 1:</p>
+<ol>
+<li>Inner value: <var>u</var> = 3. Inner slope: d<var>u</var>/d<var>x</var> = 2.</li>
+<li>Outer slope at <var>u</var> = 3: 2<var>u</var> = 6.</li>
+<li>Multiply: 6 &times; 2 = 12.</li>
+</ol>
+<p>Check with a small nudge: <var>h</var>(1.001) = 3.002<sup>2</sup> = 9.012004, and (9.012004 &minus; 9) / 0.001 = 12.004. It agrees. Intuition: the inner link doubles any nudge to <var>x</var>, and the outer link multiplies a nudge to <var>u</var> by 6, so the whole chain multiplies it by 12.</p>
+<div class="formula"><span class="frac"><span>d<var>h</var></span><span>d<var>x</var></span></span> = <span class="frac"><span>d<var>h</var></span><span>d<var>u</var></span></span> &times; <span class="frac"><span>d<var>u</var></span><span>d<var>x</var></span></span></div>
+<p>Longer chains just add more factors. A network with 50 layers has a chain of 50 links, and the slope of the error with respect to a weight in layer 1 is a product of about 50 factors. If many factors are small (like the sigmoid's 0.25 at best), the product shrinks towards zero: 0.25<sup>5</sup> &asymp; 0.001 and 0.25<sup>10</sup> &asymp; 0.000001. That is the <a class="g" href="glossary.html#vanishing-gradient">vanishing-gradient</a> problem of <a href="ml-history.html#vanishing">chapter 14</a>.</p>
+<div class="callout note"><span class="title">Try it</span><p>Find the slope of <span class="math"><var>e</var><sup>3<var>x</var></sup></span> at <var>x</var> = 0.</p></div>
+<details><summary>Answer</summary><div><p>Inner u = 3x has slope 3. Outer e<sup>u</sup> has slope e<sup>u</sup>, which at u = 0 is 1. Product: 3.</p></div></details>
+
+<h2 id="partials">Several inputs: partial derivatives</h2>
+<p>When a function has several inputs, nudge one at a time and hold the others still. That gives a <a class="g" href="glossary.html#partial-derivative">partial derivative</a>, written with a curly &part;.</p>
+<p>Worked example: <span class="math"><var>f</var>(<var>x</var>, <var>y</var>) = <var>x</var><sup>2</sup><var>y</var> + 3<var>y</var></span> at (1, 2).</p>
+<ul>
+<li>Treat <var>y</var> as a constant: &part;<var>f</var>/&part;<var>x</var> = 2<var>x</var><var>y</var> = 2 &times; 1 &times; 2 = 4.</li>
+<li>Treat <var>x</var> as a constant: &part;<var>f</var>/&part;<var>y</var> = <var>x</var><sup>2</sup> + 3 = 1 + 3 = 4.</li>
+</ul>
+
+<h3 id="gradient">The gradient</h3>
+<p>Collect all the partial derivatives into a vector and you have the <a class="g" href="glossary.html#gradient">gradient</a>, written &nabla;<var>f</var> ("del f"). For the example, &nabla;<var>f</var>(1, 2) = (4, 4).</p>
+<div class="formula">&nabla;<var>f</var> = ( &part;<var>f</var>/&part;<var>x</var><sub>1</sub>, &part;<var>f</var>/&part;<var>x</var><sub>2</sub>, &hellip;, &part;<var>f</var>/&part;<var>x</var><sub><var>n</var></sub> )<span class="cap">The gradient points in the direction where f rises fastest. Its negative points steepest downhill.</span></div>
+<p>Picture standing on a hillside in fog. You cannot see the valley, but you can feel which way the ground slopes under your feet. The gradient is that feeling, in as many dimensions as the function has inputs.</p>
+
+<h2 id="in-ai">In AI: the slope of the error</h2>
+<p>Here is the whole of Part II in miniature. A model predicts <span class="math"><var>w</var> &times; <var>x</var></span>. One training example has <var>x</var> = 2 and the right answer <var>y</var> = 6. The error, or <a class="g" href="glossary.html#loss">loss</a>, is the squared difference <span class="math"><var>L</var>(<var>w</var>) = (<var>w</var><var>x</var> &minus; <var>y</var>)<sup>2</sup></span>.</p>
+<ul>
+<li>At <var>w</var> = 1 the prediction is 2, the miss is 2 &minus; 6 = &minus;4, and the loss is 16.</li>
+<li>Chain rule: d<var>L</var>/d<var>w</var> = 2(<var>w</var><var>x</var> &minus; <var>y</var>) &times; <var>x</var> = 2 &times; (&minus;4) &times; 2 = &minus;16.</li>
+<li>The slope is negative, so increasing <var>w</var> lowers the loss. The right answer is <var>w</var> = 3, where the slope is 0.</li>
+</ul>
+<p>Real models have many parameters, so they need the whole gradient. <a class="g" href="glossary.html#backpropagation">Backpropagation</a> (<a href="ml-neural-networks.html">chapter 12</a>) is the chain rule applied from the loss backwards through every layer, reusing each link's slope so the whole gradient costs about as much as one extra pass through the network. Libraries such as PyTorch do this automatically ("autograd").</p>
+<div class="callout note"><span class="title">Try it</span><p>A model computes <span class="math"><var>a</var> = &sigma;(<var>w</var><var>x</var>)</span> and has loss <span class="math">(<var>a</var> &minus; 1)<sup>2</sup></span>. With <var>w</var> = 0.5 and <var>x</var> = 2, find d<var>L</var>/d<var>w</var>. You need &sigma;(1) = 0.7311.</p></div>
+<details><summary>Answer</summary><div><p>Three links. Loss: 2(a &minus; 1) = 2 &times; (&minus;0.2689) = &minus;0.5378. Sigmoid: a(1 &minus; a) = 0.7311 &times; 0.2689 = 0.1966. Inside: d(wx)/dw = x = 2. Product: &minus;0.5378 &times; 0.1966 &times; 2 = &minus;0.2115. Negative, so raising w lowers the loss. A numerical nudge gives the same &minus;0.2115.</p></div></details>
+
+<p>Most people who build on hosted models never take a derivative in their own code. Every model they call was trained elsewhere with exactly this maths. Knowing how those models learned still helps, because it explains how they fail (<a href="hallucination.html">chapter 36</a>).</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="project-neural-net.html">chapter 15</a> you write backpropagation yourself in NumPy and check every gradient against a numerical slope.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>What does a derivative of zero tell you about a curve at that point?</summary><div><p>The curve is flat there: it could be the bottom of a valley, the top of a hill or a flat stretch. Training looks for valleys of the loss.</p></div></details>
+<details><summary>Using the chain rule, what is the derivative of (3x &minus; 2)<sup>2</sup>?</summary><div><p>Outer 2u times inner 3: 2(3x &minus; 2) &times; 3 = 6(3x &minus; 2).</p></div></details>
+<details><summary>What is the gradient of f(x, y) = 3x + 5y?</summary><div><p>(3, 5). Each partial derivative is a constant because the function is a flat plane.</p></div></details>
+<details><summary>Why do long chains of sigmoids make learning slow?</summary><div><p>The chain rule multiplies one slope per link, and the sigmoid's slope is at most 0.25. Many such factors multiply to a number near zero, so early layers barely change.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/playlist?list=PLZHQObOWTQDMsr9K-rj53DwVRMYO3t5Yr" target="_blank" rel="noopener noreferrer">Essence of calculus (3Blue1Brown playlist)</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Visual introduction to derivatives as rates of change, building intuition before any formula work.</span></li>
+<li><a href="https://www.youtube.com/watch?v=YG15m2VwSjA" target="_blank" rel="noopener noreferrer">Visualizing the chain rule and product rule | Chapter 4, Essence of calculus</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Makes the chain rule concrete with nudges flowing through nested functions, the core of backpropagation.</span></li>
+<li><a href="https://www.khanacademy.org/math/multivariable-calculus" target="_blank" rel="noopener noreferrer">Multivariable calculus (Khan Academy)</a> <span class="pill">video</span> <span class="pill">intermediate</span><br><span class="res-note">Course whose derivatives unit covers partial derivatives and gradients for functions of many inputs.</span></li>
+<li><a href="https://www.khanacademy.org/math/multivariable-calculus/multivariable-derivatives/partial-derivative-and-gradient-articles/a/the-gradient" target="_blank" rel="noopener noreferrer">The gradient vector (Khan Academy article)</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Defines the gradient as the vector of partial derivatives with worked 2D and 3D examples.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-maths-derivatives">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/tangent.js"></script>
+</body>
+</html>

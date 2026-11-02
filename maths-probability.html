@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>7. Probability and Bayes &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part I &middot; Maths &middot; Chapter 7</p>
+<h1>Probability and Bayes</h1>
+<p class="lead">Probability puts a number on uncertainty. A language model's output is a probability for every possible next token, and every safety check in an AI system is judged by conditional probabilities. Bayes' rule ties them together.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>A guardrail that is "95% accurate" can still be wrong most of the times it fires. Whether it is depends on how rare the thing it looks for is. This chapter gives you the arithmetic to see that coming, and the vocabulary (distribution, conditional probability, expected value) that the rest of the book uses without stopping.</p></div>
+
+<h2 id="basics">Probability as a fraction</h2>
+<p>A fair die has six equally likely faces. The <a class="g" href="glossary.html#probability">probability</a> of rolling a 4 is 1 out of 6, written P(4) = 1/6 &asymp; 0.167. The probability of an even number is 3/6 = 0.5. In general:</p>
+<div class="formula">P(event) = <span class="frac"><span>number of outcomes where it happens</span><span>number of equally likely outcomes</span></span></div>
+<ul>
+<li>Every probability is between 0 (never) and 1 (certain).</li>
+<li>The probabilities of all possible outcomes add up to exactly 1.</li>
+<li>The <b>complement</b>: P(not A) = 1 &minus; P(A). P(not a 4) = 5/6.</li>
+</ul>
+
+<h3 id="and-or">"And" and "or"</h3>
+<p>If two events do not affect each other (they are <b>independent</b>), the chance of both is the product. Two dice both showing 6: 1/6 &times; 1/6 = 1/36 &asymp; 0.028.</p>
+<p>The chance of one or the other adds, minus the overlap you counted twice. Drawing a card that is a heart or a king: 13/52 + 4/52 &minus; 1/52 = 16/52 &asymp; 0.31. (The king of hearts is in both groups.)</p>
+<div class="callout note"><span class="title">Try it</span><p>A system has three independent checks, each of which wrongly blocks a good message 2% of the time. What fraction of good messages get through all three?</p></div>
+<details><summary>Answer</summary><div><p>Each lets a good message through with probability 0.98. All three: 0.98<sup>3</sup> = 0.941. So about 5.9% of good messages are blocked somewhere. Small false-alarm rates add up when checks are stacked.</p></div></details>
+
+<h2 id="conditional">Conditional probability</h2>
+<p>Often we know something already and want to update. "The chance of A, given that B happened" is written P(A | B). Worked with a table of 1,000 chat messages:</p>
+<div class="tbl-wrap"><table>
+<tr><th></th><th class="num">asks about tax</th><th class="num">does not</th><th class="num">total</th></tr>
+<tr><th>mentions Spain</th><td class="num">60</td><td class="num">140</td><td class="num">200</td></tr>
+<tr><th>does not</th><td class="num">90</td><td class="num">710</td><td class="num">800</td></tr>
+<tr><th>total</th><td class="num">150</td><td class="num">850</td><td class="num">1,000</td></tr>
+</table></div>
+<ul>
+<li>P(tax) = 150 / 1,000 = 0.15.</li>
+<li>P(tax | mentions Spain): look only at the 200 messages that mention Spain. 60 of them ask about tax, so 60 / 200 = 0.30.</li>
+<li>P(mentions Spain | tax): look only at the 150 tax messages. 60 / 150 = 0.40. A different question, a different answer.</li>
+</ul>
+<div class="formula">P(<var>A</var> | <var>B</var>) = <span class="frac"><span>P(<var>A</var> and <var>B</var>)</span><span>P(<var>B</var>)</span></span><span class="cap">Here: P(tax and Spain) = 0.06, P(Spain) = 0.2, so 0.06 / 0.2 = 0.30.</span></div>
+
+<h2 id="bayes">Bayes' rule</h2>
+<p>Confusing P(A | B) with P(B | A) is the most common mistake in reasoning about tests, detectors and classifiers. <a class="g" href="glossary.html#bayes">Bayes' rule</a> converts one into the other:</p>
+<div class="formula">P(<var>A</var> | <var>B</var>) = <span class="frac"><span>P(<var>B</var> | <var>A</var>) &times; P(<var>A</var>)</span><span>P(<var>B</var>)</span></span><span class="cap">P(A) is the base rate, or prior: how common A is before you see any evidence.</span></div>
+
+<h3 id="detector">Worked: a detector for bad messages</h3>
+<p>Suppose 1% of messages are prompt-injection attempts. A detector catches 95% of them (its <b>recall</b>), and wrongly flags 5% of normal messages (its <b>false positive rate</b>). A message is flagged. How likely is it to be a real attack?</p>
+<p>Count it out with 10,000 messages:</p>
+<ol>
+<li>Attacks: 1% of 10,000 = 100. The detector flags 95 of them.</li>
+<li>Normal messages: 9,900. The detector wrongly flags 5% of them, which is 495.</li>
+<li>Flagged in total: 95 + 495 = 590.</li>
+<li>Real attacks among the flagged: 95 / 590 = 16.1%.</li>
+</ol>
+<p>So "95% accurate" turns out to mean "wrong five times out of six when it fires". Nothing is broken; the attacks are simply rare, so even a small false-alarm rate on the huge pile of normal messages outnumbers them. Bayes gives the same number in one line: 0.95 &times; 0.01 / (0.95 &times; 0.01 + 0.05 &times; 0.99) = 0.0095 / 0.059 = 0.161.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>1,000 messages through a checker</h4></div>
+<p class="hint">Each square is one message, so counts are rounded to whole messages. Raise the base rate and watch P(bad | flagged) climb; lower the false positive rate to 1% and see how much that helps compared with raising recall.</p>
+<div id="w-bayes"></div>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>Same detector (95% recall, 5% false positives), but now 20% of messages are attacks. What is P(attack | flagged)?</p></div>
+<details><summary>Answer</summary><div><p>Out of 1,000: 200 attacks, 190 flagged; 800 normal, 40 flagged. 190 / 230 = 82.6%. The detector did not change; the base rate did.</p></div></details>
+
+<h2 id="distributions">Distributions</h2>
+<p>A <a class="g" href="glossary.html#distribution">probability distribution</a> lists every possible outcome with its probability. A die's distribution gives 1/6 to each face. A language model, given "The capital of France is", produces a distribution over its whole vocabulary of tokens: perhaps " Paris" 0.92, " a" 0.02, " the" 0.01, and tiny amounts for tens of thousands of others. All of them add up to 1.</p>
+<p><b>Sampling</b> means drawing one outcome at random according to those probabilities. Over many draws, " Paris" comes up about 92% of the time. This is why a model can answer the same question differently twice; <a href="llm-tokens.html#sampling">chapter 16</a> shows how temperature reshapes the distribution before the draw.</p>
+
+<h3 id="expected-value">Expected value</h3>
+<p>The <b>expected value</b> is the probability-weighted average outcome. For a die: (1 + 2 + 3 + 4 + 5 + 6) / 6 = 3.5. For a bet that pays 100 with probability 0.1 and 0 otherwise: 0.1 &times; 100 + 0.9 &times; 0 = 10. You never roll a 3.5, but over many rolls the average approaches it. Training losses are expected values: the average loss over the distribution of training examples.</p>
+<div class="formula">E[<var>X</var>] = <span class="big">&Sigma;</span><sub><var>x</var></sub> <var>x</var> &times; P(<var>x</var>)</div>
+
+<h3 id="continuous">Continuous distributions</h3>
+<p>Heights, returns and measurement errors can take any value, not just a list. For those, a curve called a density says where values are likely, and probabilities are areas under the curve. The famous bell-shaped <b>normal distribution</b> is described by its mean and standard deviation (<a href="maths-statistics.html">chapter 8</a>). Neural networks start training with weights drawn from such a curve (<a href="ml-training-deep.html#init">chapter 13</a>).</p>
+
+<h2 id="in-ai">In AI</h2>
+<ul>
+<li>A classifier's output, such as "spam: 0.83", is meant to be a conditional probability: P(spam | this text). When those numbers match reality (of all messages scored 0.83, about 83% really are spam), the classifier is <b>calibrated</b>.</li>
+<li>A language model is a machine for P(next token | all the tokens so far). Its whole training objective is to make those conditional probabilities match real text (<a href="llm-training.html">chapter 19</a>).</li>
+<li>Every guardrail has a recall and a false positive rate, and the base rate of what it guards against decides how often its alarms are right.</li>
+</ul>
+
+<p>A personal-data scrubber is measured in exactly these two directions. A <i>planted set</i> holds messages with personal data placed at known positions, and measures recall: of every email, phone number and ID number planted, how many were caught? A <i>clean set</i> holds messages with no personal data, and counts false masks. A release check can then demand that every email and phone number is caught and fail on even one false mask.</p>
+<p>An intent filter that labels each question before the main model runs, turning abusive or off-topic questions away with a fixed reply, is judged the same way. If its labels come from a model, the same reasoning applies: if off-topic questions are rare in real traffic, a small rate of good questions wrongly labelled off-topic can outnumber the true catches.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-guardrails.html">Lab 7</a> you measure a guard&rsquo;s catch rate and its false positive rate on labelled data: the two numbers that, with a base rate, Bayes&rsquo; rule turns into how often a flag is real.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Is P(fever | flu) the same as P(flu | fever)?</summary><div><p>No. Most people with flu have a fever, but most people with a fever do not have flu, because many other things cause fevers. Bayes' rule connects the two through the base rates.</p></div></details>
+<details><summary>A detector has 99% recall and a 1% false positive rate. 1 in 1,000 messages is bad. Roughly what share of its flags are real?</summary><div><p>Out of 100,000: 100 bad, 99 flagged; 99,900 good, 999 flagged. 99 / 1,098 &asymp; 9%. Rare targets make even excellent detectors mostly raise false alarms.</p></div></details>
+<details><summary>Why does a scrubber's evaluation need both a planted set and a clean set?</summary><div><p>The planted set measures recall: how much real personal data is caught. The clean set measures false positives: how often harmless text is masked. A scrubber that masks everything would score perfectly on the first and terribly on the second.</p></div></details>
+<details><summary>What is the expected value of a game that pays 6 on a roll of 6 and costs 1 otherwise?</summary><div><p>(1/6) &times; 6 + (5/6) &times; (&minus;1) = 1 &minus; 0.833 = 0.167 per roll.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/watch?v=HZGCoVF3YvM" target="_blank" rel="noopener noreferrer">Bayes theorem, the geometry of changing beliefs</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Derives Bayes&#x27; rule from a picture of proportions, making updating on evidence feel obvious.</span></li>
+<li><a href="https://www.youtube.com/watch?v=_IgyaD7vOOA" target="_blank" rel="noopener noreferrer">Conditional Probabilities, Clearly Explained!!!</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Slow, friendly treatment of conditional probability, the piece most people trip on before Bayes.</span></li>
+<li><a href="https://seeing-theory.brown.edu/" target="_blank" rel="noopener noreferrer">Seeing Theory</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Interactive visual book on probability basics, distributions and Bayesian inference you can click through.</span></li>
+<li><a href="https://www.khanacademy.org/math/statistics-probability/probability-library" target="_blank" rel="noopener noreferrer">Probability (Khan Academy, Statistics and probability)</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Practice unit on sample spaces, addition and multiplication rules, and independence.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-maths-probability">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/bayes.js"></script>
+</body>
+</html>

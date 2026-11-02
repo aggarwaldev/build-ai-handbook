@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Build AI, from first principles to working code &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<div class="cover">
+<p class="kicker">Build AI handbook</p>
+<h1>Build AI, from first principles to working code</h1>
+<p class="lead">A free, hands-on book about how AI works and how to build with it. It starts from school algebra, explains how neural networks and language models learn, covers the ideas behind real AI applications, and has you build them yourself in eleven labs: a first model call, a prompt test bench, retrieval with citations, an agent, an MCP server, guardrails, a judge, tracing and a small assistant.</p>
+</div>
+
+<div class="callout note">
+<span class="title">Who this is for</span>
+<p>Anyone who wants hands-on experience building AI. You need no background in AI or advanced maths: Part I starts from equations you met at school and works every idea with real numbers before any symbols. For the labs you need to be able to run a Python script; Lab 0 sets up everything else. Each lab runs without an account or a key on a built-in fake model, on a free local model through Ollama, or on Claude with your own key.</p>
+</div>
+
+<h2 id="how-to-use">How to use this book</h2>
+<ul>
+<li><b>Open it from disk.</b> Double-click <code class="path">index.html</code>. There is no build step and no network access: every page, diagram and widget is plain HTML, CSS and JavaScript in this folder.</li>
+<li><b>Or serve it on your own machine.</b> Run <code>python3 tools/serve.py</code> in this folder and open <code>http://127.0.0.1:8765/</code>. Progress tracking then works in every browser, and with your own Anthropic key Ask AI can answer inside the page. <a href="reading.html#ask-ai-helper">Chapter 1</a> says what the server does and refuses.</li>
+<li><b>Navigation.</b> The contents are on the left (behind the menu button on a phone). Every page ends with previous and next links. Press <kbd>/</kbd> to search chapter titles, headings and glossary terms.</li>
+<li><b>Dotted words</b> are <a href="glossary.html">glossary</a> terms, like <a class="g" href="glossary.html#token">token</a>. Hover or focus one to see a short definition; click it for the full entry.</li>
+<li><b>Boxes.</b> A green <i>Why it matters</i> box says what problem an idea solves. An amber <i>Careful</i> box marks a common mistake. A blue <i>Note</i> is a side remark. A teal <i>Build it</i> box sends you to the lab where you build the idea yourself.</li>
+<li><b>Interactive pieces</b> carry a <span class="pill">Try it</span> label. Move the sliders and type into the boxes; nothing is sent anywhere.</li>
+<li><b>Self-checks</b> close every chapter. Answer in your head, then click to open the answer.</li>
+<li><b>Ask AI.</b> Select any passage and press <b>Ask AI</b> to ask Claude about it. <a href="reading.html#ask-ai">Chapter 1 explains how.</a></li>
+</ul>
+
+<h2 id="reading-paths">Reading paths</h2>
+<p>Read straight through if you like a firm foundation. Or pick a path: each one links back to the chapters it needs, so you can fill gaps as you meet them.</p>
+<div class="split">
+<div class="panel">
+<h5>Build now</h5>
+<p>Start with working code and read the concepts each lab points to.</p>
+<ol class="path-list">
+<li><a href="lab-setup.html">Lab 0: set up your workbench</a>: Python, a virtual environment, and a backend (fake, Ollama or Claude).</li>
+<li><a href="lab-first-call.html">Lab 1: your first model call</a>, with <a href="llm-tokens.html">tokens and sampling</a> and <a href="prompt-engineering.html">prompt engineering</a>.</li>
+<li><a href="lab-prompt-bench.html">Lab 2: a prompt test bench</a>, with <a href="prompt-engineering.html">prompt engineering</a> and <a href="evals.html">evaluating LLM output</a>.</li>
+<li><a href="lab-rag.html">Lab 3: RAG from scratch</a>, with <a href="embeddings.html">embeddings</a> and <a href="rag.html">retrieval and RAG</a>.</li>
+<li><a href="lab-retrieval-eval.html">Lab 4: measure your retrieval</a>, with <a href="vector-search.html">vector search internals</a> and <a href="rag-eval.html">evaluating RAG</a>.</li>
+<li><a href="lab-agent.html">Lab 5: tools and an agent loop</a>, with <a href="tools.html">tools and function calling</a> and <a href="agents.html">agents</a>.</li>
+</ol>
+</div>
+<div class="panel">
+<h5>Foundations</h5>
+<p>How the machinery works inside, in order. Do every Try it; they are short.</p>
+<ol class="path-list">
+<li><a href="maths-functions.html">Part I, Maths</a>: chapters 2 to 9, the maths everything later needs.</li>
+<li><a href="ml-learning.html">Part II, ML foundations</a>: chapters 10 to 14, then <a href="project-neural-net.html">train your own neural network</a> (chapter 15).</li>
+<li><a href="llm-tokens.html">Part III, How LLMs work</a>: chapters 16 to 19, then <a href="project-tiny-lm.html">train a tiny language model</a> (chapter 20).</li>
+</ol>
+<h5>Shipping</h5>
+<p>What it takes to run an AI system other people rely on.</p>
+<ol class="path-list">
+<li><a href="harness.html">Chapters 33 to 37</a>: harness engineering, guardrails, security, hallucination and memory.</li>
+<li><a href="frameworks.html">Chapters 38 to 43</a>: frameworks, quantisation, fine-tuning, production and regulated domains.</li>
+<li><a href="evals.html">Chapters 44 and 45</a>: evaluating output with judges, and observability, tracing and cost.</li>
+<li><a href="lab-guardrails.html">Lab 7</a>, <a href="lab-judge.html">Lab 8</a> and <a href="lab-tracing.html">Lab 9</a>: guardrails, a judge and tracing you can measure. Then the <a href="lab-capstone.html">capstone</a>.</li>
+</ol>
+</div>
+</div>
+
+<h2 id="progress">Your progress</h2>
+<p>The book keeps track of what you have read and built, in this browser only: no account, no cookies, nothing sent anywhere.</p>
+<ul>
+<li>Every chapter and lab has a <b>Mark this chapter done</b> box and a <b>My notes</b> box above its previous and next links. Notes save as you type.</li>
+<li>Each lab ends its steps with a <b>checklist</b>. Tick the steps as you finish them; when every step is ticked, the lab is marked done.</li>
+<li>The sidebar shows a tick beside pages you have finished, a dot beside pages in progress, and how many pages of each part are done.</li>
+<li><a href="progress.html">Your progress</a> shows the whole picture, where to continue, your notes and recent activity, and lets you export your progress to a file, import it on another device, or reset it.</li>
+</ul>
+
+<h2 id="contents">Contents</h2>
+
+<h3 id="toc-start">Start here</h3>
+<div class="toc-grid">
+<a class="toc-card" href="reading.html"><span class="n">Chapter 1</span><span class="t">How to read this book</span><span class="d">The parts, the boxes and widgets, progress tracking, Ask AI, and how to keep the book current.</span></a>
+<a class="toc-card" href="progress.html"><span class="n">Start here</span><span class="t">Your progress</span><span class="d">What you have read, built and noted, with export, import and reset.</span></a>
+</div>
+
+<h3 id="toc-maths">Part I: Maths</h3>
+<p>A self-contained maths track. Worked numbers first, then the symbols, then an exercise with its answer.</p>
+<div class="toc-grid">
+<a class="toc-card" href="maths-functions.html"><span class="n">Chapter 2</span><span class="t">Algebra, functions and graphs</span><span class="d">Variables, equations, functions as machines, straight lines and slope.</span></a>
+<a class="toc-card" href="maths-exp-log.html"><span class="n">Chapter 3</span><span class="t">Exponentials and logarithms</span><span class="d">Powers, the number e, growth, logs as the inverse, and why AI uses logs.</span></a>
+<a class="toc-card" href="maths-vectors-matrices.html"><span class="n">Chapter 4</span><span class="t">Vectors and matrices</span><span class="d">Arrows and lists of numbers, dot products, and matrix multiplication by hand.</span></a>
+<a class="toc-card" href="maths-derivatives.html"><span class="n">Chapter 5</span><span class="t">Derivatives and gradients</span><span class="d">Slope at a point, the chain rule, partial derivatives and the gradient.</span></a>
+<a class="toc-card" href="maths-gradient-descent.html"><span class="n">Chapter 6</span><span class="t">Gradient descent</span><span class="d">Walking downhill on a loss curve, and how the learning rate matters.</span></a>
+<a class="toc-card" href="maths-probability.html"><span class="n">Chapter 7</span><span class="t">Probability and Bayes</span><span class="d">Distributions, conditional probability and Bayes' rule with counts.</span></a>
+<a class="toc-card" href="maths-statistics.html"><span class="n">Chapter 8</span><span class="t">Mean, variance and normalisation</span><span class="d">Centre, spread, standard scores and why networks normalise.</span></a>
+<a class="toc-card" href="maths-softmax-entropy.html"><span class="n">Chapter 9</span><span class="t">Softmax, cross-entropy and KL divergence</span><span class="d">Turning scores into probabilities and measuring how wrong they are.</span></a>
+</div>
+
+<h3 id="toc-ml">Part II: ML foundations</h3>
+<div class="toc-grid">
+<a class="toc-card" href="ml-learning.html"><span class="n">Chapter 10</span><span class="t">What learning means</span><span class="d">Linear regression from scratch, loss functions, logistic regression.</span></a>
+<a class="toc-card" href="ml-generalisation.html"><span class="n">Chapter 11</span><span class="t">Generalisation</span><span class="d">Train, validation and test sets; overfitting; regularisation.</span></a>
+<a class="toc-card" href="ml-neural-networks.html"><span class="n">Chapter 12</span><span class="t">Neural networks and backpropagation</span><span class="d">Neurons, activations, backprop with real numbers, and a live trainer.</span></a>
+<a class="toc-card" href="ml-training-deep.html"><span class="n">Chapter 13</span><span class="t">Training deep networks well</span><span class="d">Initialisation, SGD, momentum, Adam, normalisation layers, dropout, residuals.</span></a>
+<a class="toc-card" href="ml-history.html"><span class="n">Chapter 14</span><span class="t">From perceptron to transformer</span><span class="d">Each bottleneck and the idea that removed it.</span></a>
+<a class="toc-card" href="project-neural-net.html"><span class="n">Chapter 15 &middot; Project</span><span class="t">Train your own neural network</span><span class="d">A NumPy-only network you write and train yourself.</span></a>
+</div>
+
+<h3 id="toc-llm">Part III: How LLMs work and are trained</h3>
+<div class="toc-grid">
+<a class="toc-card" href="llm-tokens.html"><span class="n">Chapter 16</span><span class="t">Language models, tokens and sampling</span><span class="d">Next-token prediction, BPE worked by hand, temperature, context windows.</span></a>
+<a class="toc-card" href="llm-embeddings-positions.html"><span class="n">Chapter 17</span><span class="t">The embedding layer and positions</span><span class="d">From token ids to vectors, and how order gets in.</span></a>
+<a class="toc-card" href="llm-transformer.html"><span class="n">Chapter 18</span><span class="t">The transformer block</span><span class="d">Attention with real numbers, multi-head, the MLP, residuals, layer norm.</span></a>
+<a class="toc-card" href="llm-training.html"><span class="n">Chapter 19</span><span class="t">How LLMs are trained</span><span class="d">The objective, data, scaling and the 6ND rule, SFT, RLHF, DPO, evaluation.</span></a>
+<a class="toc-card" href="project-tiny-lm.html"><span class="n">Chapter 20 &middot; Project</span><span class="t">Train your own tiny language model</span><span class="d">A bigram model in pure Python, then a tiny character transformer.</span></a>
+</div>
+
+<h3 id="toc-applied">Part IV: Applied concepts</h3>
+<div class="toc-grid">
+<a class="toc-card" href="prompt-engineering.html"><span class="n">Chapter 21</span><span class="t">Prompt engineering</span><span class="d">Roles, instructions, examples, delimiters, templates, cache-friendly order and injection-resistant prompts.</span></a>
+<a class="toc-card" href="context-engineering.html"><span class="n">Chapter 22</span><span class="t">Context engineering and choosing models</span><span class="d">What goes in the window and in what order, token budgets, and picking a model on cost, speed and quality.</span></a>
+<a class="toc-card" href="embeddings.html"><span class="n">Chapter 23</span><span class="t">Embeddings and similarity</span><span class="d">From token vectors to one text vector, cosine similarity, and choosing an embedding model.</span></a>
+<a class="toc-card" href="rag.html"><span class="n">Chapter 24</span><span class="t">Retrieval and RAG</span><span class="d">Chunking, putting passages in the prompt, citations, and how RAG fails.</span></a>
+<a class="toc-card" href="vector-search.html"><span class="n">Chapter 25</span><span class="t">Vector search internals</span><span class="d">Exact search cost, HNSW, IVF, BM25 worked by hand, hybrid search and re-ranking.</span></a>
+<a class="toc-card" href="rag-eval.html"><span class="n">Chapter 26</span><span class="t">Evaluating RAG</span><span class="d">Precision@k, recall@k, MRR, nDCG, groundedness and golden sets.</span></a>
+<a class="toc-card" href="knowledge-base.html"><span class="n">Chapter 27</span><span class="t">The knowledge base and maintaining it</span><span class="d">Documents, official texts, figures and news: provenance, licences and keeping them current.</span></a>
+<a class="toc-card" href="tools.html"><span class="n">Chapter 28</span><span class="t">Tools and function calling</span><span class="d">Schemas, the tool loop and its cost, structured output, and calculators that keep the numbers in code.</span></a>
+<a class="toc-card" href="agents.html"><span class="n">Chapter 29</span><span class="t">Agents and agentic flow</span><span class="d">ReAct, planning, graphs versus free agents, stopping conditions.</span></a>
+<a class="toc-card" href="mcp.html"><span class="n">Chapter 30</span><span class="t">MCP, basic and advanced</span><span class="d">The Model Context Protocol from handshake to security, with a tiny server you can run.</span></a>
+<a class="toc-card" href="skills.html"><span class="n">Chapter 31</span><span class="t">Skills</span><span class="d">A folder with SKILL.md that an agent loads on demand, with a worked example.</span></a>
+<a class="toc-card" href="subagents.html"><span class="n">Chapter 32</span><span class="t">Subagents</span><span class="d">Delegating to workers with their own context, and writing a good brief.</span></a>
+<a class="toc-card" href="harness.html"><span class="n">Chapter 33</span><span class="t">Harness engineering</span><span class="d">Everything around a model that turns it into a working agent or app.</span></a>
+<a class="toc-card" href="guardrails.html"><span class="n">Chapter 34</span><span class="t">Guardrails</span><span class="d">Input and output guards, required wording owned by code, and measuring a guard's precision and recall.</span></a>
+<a class="toc-card" href="security.html"><span class="n">Chapter 35</span><span class="t">LLM security</span><span class="d">Injection, jailbreaks, leakage, excessive agency, cost abuse, supply chain.</span></a>
+<a class="toc-card" href="hallucination.html"><span class="n">Chapter 36</span><span class="t">Hallucination</span><span class="d">Why it happens, how to measure it with intervals, and how to reduce it.</span></a>
+<a class="toc-card" href="memory.html"><span class="n">Chapter 37</span><span class="t">Memory</span><span class="d">Conversation history and its cost, long-term facts, recall, and giving people control.</span></a>
+<a class="toc-card" href="frameworks.html"><span class="n">Chapter 38</span><span class="t">Frameworks and model providers</span><span class="d">The layers, gateways and routing, graphs for multi-step flows, and running open models yourself.</span></a>
+<a class="toc-card" href="quantisation.html"><span class="n">Chapter 39</span><span class="t">Quantisation</span><span class="d">Number formats, scale and zero point, GPTQ, AWQ, GGUF and QLoRA.</span></a>
+<a class="toc-card" href="fine-tuning.html"><span class="n">Chapter 40</span><span class="t">Fine-tuning and distillation</span><span class="d">Full versus LoRA, the W + BA maths, soft targets and the KL loss.</span></a>
+<a class="toc-card" href="project-finetune-distil.html"><span class="n">Chapter 41 &middot; Projects</span><span class="t">LoRA fine-tune and distillation</span><span class="d">Hands-on with small open models, with hardware notes.</span></a>
+<a class="toc-card" href="production.html"><span class="n">Chapter 42</span><span class="t">Running AI in production</span><span class="d">Latency, cost per answer, prompt caching, retries, rate limits and budgets that cannot be overrun.</span></a>
+<a class="toc-card" href="regulated.html"><span class="n">Chapter 43</span><span class="t">AI in a regulated domain</span><span class="d">Traceable answers, people in charge of actions, data handling and change control.</span></a>
+<a class="toc-card" href="evals.html"><span class="n">Chapter 44</span><span class="t">Evaluating LLM output: judges and agreement</span><span class="d">Test sets, deterministic checks, a model as judge, Cohen's kappa against people, and judge biases.</span></a>
+<a class="toc-card" href="observability.html"><span class="n">Chapter 45</span><span class="t">Observability, tracing and cost</span><span class="d">What to record per call, traces and spans, latency percentiles, cost from tokens, and alerts.</span></a>
+</div>
+
+<h3 id="toc-build">Part V: Build it</h3>
+<p>Runnable labs in <code class="path">labs/</code>. Each one says what it costs on Claude; Ollama and the built-in fake model cost nothing.</p>
+<div class="toc-grid">
+<a class="toc-card" href="lab-setup.html"><span class="n">Lab 0</span><span class="t">Set up your workbench</span><span class="d">Python, a virtual environment, the requirements, and choosing a backend: fake, Ollama or Claude.</span></a>
+<a class="toc-card" href="lab-first-call.html"><span class="n">Lab 1</span><span class="t">Your first model call</span><span class="d">One message, a system prompt and a conversation, and every field of the reply: tokens, stop reason, time and cost.</span></a>
+<a class="toc-card" href="lab-prompt-bench.html"><span class="n">Lab 2</span><span class="t">A prompt test bench</span><span class="d">Run prompt versions over labelled cases, score every reply and compare runs case by case.</span></a>
+<a class="toc-card" href="lab-rag.html"><span class="n">Lab 3</span><span class="t">RAG from scratch</span><span class="d">Chunk a small set of help pages, embed them, retrieve, and answer with citations that code checks.</span></a>
+<a class="toc-card" href="lab-retrieval-eval.html"><span class="n">Lab 4</span><span class="t">Measure your retrieval</span><span class="d">Hit@k, recall@k, MRR and nDCG for TF-IDF, BM25 and their fusion, with an honest interval.</span></a>
+<a class="toc-card" href="lab-agent.html"><span class="n">Lab 5</span><span class="t">Tools and an agent loop</span><span class="d">A small agent with a catalogue search, exact arithmetic, dates and an order tool, and the loop that runs them.</span></a>
+<a class="toc-card" href="lab-mcp.html"><span class="n">Lab 6</span><span class="t">Build an MCP server</span><span class="d">Tools, a resource and a prompt over stdio, seen through the official client and on the raw wire.</span></a>
+<a class="toc-card" href="lab-guardrails.html"><span class="n">Lab 7</span><span class="t">Guardrails you can test</span><span class="d">Mask personal data, flag instructions hidden in passages, check output, and measure each guard on labelled data.</span></a>
+<a class="toc-card" href="lab-judge.html"><span class="n">Lab 8</span><span class="t">An LLM judge you can trust</span><span class="d">A judge for a help desk's answers, tested against human labels and planted defects.</span></a>
+<a class="toc-card" href="lab-tracing.html"><span class="n">Lab 9</span><span class="t">Tracing and cost</span><span class="d">Traces and spans for every model and tool call, with time and cost added up per run.</span></a>
+<a class="toc-card" href="lab-capstone.html"><span class="n">Lab 10</span><span class="t">Capstone: a small assistant</span><span class="d">The pieces from the earlier labs, put together into one small assistant you can test and measure.</span></a>
+</div>
+
+<h3 id="toc-reference">Reference</h3>
+<div class="toc-grid">
+<a class="toc-card" href="glossary.html"><span class="n">Reference</span><span class="t">Glossary</span><span class="d">Every term the book uses, in plain words.</span></a>
+<a class="toc-card" href="resources.html"><span class="n">Reference</span><span class="t">Resources</span><span class="d">Free videos, articles, docs and papers for every chapter.</span></a>
+</div>
+
+<div class="callout warn">
+<span class="title">A note on accuracy</span>
+<p>Model names, prices and APIs change quickly. Every number the labs print comes from running their code, and each lab says which model and prices it assumed. If something here has gone out of date, the code in <code class="path">labs/</code> and the provider's own documentation win; <a href="reading.html#keeping-current">chapter 1</a> says how to keep the book current.</p>
+</div>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

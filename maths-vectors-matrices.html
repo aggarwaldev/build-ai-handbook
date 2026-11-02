@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>4. Vectors and matrices &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part I &middot; Maths &middot; Chapter 4</p>
+<h1>Vectors and matrices</h1>
+<p class="lead">A vector is a list of numbers; a matrix is a table of them. Almost every computation inside a neural network is a matrix multiplied by a vector, so this chapter is where AI's arithmetic lives.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>A search system can turn every passage of a document set into a list of 384 or 1,024 numbers and find relevant passages by comparing those lists. A language model is, in arithmetic terms, a long series of matrix multiplications. GPUs exist to do this one operation very fast.</p></div>
+
+<h2 id="vectors">Vectors: lists of numbers</h2>
+<p>A <a class="g" href="glossary.html#vector">vector</a> is an ordered list of numbers. A flat described by (area 60, bedrooms 2, floor 3) is a 3-number vector. Each position has a fixed meaning, and the count of numbers is the vector's <a class="g" href="glossary.html#dimension">dimension</a>.</p>
+<p>A 2-number vector can be drawn as an arrow from the origin (0, 0): the vector (3, 1) points 3 to the right and 1 up. Higher dimensions cannot be drawn, but every rule below works the same way in 384 dimensions as in 2.</p>
+
+<h3 id="vector-ops">Adding and scaling</h3>
+<ul>
+<li>Add position by position: (3, 1) + (1, 2) = (4, 3). As arrows: put the second arrow's tail on the first arrow's tip.</li>
+<li>Multiply by a single number (a <b>scalar</b>): 2 &times; (3, 1) = (6, 2). Same direction, twice as long. &minus;1 &times; (3, 1) = (&minus;3, &minus;1) points the opposite way.</li>
+</ul>
+
+<h3 id="length">Length</h3>
+<p>The length of (3, 4) comes from Pythagoras: &radic;(3<sup>2</sup> + 4<sup>2</sup>) = &radic;(9 + 16) = &radic;25 = 5. In any dimension, square every entry, add, take the square root.</p>
+<div class="formula">|<var>a</var>| = &radic;(<var>a</var><sub>1</sub><sup>2</sup> + <var>a</var><sub>2</sub><sup>2</sup> + &hellip; + <var>a</var><sub><var>n</var></sub><sup>2</sup>)<span class="cap">Also called the norm, or the L2 norm.</span></div>
+<p>Dividing a vector by its length gives a <b>unit vector</b>, of length 1, pointing the same way: (3, 4) / 5 = (0.6, 0.8). Check: 0.36 + 0.64 = 1. This is called <a class="g" href="glossary.html#normalisation">normalising</a>, and embedding models usually return unit vectors.</p>
+
+<h2 id="dot-product">The dot product</h2>
+<p>You met it in <a href="maths-functions.html#sigma">chapter 2</a>: multiply matching positions, then add. Worked in 3 dimensions:</p>
+<div class="formula">(1, 2, 3) &middot; (4, 5, 6) = 1&times;4 + 2&times;5 + 3&times;6 = 4 + 10 + 18 = 32</div>
+<p>The dot product has a geometric meaning that makes it the measure of similarity used throughout AI:</p>
+<div class="formula"><var>a</var> &middot; <var>b</var> = |<var>a</var>| &times; |<var>b</var>| &times; cos &theta;<span class="cap">&theta; (theta) is the angle between the two arrows. cos &theta; is 1 when they point the same way, 0 at right angles and &minus;1 when opposite.</span></div>
+
+<h3 id="cosine">Cosine similarity</h3>
+<p>Rearranging gives the <a class="g" href="glossary.html#cosine-similarity">cosine similarity</a>, which ignores length and keeps only direction:</p>
+<div class="formula">cos &theta; = <span class="frac"><span><var>a</var> &middot; <var>b</var></span><span>|<var>a</var>| |<var>b</var>|</span></span></div>
+<p>Worked with <var>a</var> = (3, 1) and <var>b</var> = (1, 2):</p>
+<ol>
+<li>Dot product: 3&times;1 + 1&times;2 = 5.</li>
+<li>Lengths: |<var>a</var>| = &radic;10 = 3.162, |<var>b</var>| = &radic;5 = 2.236.</li>
+<li>Cosine: 5 / (3.162 &times; 2.236) = 5 / 7.071 = 0.707, which is the cosine of 45&deg;.</li>
+</ol>
+<p>If both vectors are already unit length, the denominator is 1 and the cosine is just the dot product. That shortcut is why search systems normalise their vectors.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Drag two vectors</h4></div>
+<p class="hint">Drag the coloured dots. Watch the cosine fall from 1 to 0 as the arrows move to right angles, and to &minus;1 when they point in opposite directions. Make one arrow longer without turning it: the dot product changes but the cosine does not.</p>
+<div class="w-vectors"></div>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>Find the cosine similarity of (1, 0, 1) and (1, 1, 0).</p></div>
+<details><summary>Answer</summary><div><p>Dot product 1 + 0 + 0 = 1. Both lengths are &radic;2. Cosine = 1 / (&radic;2 &times; &radic;2) = 1/2 = 0.5, an angle of 60&deg;.</p></div></details>
+
+<h2 id="matrices">Matrices: tables of numbers</h2>
+<p>A <a class="g" href="glossary.html#matrix">matrix</a> is a rectangle of numbers with rows and columns. Its <b>shape</b> is written rows &times; columns, so</p>
+<div class="formula"><var>W</var> = <span class="mat" style="grid-template-columns:repeat(2,auto)"><span>2</span><span>0</span><span>1</span><span>3</span></span><span class="cap">a 2 &times; 2 matrix. W<sub>21</sub>, the entry in row 2, column 1, is 1.</span></div>
+
+<h3 id="matrix-vector">A matrix times a vector</h3>
+<p>Each row of the matrix takes a dot product with the vector, and each result becomes one entry of the output. With <var>W</var> above and <var>x</var> = (1, 2):</p>
+<ul>
+<li>Row 1: (2, 0) &middot; (1, 2) = 2 + 0 = 2.</li>
+<li>Row 2: (1, 3) &middot; (1, 2) = 1 + 6 = 7.</li>
+</ul>
+<p>So <var>W</var><var>x</var> = (2, 7). A 2 &times; 2 matrix turns a 2-vector into another 2-vector. In general, an <var>m</var> &times; <var>n</var> matrix turns an <var>n</var>-vector into an <var>m</var>-vector: it can change the dimension.</p>
+<p>Seen as arrows, a matrix moves every point of the plane: it can stretch, squash, rotate or flip space. The matrix with 1s on the diagonal and 0s elsewhere, the <b>identity</b>, leaves every vector where it was.</p>
+
+<h3 id="matmul">Matrix times matrix</h3>
+<p>To multiply two matrices, take every row of the first with every column of the second. Worked by hand:</p>
+<div class="formula"><span class="mat" style="grid-template-columns:repeat(3,auto)"><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span></span> &times; <span class="mat" style="grid-template-columns:repeat(2,auto)"><span>7</span><span>8</span><span>9</span><span>10</span><span>11</span><span>12</span></span> = <span class="mat" style="grid-template-columns:repeat(2,auto)"><span>58</span><span>64</span><span>139</span><span>154</span></span></div>
+<ul>
+<li>Row 1, column 1: 1&times;7 + 2&times;9 + 3&times;11 = 7 + 18 + 33 = 58.</li>
+<li>Row 1, column 2: 1&times;8 + 2&times;10 + 3&times;12 = 8 + 20 + 36 = 64.</li>
+<li>Row 2, column 1: 4&times;7 + 5&times;9 + 6&times;11 = 28 + 45 + 66 = 139.</li>
+<li>Row 2, column 2: 4&times;8 + 5&times;10 + 6&times;12 = 32 + 50 + 72 = 154.</li>
+</ul>
+<p>The <b>shape rule</b>: (<var>m</var> &times; <var>n</var>) times (<var>n</var> &times; <var>p</var>) gives <var>m</var> &times; <var>p</var>. The inner numbers must match, because each row of the first needs exactly one partner for each entry of a column of the second. A 2 &times; 3 times a 3 &times; 2 is fine; a 2 &times; 3 times a 2 &times; 3 is not defined. Order matters: in general <var>A</var><var>B</var> is not <var>B</var><var>A</var>.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Step through a matrix multiply</h4></div>
+<p class="hint">Press Next cell to compute C one entry at a time. The highlighted row of A and column of B are the two lists being dotted. Edit any entry of A or B and step again.</p>
+<div id="w-matmul"></div>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>Multiply <span class="mat" style="grid-template-columns:repeat(2,auto)"><span>1</span><span>2</span><span>0</span><span>1</span></span> by <span class="mat" style="grid-template-columns:repeat(2,auto)"><span>3</span><span>0</span><span>1</span><span>2</span></span>. Then multiply them in the other order.</p></div>
+<details><summary>Answer</summary><div><p>First order: row 1 gives (1&times;3 + 2&times;1, 1&times;0 + 2&times;2) = (5, 4); row 2 gives (0&times;3 + 1&times;1, 0&times;0 + 1&times;2) = (1, 2). Other order: row 1 gives (3&times;1 + 0&times;0, 3&times;2 + 0&times;1) = (3, 6); row 2 gives (1&times;1 + 2&times;0, 1&times;2 + 2&times;1) = (1, 4). Different results, so order matters.</p></div></details>
+
+<h3 id="transpose">Transpose</h3>
+<p>The <b>transpose</b> <var>A</var><sup>T</sup> swaps rows and columns: a 2 &times; 3 becomes a 3 &times; 2. You will see it in attention (<a href="llm-transformer.html">chapter 18</a>), where <var>Q</var><var>K</var><sup>T</sup> computes the dot product of every query with every key in one multiplication.</p>
+
+<h2 id="cost">Counting the cost</h2>
+<p>Each output cell of an (<var>m</var> &times; <var>n</var>) &times; (<var>n</var> &times; <var>p</var>) product needs <var>n</var> multiplications, and there are <var>m</var> &times; <var>p</var> cells, so <var>m</var><var>n</var><var>p</var> multiplications in all. For the worked example that is 2 &times; 3 &times; 2 = 12. For one 4,096 &times; 4,096 matrix times a 4,096-vector it is about 16.8 million. That is why AI runs on GPUs, which do thousands of multiplications at once.</p>
+
+<h2 id="in-ai">In AI</h2>
+<ul>
+<li>A <b>layer</b> of a neural network computes <span class="math"><var>y</var> = <var>W</var><var>x</var> + <var>b</var></span>: a matrix times the input, plus a bias vector (<a href="ml-neural-networks.html">chapter 12</a>). Each row of <var>W</var> is one neuron's weights.</li>
+<li>Processing a <b>batch</b> of inputs at once stacks them as rows of a matrix, so many matrix-vector products become one matrix-matrix product.</li>
+<li>An <b>embedding</b> is a vector that stands for a piece of text; texts with similar meaning get vectors with high cosine similarity (<a href="embeddings.html">chapter 23</a>).</li>
+<li>A <a class="g" href="glossary.html#tensor">tensor</a> is the same idea with more than two index directions, for example a batch of sequences of vectors.</li>
+</ul>
+
+<p>Embedding models produce vectors of a fixed length: 384 numbers for a small open model, 1,024 or more for larger ones. A vector database stores each passage's vector next to its text and ranks passages by cosine <i>distance</i>, which is 1 minus the cosine similarity. Many systems report <code>1 - distance</code> as the score, so the score you see in a retrieval trace is exactly the cosine similarity from this chapter.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-rag.html">Lab 3</a> you embed a small document set and rank its passages by cosine similarity yourself, then use the best ones to answer questions.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>What shape is the product of a 4 &times; 3 matrix and a 3 &times; 5 matrix?</summary><div><p>4 &times; 5. The inner 3s match and disappear.</p></div></details>
+<details><summary>Two unit vectors have dot product 0.9. What is their cosine similarity?</summary><div><p>0.9. For unit vectors the lengths are 1, so the cosine equals the dot product.</p></div></details>
+<details><summary>Why does cosine similarity suit comparing texts better than the raw dot product?</summary><div><p>It ignores length and compares only direction. Vector length can reflect things like text length rather than meaning, so removing it makes the comparison about what the text is about.</p></div></details>
+<details><summary>How many multiplications does a 384 &times; 384 matrix times a 384-vector need?</summary><div><p>384 &times; 384 = 147,456: one per entry of the matrix.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/playlist?list=PLZHQObOWTQDPD3MizzM2xVFitgF8hE_ab" target="_blank" rel="noopener noreferrer">Essence of linear algebra (3Blue1Brown playlist)</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">The standard visual series: vectors, linear maps and matrices as geometry, ideal before seeing them in neural nets.</span></li>
+<li><a href="https://www.youtube.com/watch?v=XkY2DOUCWMU" target="_blank" rel="noopener noreferrer">Matrix multiplication as composition | Chapter 4, Essence of linear algebra</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Explains why matrix products work the way they do by chaining transformations, which is what network layers do.</span></li>
+<li><a href="https://www.youtube.com/watch?v=LyGKycYT2v0" target="_blank" rel="noopener noreferrer">Dot products and duality | Chapter 9, Essence of linear algebra</a> <span class="pill">video</span> <span class="pill">intermediate</span><br><span class="res-note">Gives the geometric meaning of the dot product, the operation behind similarity scores and attention.</span></li>
+<li><a href="https://www.khanacademy.org/math/linear-algebra" target="_blank" rel="noopener noreferrer">Linear algebra (Khan Academy)</a> <span class="pill">video</span> <span class="pill">intermediate</span><br><span class="res-note">Full course on vectors, spaces and matrix transformations with exercises, for readers who want drill after the visuals.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-maths-vectors-matrices">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/vectors.js"></script>
+<script src="assets/widgets/matmul.js"></script>
+</body>
+</html>

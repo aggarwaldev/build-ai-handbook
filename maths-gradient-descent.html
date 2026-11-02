@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>6. Gradient descent &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part I &middot; Maths &middot; Chapter 6</p>
+<h1>Gradient descent</h1>
+<p class="lead">Gradient descent finds the bottom of a valley by taking small steps downhill, using the slope from chapter 5. It is how almost every modern model, from a straight line to a language model, learns its parameters.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>"Training" sounds mysterious, but for nearly every model in this book it is one line repeated millions of times: move each parameter a little against its slope. The learning rate, the most important setting in that line, decides whether training works, crawls or blows up.</p></div>
+
+<h2 id="the-rule">The update rule</h2>
+<p>You have a loss <var>L</var>(<var>w</var>) that measures how wrong a model is for a parameter value <var>w</var>. You want the <var>w</var> with the smallest loss. If the slope at your current <var>w</var> is negative, the loss falls to the right, so move right; if positive, move left. Move further when the slope is steep. In one line:</p>
+<div class="formula"><var>w</var><sub>new</sub> = <var>w</var> &minus; &eta; &times; <span class="frac"><span>d<var>L</var></span><span>d<var>w</var></span></span><span class="cap">&eta; (eta) is the learning rate: how big a step to take per unit of slope.</span></div>
+
+<h3 id="worked">Worked by hand</h3>
+<p>Take <span class="math"><var>L</var>(<var>w</var>) = (<var>w</var> &minus; 3)<sup>2</sup> + 1</span>. Its lowest point is at <var>w</var> = 3, where the loss is 1. Its slope is 2(<var>w</var> &minus; 3). Start at <var>w</var> = 0 with learning rate &eta; = 0.1.</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>step</th><th>w</th><th>loss</th><th>slope 2(w &minus; 3)</th><th>&minus;&eta; &times; slope</th></tr>
+<tr><td class="num">0</td><td class="num">0</td><td class="num">10</td><td class="num">&minus;6</td><td class="num">+0.6</td></tr>
+<tr><td class="num">1</td><td class="num">0.6</td><td class="num">6.76</td><td class="num">&minus;4.8</td><td class="num">+0.48</td></tr>
+<tr><td class="num">2</td><td class="num">1.08</td><td class="num">4.686</td><td class="num">&minus;3.84</td><td class="num">+0.384</td></tr>
+<tr><td class="num">3</td><td class="num">1.464</td><td class="num">3.359</td><td class="num">&minus;3.072</td><td class="num">+0.307</td></tr>
+<tr><td class="num">4</td><td class="num">1.771</td><td class="num">2.510</td><td class="num">&minus;2.458</td><td class="num">+0.246</td></tr>
+</table></div>
+<p>The steps shrink by themselves, because the slope shrinks as the ball nears the bottom. Each step closes 20% of the remaining distance to 3: the gap goes 3, 2.4, 1.92, 1.536 and so on, a factor of 0.8 each time.</p>
+
+<h2 id="learning-rate">The learning rate</h2>
+<p>For this bowl the gap to the bottom is multiplied by (1 &minus; 2&eta;) each step. That one factor explains every behaviour you will see in practice:</p>
+<ul>
+<li>&eta; = 0.01: factor 0.98. Correct but slow; after 100 steps the gap is still 13% of where it started.</li>
+<li>&eta; = 0.1: factor 0.8. Steady progress.</li>
+<li>&eta; = 0.5: factor 0. One step lands exactly on 3. (This only happens on a perfect bowl.)</li>
+<li>&eta; = 1.0: factor &minus;1. The ball bounces between 0 and 6 forever.</li>
+<li>&eta; = 1.1: factor &minus;1.2. Each bounce is bigger than the last; the loss explodes. This is <b>divergence</b>, and in a real training run it shows up as the loss shooting to infinity or "NaN" (not a number).</li>
+</ul>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Gradient-descent ball</h4></div>
+<p class="hint">Press Step a few times and compare with the table above. Then raise the learning rate past 1 and watch it diverge. On the bumpy curve, start on the right: the ball settles in the shallow valley and never finds the deeper one.</p>
+<div id="w-gdescent"></div>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>With <span class="math"><var>L</var>(<var>w</var>) = (<var>w</var> &minus; 3)<sup>2</sup> + 1</span>, start at <var>w</var> = 5 with &eta; = 0.25. Take two steps.</p></div>
+<details><summary>Answer</summary><div><p>Slope 2(5 &minus; 3) = 4, step &minus;0.25 &times; 4 = &minus;1, so w = 4. Slope 2, step &minus;0.5, so w = 3.5. The gap halves each step, because 1 &minus; 2 &times; 0.25 = 0.5.</p></div></details>
+
+<h2 id="many-params">Many parameters at once</h2>
+<p>With several parameters, use the gradient (<a href="maths-derivatives.html#gradient">chapter 5</a>) and update every parameter by its own partial derivative, all at the same time:</p>
+<div class="formula"><b>w</b><sub>new</sub> = <b>w</b> &minus; &eta; &nabla;<var>L</var>(<b>w</b>)<span class="cap">Bold w is the vector of all the parameters.</span></div>
+<p>Worked example: <span class="math"><var>L</var>(<var>a</var>, <var>b</var>) = (<var>a</var> &minus; 1)<sup>2</sup> + 4(<var>b</var> &minus; 2)<sup>2</sup></span>, starting at (0, 0) with &eta; = 0.1.</p>
+<ul>
+<li>Gradient: (2(<var>a</var> &minus; 1), 8(<var>b</var> &minus; 2)) = (&minus;2, &minus;16). Loss 17.</li>
+<li>Step: (0, 0) &minus; 0.1 &times; (&minus;2, &minus;16) = (0.2, 1.6). Loss 1.28.</li>
+<li>Gradient now (&minus;1.6, &minus;3.2). Step to (0.36, 1.92). Loss 0.435.</li>
+</ul>
+<p>Notice <var>b</var> moved much faster than <var>a</var>, because the loss is four times steeper in the <var>b</var> direction. When directions differ a lot in steepness, one learning rate is too big for one and too small for the other. Momentum and Adam (<a href="ml-training-deep.html#optimisers">chapter 13</a>) were invented to fix exactly this.</p>
+
+<h2 id="traps">Valleys, saddles and plateaus</h2>
+<ul>
+<li><b>Local minimum</b>: a valley that is not the deepest. The bumpy curve in the widget has one. In very high dimensions true local minima turn out to be less of a problem than people feared, because a point has to curve upwards in every one of millions of directions to trap you.</li>
+<li><b>Saddle point</b>: flat, but downhill in some directions and uphill in others, like the middle of a horse's saddle. The slope is zero, so plain gradient descent slows to a crawl there.</li>
+<li><b>Plateau</b>: a wide flat region where the slope is tiny everywhere. Progress stalls until the ball reaches steeper ground.</li>
+</ul>
+
+<h2 id="stochastic">Stochastic gradient descent</h2>
+<p>The real loss averages the error over every training example. Computing the exact gradient over millions of examples for every step would be far too slow. Instead, each step uses a small random <a class="g" href="glossary.html#batch">batch</a>, say 32 examples, and computes the gradient on just those. The gradient is noisy, but cheap, and on average points the right way. This is <b>stochastic gradient descent</b> (SGD). One pass through the whole training set is an <a class="g" href="glossary.html#epoch">epoch</a>.</p>
+<pre><code><span class="c"># the training loop of almost every model, in outline</span>
+<span class="k">for</span> epoch <span class="k">in</span> range(num_epochs):
+    <span class="k">for</span> batch <span class="k">in</span> shuffled_batches(training_data):
+        loss = average_loss(model, batch)      <span class="c"># forward pass</span>
+        grads = gradient_of(loss, model.params) <span class="c"># backward pass (chain rule)</span>
+        <span class="k">for</span> p, g <span class="k">in</span> zip(model.params, grads):
+            p -= learning_rate * g              <span class="c"># the update rule</span></code></pre>
+<p>You will write this loop for real, with NumPy, in <a href="project-neural-net.html">chapter 15</a>.</p>
+
+<h2 id="retry-loops">The same loop outside training</h2>
+<p>The same "measure the error, then adjust" shape turns up outside training. A common example is a retry loop around a language model: when an output check blocks an answer, the system re-asks the question with the block reasons appended ("Revise the answer. Block reasons: &hellip;"), perhaps on a stronger model. Good systems allow a fixed number of retries. Like a learning rate, that cap is a deliberate limit: unbounded "try again" loops can bounce for ever or run up cost, just as a too-large step diverges.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="project-neural-net.html#experiments">chapter 15</a> you train a neural network by gradient descent in NumPy and try learning rates that are too small and too large. In <a href="project-tiny-lm.html#learn">chapter 20</a>, <code>bigram.py --learn</code> fits a language model the same way, by following the gradient of its loss.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>The slope at the current w is +4 and the learning rate is 0.05. What is the update?</summary><div><p>w decreases by 0.05 &times; 4 = 0.2. A positive slope means the loss rises to the right, so we move left.</p></div></details>
+<details><summary>A training run's loss shoots up and becomes NaN after a few steps. What is the first thing to try?</summary><div><p>Lower the learning rate. Steps that overshoot the valley by more each time are the classic sign of a learning rate that is too large.</p></div></details>
+<details><summary>Why use mini-batches instead of the whole training set for each step?</summary><div><p>A batch gradient is far cheaper to compute and is right on average, so you can take many more steps in the same time. The noise can even help the model move off flat spots.</p></div></details>
+<details><summary>Why do the steps shrink near the bottom even with a fixed learning rate?</summary><div><p>The step is the learning rate times the slope, and the slope shrinks towards zero as you approach the minimum.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.youtube.com/watch?v=IHZwWFHWa-w" target="_blank" rel="noopener noreferrer">Gradient descent, how neural networks learn | Deep Learning Chapter 2</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Pictures learning as walking downhill on a cost surface, tying the gradient to how weights get updated.</span></li>
+<li><a href="https://www.youtube.com/watch?v=sDv4f4s2SB8" target="_blank" rel="noopener noreferrer">Gradient Descent, Step-by-Step</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Works a tiny regression by hand so every step size and update is visible, including the learning rate.</span></li>
+<li><a href="https://developers.google.com/machine-learning/crash-course/linear-regression/gradient-descent" target="_blank" rel="noopener noreferrer">Linear regression: Gradient descent</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Short crash-course page on iterating toward lower loss and reading loss curves for convergence.</span></li>
+<li><a href="https://developers.google.com/machine-learning/crash-course/linear-regression/hyperparameters" target="_blank" rel="noopener noreferrer">Linear regression: Hyperparameters</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Covers learning rate, batch size and epochs, with what happens when the learning rate is too high or too low.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-maths-gradient-descent">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/gdescent.js"></script>
+</body>
+</html>

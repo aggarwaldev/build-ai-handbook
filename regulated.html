@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>43. AI in a regulated domain &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 43</p>
+<h1>AI in a regulated domain</h1>
+<p class="lead">Finance, health, insurance and law are regulated domains: what a system tells people can affect their money, wellbeing or rights, and the organisation must be able to show how each answer came about. This chapter is about the engineering habits that make an AI system fit for that setting. It makes no claims about what any law requires; that is a question for your compliance and legal colleagues, and the habits below are what lets you answer them.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>In a regulated product, "the model said so" is never an acceptable explanation. Someone will ask what the customer saw, why, from which data, and which version of the system produced it. If the system was not built to answer, the answer is usually "we cannot tell".</p></div>
+
+<h2 id="traceability">Every answer traceable</h2>
+<p>Record enough with each answer to rebuild it later:</p>
+<ul>
+<li>the input, as stored (with personal data masked);</li>
+<li>every tool call with its arguments and result, and every document passage used, each with its as-of date;</li>
+<li>the model ids, the prompt versions and the code version (a git commit);</li>
+<li>the checks that ran and their verdicts, including the reasons for any block;</li>
+<li>what the customer finally saw.</li>
+</ul>
+<p>Make the record automatic and complete. A trace that depends on someone remembering to log will be missing exactly when it is needed.</p>
+
+<h2 id="explain">Explainable by construction</h2>
+<p>Design so that the explanation is part of the answer, not reconstructed afterwards. Figures come from tools and carry their source and an as-of date, and a check blocks any answer whose source has no date. Statements about documents cite the section. Fixed wording that must appear (disclosures, risk statements) is owned by code and checked, not left to the model to remember: code picks the right wording from what the tools actually did, and when the line is the only thing missing it can append the line rather than fail the answer (<a href="guardrails.html#disclosures">chapter 34</a>). A customer, an auditor and an engineer should all be able to see where each number came from.</p>
+
+<h2 id="humans">People stay in charge of actions</h2>
+<p>A model may suggest; it should not act. Anything that moves money, changes an account or files a document goes through an explicit confirmation by the customer, or through a person, with the suggestion and the confirmation recorded separately. A suggested action can be a button that describes what it will do, sized by code rather than by the model, which asks for confirmation before anything happens; tell the checking model so, and let it check the button's content. When the system is unsure or a check fails, hand over to a human ("let me connect you to a person") instead of guessing.</p>
+
+<h2 id="data">Data handling</h2>
+<ul>
+<li><b>Minimise.</b> Send each model only what the task needs; mask personal data before any call.</li>
+<li><b>Know where data goes.</b> List every service that sees customer data, what it keeps and for how long, and record who approved each one. Make the approvals part of configuration, so the system refuses to run without them.</li>
+<li><b>Use made-up data until the approvals exist.</b> Synthetic personas let you build and test everything without real customers' details. If an outside service has not yet been approved for real data, only synthetic data goes through it.</li>
+<li><b>Let people see and delete</b> what the system remembers about them.</li>
+</ul>
+
+<h2 id="change">Change control</h2>
+<p>A prompt edit can change behaviour as much as a code change. Treat prompts, model choices and thresholds as versioned artefacts: reviewed, tested against a fixed evaluation set before release, and recorded with each answer. Keep a written list of known shortcuts and gaps, with what would fix each one, and check that the code and the list agree. Describe each model you rely on, its intended use, how it was evaluated and where it fails, in a short model card ("Model Cards for Model Reporting", 2018), and each dataset's origin and limits in a datasheet ("Datasheets for Datasets", 2018).</p>
+
+<h2 id="fairness">Testing across customers</h2>
+<p>An answer can be right for one kind of customer and wrong for another. Test with personas that differ in the ways that matter (age, risk appetite, country, currency) and compare outcomes such as block rates and judge scores between groups, with confidence intervals (<a href="hallucination.html#measuring">chapter 36</a>), before concluding that a difference is real.</p>
+
+<h2 id="sampling">How many answers to review</h2>
+<p>Reviewing every answer by hand is rarely possible, so review a random sample. How big? If a fault affects a fraction <i>p</i> of answers, the chance that a random sample of <i>n</i> contains none is (1 &minus; <i>p</i>)<sup><i>n</i></sup>. To be 95% sure of seeing at least one, you need (1 &minus; <i>p</i>)<sup><i>n</i></sup> &le; 0.05, that is <i>n</i> &ge; ln 0.05 / ln(1 &minus; <i>p</i>).</p>
+<p>Worked: for a fault in 1% of answers, <i>n</i> &ge; &minus;2.996 / &minus;0.01005 &asymp; 298.1, so review 299 answers. This is the rule of three turned around: 3 / 0.01 = 300.</p>
+
+<h2 id="floor">A floor for a prototype</h2>
+<p>Before any real customer touches the system, agree a short list of fixed rules and enforce them in code. A reasonable floor has four: no secrets in the code or the prompts; synthetic data only; no action triggered by model output alone; and every known shortcut written in a list, with a script that scans the code for shortcut markers and checks that the list and the code agree. The list is how a known gap stays a known gap instead of a surprise.</p>
+<p>Retrieval fields help too: for each answer that read documents, record how its passages were found (vector search or a fused ranking) and, when that search fell back to something simpler, why. A fallback that nobody can see is a change in behaviour that nobody approved.</p>
+
+<h2 id="domains">The same habits in three domains</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Domain</th><th>What goes wrong</th><th>What the habits look like</th></tr>
+<tr><td>Finance</td><td>An invented figure, advice unsuited to the person, a missing disclosure</td><td>Figures from tools with as-of dates, a suitability rubric, code-owned disclosure wording, orders only through a confirmation</td></tr>
+<tr><td>Health</td><td>A wrong dose, a guideline quoted from memory, a missed warning sign</td><td>Quotes checked against the source leaflet or guideline, a fixed "see a clinician" line, a hand-over to a person when unsure</td></tr>
+<tr><td>Legal</td><td>A citation to a case or clause that does not exist, advice for the wrong jurisdiction</td><td>Every citation checked against the text, the jurisdiction recorded with the answer, a lawyer reviewing before anything is filed or sent</td></tr>
+</table></div>
+<p>None of this tells you what a regulator requires. It makes the questions a regulator, an auditor or a customer asks answerable, and a lawyer or compliance colleague can then decide what is required.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>How many randomly chosen answers must you review to be 95% sure of seeing at least one example of a fault that affects 2% of answers?</p></div>
+<details><summary>Answer</summary><div><p><i>n</i> &ge; ln 0.05 / ln 0.98 = &minus;2.996 / &minus;0.0202 &asymp; 148.3, so 149 answers. The rule of three gives 3 / 0.02 = 150.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-tracing.html">Lab 9</a> you build the trace that records each call and its cost, the raw material of an answer record. <a href="lab-capstone.html">Lab 10</a> puts it into a small assistant you can inspect after each answer.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Name four things to record with each answer so it can be rebuilt later.</summary><div><p>Any four of: masked input, tool calls with results, document passages with dates, model ids, prompt versions, code version, check verdicts, what the customer saw.</p></div></details>
+<details><summary>Why should disclosure wording be owned by code rather than the prompt?</summary><div><p>Code can guarantee the exact words and check they are present; a model may paraphrase or forget them.</p></div></details>
+<details><summary>How many random answers give a 95% chance of catching a fault that affects 5% of answers?</summary><div><p><i>n</i> &ge; ln 0.05 / ln 0.95 &asymp; 58.4, so 59.</p></div></details>
+<details><summary>Why make a data-handling approval a required setting?</summary><div><p>The system then cannot run against that service until the approval is recorded, so it cannot be forgotten.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.nist.gov/publications/artificial-intelligence-risk-management-framework-ai-rmf-10" target="_blank" rel="noopener noreferrer">Artificial Intelligence Risk Management Framework (AI RMF 1.0)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">NIST&#x27;s free framework organising AI risk work into govern, map, measure and manage.</span></li>
+<li><a href="https://arxiv.org/abs/1810.03993" target="_blank" rel="noopener noreferrer">Model Cards for Model Reporting (2018)</a> <span class="pill">paper</span> <span class="pill">intermediate</span><br><span class="res-note">Proposes a short standard document describing a model&#x27;s intended use, evaluation and limits.</span></li>
+<li><a href="https://arxiv.org/abs/1803.09010" target="_blank" rel="noopener noreferrer">Datasheets for Datasets (2018)</a> <span class="pill">paper</span> <span class="pill">intermediate</span><br><span class="res-note">The dataset counterpart: recording how data was collected, what it contains and its known gaps.</span></li>
+<li><a href="https://pair.withgoogle.com/guidebook/" target="_blank" rel="noopener noreferrer">People + AI Guidebook</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">Google PAIR&#x27;s free practical guide to designing AI features people can understand and trust.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-regulated">All resources for this chapter</a> and 1 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>11. Generalisation, overfitting and regularisation &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part II &middot; ML foundations &middot; Chapter 11</p>
+<h1>Generalisation, overfitting and regularisation</h1>
+<p class="lead">A model is only useful if it works on examples it has never seen. This chapter is about the gap between training performance and real performance: how to measure it with held-out data, why it opens, and the regularisation tricks that close it.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Memorising the answers is the easiest way to score well on a test you have seen. Models do this too, and so do people tuning prompts against the same twenty questions every day. The habit of keeping some data aside, and never peeking at it while you tune, is the single most important discipline in machine learning and in AI evaluation.</p></div>
+
+<h2 id="splits">Training, validation and test sets</h2>
+<p>Split your labelled examples into three groups before you start:</p>
+<ul>
+<li><b>Training set</b> (often about 80%): the model's parameters are fitted to these.</li>
+<li><a class="g" href="glossary.html#validation-set">Validation set</a> (about 10%): used to choose settings that are not learned by gradient descent, called <a class="g" href="glossary.html#hyperparameter">hyperparameters</a>: the learning rate, the size of the model, how long to train, how strong the penalty.</li>
+<li><a class="g" href="glossary.html#test-set">Test set</a> (about 10%): looked at once, at the end, to report how well the finished model does. If you go back and change things after seeing the test score, it has become a second validation set and no longer measures anything honest.</li>
+</ul>
+<p>Shuffle before splitting, unless the data has an order that matters. For anything that changes over time, like prices or news, train on the past and test on the future; a random split would let the model peek at tomorrow.</p>
+
+<h2 id="overfitting">Underfitting and overfitting</h2>
+<p>Fit polynomials of different degrees to ten noisy points that come from a smooth curve:</p>
+<ul>
+<li>Degree 1, a straight line, is too simple. It misses the curve, so its error is high on both the training points and new points. This is <a class="g" href="glossary.html#underfitting">underfitting</a>.</li>
+<li>Degree 3 or 4 follows the trend and ignores the noise. Training error is moderate, validation error is lowest.</li>
+<li>Degree 9 has ten parameters for ten points, so it can pass through every training point exactly: training error near zero. Between the points it swings wildly, and its validation error is the worst of all. This is <a class="g" href="glossary.html#overfitting">overfitting</a>: the model has learned the noise.</li>
+</ul>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Overfitting and regularisation</h4></div>
+<p class="hint">Raise the degree from 1 to 9 and watch the blue training error fall while the orange validation error falls and then rises. At degree 9, raise the penalty to 10<sup>&minus;3</sup> or 10<sup>&minus;2</sup>: the curve calms down and validation error improves, though training error rises. The grey dashed curve is the truth the points came from.</p>
+<div id="w-overfit"></div>
+</div>
+
+<p>The U-shape of validation error against model complexity is the picture to remember. Older textbooks call the two sides <b>bias</b> (too simple, systematically wrong) and <b>variance</b> (too flexible, changing a lot with every new sample of training data).</p>
+<div class="callout note"><span class="title">A modern twist</span><p>Very large neural networks often keep improving on validation data even when they have far more parameters than training examples, contradicting the simple U-shape. Researchers call this "double descent". The practical rules in this chapter still hold: measure on held-out data, and stop when validation error stops improving.</p></div>
+
+<h2 id="regularisation">Regularisation</h2>
+<p><a class="g" href="glossary.html#regularisation">Regularisation</a> means any change that makes a model prefer simpler explanations. The main tools:</p>
+
+<h3 id="l2">L2 penalty (weight decay)</h3>
+<p>Add the sum of squared weights to the loss, scaled by a strength &lambda; (lambda):</p>
+<div class="formula"><var>L</var><sub>total</sub> = <var>L</var><sub>data</sub> + &lambda; <span class="big">&Sigma;</span><sub><var>i</var></sub> <var>w</var><sub><var>i</var></sub><sup>2</sup></div>
+<p>Wild curves need huge weights that cancel each other out; the penalty makes those expensive. The gradient of the penalty is 2&lambda;<var>w</var>, so each update becomes</p>
+<div class="formula"><var>w</var> &larr; (1 &minus; 2&eta;&lambda;) <var>w</var> &minus; &eta; <span class="frac"><span>&part;<var>L</var><sub>data</sub></span><span>&part;<var>w</var></span></span></div>
+<p>Worked: with &eta; = 0.1 and &lambda; = 0.05 the factor is 1 &minus; 0.01 = 0.99, so every step first shrinks each weight by 1% and then applies the usual gradient. A weight of 3 that the data does not support decays to 3 &times; 0.99<sup>100</sup> = 1.10 after 100 steps. Hence the other name, <b>weight decay</b>. (The AdamW optimiser applies this shrinking directly rather than through the loss; <a href="ml-training-deep.html#optimisers">chapter 13</a>.)</p>
+
+<h3 id="l1">L1 penalty</h3>
+<p>Penalise &lambda;&Sigma;|<var>w</var><sub><var>i</var></sub>| instead. Its push towards zero is the same size however small the weight is, so it drives unhelpful weights to exactly zero. That makes L1 useful when you want the model to ignore most of its inputs.</p>
+
+<h3 id="early-stopping">Early stopping</h3>
+<p>Check validation loss as you train. Training loss keeps falling, but validation loss eventually turns upwards as the model starts memorising. Keep the parameters from the point where validation loss was lowest and stop. It is free, and almost every serious training run does it.</p>
+
+<h3 id="more-data">More data, and augmentation</h3>
+<p>The surest cure for overfitting is more examples, because noise averages out while the real pattern does not. When real data is scarce, <b>augmentation</b> makes new examples from old ones: flipped or cropped images, paraphrased sentences. Dropout (<a href="ml-training-deep.html#dropout">chapter 13</a>) is a regulariser built into the network itself.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A weight is 2.0, its data gradient is 0.5, the learning rate is 0.1 and &lambda; is 0.1. What is the weight after one step with weight decay, and without?</p></div>
+<details><summary>Answer</summary><div><p>With: (1 &minus; 2 &times; 0.1 &times; 0.1) &times; 2.0 &minus; 0.1 &times; 0.5 = 0.98 &times; 2.0 &minus; 0.05 = 1.91. Without: 2.0 &minus; 0.05 = 1.95.</p></div></details>
+
+<h2 id="leakage">Leakage: the silent failure</h2>
+<p>Leakage is when information from the validation or test set reaches training. The scores look wonderful and mean nothing. Common causes:</p>
+<ul>
+<li>Duplicates or near-duplicates across the split, so the "unseen" example was seen.</li>
+<li>Normalising with the mean and standard deviation of all the data, test set included. Compute them on the training set only.</li>
+<li>A feature that secretly contains the answer, such as a "closed account" flag when predicting who will close their account.</li>
+<li>For language models, <b>contamination</b>: benchmark questions that appear somewhere in the web text the model was trained on. A model that has read the answers scores well on that benchmark without being able to do the task.</li>
+</ul>
+
+<h2 id="in-ai">In AI applications</h2>
+<p>When you build on a hosted model, you rarely train it, but you still tune: prompts, retrieval settings, which model to call. Each tweak that makes a fixed set of test questions pass is a step of fitting, and you can overfit your prompts to your eval set exactly as a degree-9 polynomial fits ten points. The defence is the same: keep some cases you never tune against, and be suspicious of a change that helps the eval but has no clear reason to help users.</p>
+
+<p>Keep the eval data as carefully as code. Build the question bank from its sources with a script that drops any question already in the bank and prints each one it drops, so a duplicate cannot quietly count twice. Give the script a <code>--check</code> mode that exits with an error when the built file is out of date, so a stale bank fails in review.</p>
+<p>Test data for a grader should be built to measure, not to tune. Start from good answers and deliberately plant defects in them (a wrong figure, a missing caveat), so that a grader that passes everything is caught. And split the question bank into a tuning half and a held-out half before you start tuning prompts against it: that is the first safeguard this chapter recommends.</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="project-neural-net.html#experiments">chapter 15</a>, the overfitting experiment makes the data noisier and trains a wide network for 2,000 epochs, so you can watch training accuracy keep rising while validation accuracy falls.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Training error 0.01, validation error 0.9. What is happening, and name two fixes.</summary><div><p>Overfitting. Fixes: a stronger penalty (L2 or dropout), a smaller model, early stopping, or more training data.</p></div></details>
+<details><summary>Why must the test set be looked at only once?</summary><div><p>Every decision made after looking at it fits the model to it a little, so its score stops being an honest estimate of performance on new data.</p></div></details>
+<details><summary>What does L1 regularisation do that L2 does not?</summary><div><p>It pushes weights to exactly zero, because its pull does not weaken as a weight gets small. L2's pull is proportional to the weight, so weights shrink but rarely reach zero.</p></div></details>
+<details><summary>You normalise features using the mean of the whole dataset before splitting. What is wrong?</summary><div><p>The test set's values influenced a number used in training: a small leak. Compute the mean and standard deviation on the training set and apply them unchanged to validation and test.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://developers.google.com/machine-learning/crash-course/overfitting" target="_blank" rel="noopener noreferrer">Datasets, generalization, and overfitting</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Crash-course module on what generalising means and how to spot a model that memorised its data.</span></li>
+<li><a href="https://developers.google.com/machine-learning/crash-course/overfitting/dividing-datasets" target="_blank" rel="noopener noreferrer">Datasets: Dividing the original dataset</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Why data is split into training, validation and test sets, and the leaks to avoid when splitting.</span></li>
+<li><a href="https://www.youtube.com/watch?v=EuBBz3bI-aA" target="_blank" rel="noopener noreferrer">Machine Learning Fundamentals: Bias and Variance</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Short visual explanation of the bias-variance trade-off with simple and wiggly models.</span></li>
+<li><a href="https://developers.google.com/machine-learning/crash-course/overfitting/regularization" target="_blank" rel="noopener noreferrer">Overfitting: L2 regularization</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Shows how penalising large weights reduces overfitting and how the regularisation rate is tuned.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-ml-generalisation">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/overfit.js"></script>
+</body>
+</html>

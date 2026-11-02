@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>2. Algebra, functions and graphs &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part I &middot; Maths &middot; Chapter 2</p>
+<h1>Algebra, functions and graphs</h1>
+<p class="lead">An AI model is a function: numbers go in, numbers come out. This chapter rebuilds the school algebra you need to read every formula in the rest of the book.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Every model in this book, from a straight line to a large language model, is a <a class="g" href="glossary.html#function">function</a> with adjustable numbers inside it. Training means choosing those numbers well. If you can read <i>y</i> = <i>m</i><i>x</i> + <i>b</i> and say what each letter does, you can read the rest.</p></div>
+
+<h2 id="variables">Letters that stand for numbers</h2>
+<p>Start with something you already do. A coffee costs 3 dollars. Two coffees cost 3 &times; 2 = 6 dollars. Five coffees cost 3 &times; 5 = 15 dollars. You are repeating one rule with different numbers.</p>
+<p>Algebra writes the rule once, with a letter in place of the number that changes:</p>
+<div class="formula">cost = 3 &times; <var>n</var><span class="cap">n is the number of coffees. Put in n = 5 and you get 15.</span></div>
+<p>The letter is a <b>variable</b>: a name for a number we do not want to fix yet. Mathematicians usually drop the &times; sign between a number and a letter, so <span class="math">3<var>n</var></span> means 3 times <var>n</var>.</p>
+
+<h3 id="order">The order of operations</h3>
+<p>In <span class="math">2 + 3 &times; 4</span> the multiplication happens first, so the answer is 2 + 12 = 14, not 20. The order is: brackets first, then powers, then multiply and divide, then add and subtract. When in doubt, add brackets: <span class="math">(2 + 3) &times; 4 = 20</span>.</p>
+
+<h3 id="powers-roots">Powers, roots and negatives</h3>
+<p>A <b>power</b> is repeated multiplication. <span class="math">5<sup>2</sup></span> ("five squared") is 5 &times; 5 = 25. <span class="math">2<sup>3</sup></span> is 2 &times; 2 &times; 2 = 8. A <b>square root</b> undoes squaring: <span class="math">&radic;25 = 5</span> because 5 &times; 5 = 25.</p>
+<p>Negative numbers follow two rules worth memorising. A negative times a negative is positive: <span class="math">(&minus;3) &times; (&minus;4) = 12</span>. So any number squared is never negative: <span class="math">(&minus;3)<sup>2</sup> = 9</span>. That fact matters later, because squared errors are always zero or more.</p>
+
+<h3 id="percent">Fractions, decimals and percentages</h3>
+<p>Money questions are full of these. 7% means 7 per hundred, so 7% = 7 / 100 = 0.07. To take 7% of 2,000, multiply: 2,000 &times; 0.07 = 140. To grow 2,000 by 7%, multiply by 1.07: 2,000 &times; 1.07 = 2,140. Remember "multiply by 1 + rate"; <a href="maths-exp-log.html">chapter 3</a> builds compound growth on it.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A fund is worth 1,500 and falls by 4%. What is it worth now?</p></div>
+<details><summary>Answer</summary><div><p>Falling by 4% means multiplying by 1 &minus; 0.04 = 0.96. So 1,500 &times; 0.96 = 1,440.</p></div></details>
+
+<h2 id="equations">Solving equations</h2>
+<p>An <b>equation</b> says two things are equal. Solving it means finding the value of the variable that makes it true.</p>
+<p>Worked example. Solve <span class="math">2<var>x</var> + 3 = 11</span>.</p>
+<ol>
+<li>Subtract 3 from both sides: <span class="math">2<var>x</var> = 8</span>.</li>
+<li>Divide both sides by 2: <span class="math"><var>x</var> = 4</span>.</li>
+<li>Check by putting it back: 2 &times; 4 + 3 = 11. Correct.</li>
+</ol>
+<p>The one rule: whatever you do to one side, do to the other, and the balance stays true. That is all of school algebra in one sentence.</p>
+<div class="callout note"><span class="title">Try it</span><p>Solve <span class="math">5<var>x</var> &minus; 7 = 18</span>. Then solve <span class="math"><var>x</var> / 4 + 1 = 3</span>.</p></div>
+<details><summary>Answer</summary><div><p>First: add 7 to get 5x = 25, divide by 5 to get x = 5. Second: subtract 1 to get x / 4 = 2, multiply by 4 to get x = 8.</p></div></details>
+
+<h2 id="functions">Functions: machines with one output</h2>
+<p>A <a class="g" href="glossary.html#function">function</a> is a rule that takes an input and gives exactly one output. Picture a machine: drop in a number, get a number out.</p>
+<p>Take the machine "double it, then add one". Feed it 3: double is 6, add one is 7. Feed it 0: you get 1. Feed it &minus;2: you get &minus;3. We write the machine as</p>
+<div class="formula"><var>f</var>(<var>x</var>) = 2<var>x</var> + 1<span class="cap">Read "f of x equals two x plus one". f is the machine's name; x is whatever you feed it.</span></div>
+<p>So <span class="math"><var>f</var>(3) = 7</span>, <span class="math"><var>f</var>(0) = 1</span> and <span class="math"><var>f</var>(&minus;2) = &minus;3</span>. A table of inputs and outputs is a perfectly good way to describe a function:</p>
+<table>
+<tr><th>x</th><td class="num">&minus;2</td><td class="num">&minus;1</td><td class="num">0</td><td class="num">1</td><td class="num">2</td><td class="num">3</td></tr>
+<tr><th>f(x) = 2x + 1</th><td class="num">&minus;3</td><td class="num">&minus;1</td><td class="num">1</td><td class="num">3</td><td class="num">5</td><td class="num">7</td></tr>
+</table>
+<p>"Exactly one output" is the important part. The same input always gives the same output. (Language models break this on purpose by sampling; <a href="llm-tokens.html">chapter 16</a> explains how.)</p>
+
+<h2 id="graphs">Graphs</h2>
+<p>A graph draws a function. The horizontal axis is the input <var>x</var>; the vertical axis is the output <var>y</var>. Each row of the table becomes a point: (0, 1), (1, 3), (2, 5) and so on. Join the points and you see the function's shape at a glance.</p>
+<p>For <span class="math"><var>f</var>(<var>x</var>) = 2<var>x</var> + 1</span> the points lie on a straight line. Functions whose graphs are straight lines are called <b>linear</b>.</p>
+
+<h2 id="lines">Straight lines: slope and intercept</h2>
+<p>Every straight line can be written as</p>
+<div class="formula"><var>y</var> = <var>m</var><var>x</var> + <var>b</var><span class="cap">m is the slope (how steep), b is the intercept (where the line crosses the vertical axis, at x = 0).</span></div>
+<p><b>Slope</b> is "rise over run": how far the line goes up for each step to the right. Worked example with the line through (1, 3) and (3, 7):</p>
+<ul>
+<li>Run: from x = 1 to x = 3 is 3 &minus; 1 = 2.</li>
+<li>Rise: from y = 3 to y = 7 is 7 &minus; 3 = 4.</li>
+<li>Slope: rise / run = 4 / 2 = 2.</li>
+<li>Intercept: at x = 1, y = 3, so 3 = 2 &times; 1 + b, giving b = 1. The line is y = 2x + 1, our machine from before.</li>
+</ul>
+<div class="formula"><var>m</var> = <span class="frac"><span><var>y</var><sub>2</sub> &minus; <var>y</var><sub>1</sub></span><span><var>x</var><sub>2</sub> &minus; <var>x</var><sub>1</sub></span></span><span class="cap">The small numbers below the letters (subscripts) just label the first and second point.</span></div>
+<p>A positive slope goes up to the right. A negative slope goes down. A slope of zero is flat. Slope is the single most important idea in Part I: <a href="maths-derivatives.html">chapter 5</a> extends it to curves, and <a href="maths-gradient-descent.html">chapter 6</a> uses it to train models.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Move the slope and the intercept</h4></div>
+<p class="hint">Drag the sliders. The dashed triangle shows the run (2 steps right) and the rise between x = 1 and x = 3. The red dot is the intercept.</p>
+<div id="w-line"></div>
+</div>
+
+<div class="callout note"><span class="title">Try it</span><p>A line passes through (2, 1) and (6, 9). Find its slope and intercept.</p></div>
+<details><summary>Answer</summary><div><p>Run = 6 &minus; 2 = 4, rise = 9 &minus; 1 = 8, slope = 8 / 4 = 2. Then 1 = 2 &times; 2 + b, so b = &minus;3. The line is y = 2x &minus; 3.</p></div></details>
+
+<h2 id="many-inputs">Functions of several inputs</h2>
+<p>Real functions often take several inputs. A flat's rent might be estimated as</p>
+<div class="formula">rent = 400 + 25 &times; <var>area</var> + 150 &times; <var>bedrooms</var></div>
+<p>For 60 square metres and 2 bedrooms: 400 + 25 &times; 60 + 150 &times; 2 = 400 + 1,500 + 300 = 2,200.</p>
+<p>The numbers 25 and 150 are <b>weights</b>: how much each input counts. 400 is a starting amount, which machine learning calls the <a class="g" href="glossary.html#bias-term">bias</a>. With inputs <var>x</var><sub>1</sub>, <var>x</var><sub>2</sub> and weights <var>w</var><sub>1</sub>, <var>w</var><sub>2</sub> it reads</p>
+<div class="formula"><var>y</var> = <var>w</var><sub>1</sub><var>x</var><sub>1</sub> + <var>w</var><sub>2</sub><var>x</var><sub>2</sub> + <var>b</var></div>
+<p>Hold this shape in mind. A single <a class="g" href="glossary.html#neuron">neuron</a> in a neural network computes exactly this, then bends the result with an activation function (<a href="ml-neural-networks.html">chapter 12</a>).</p>
+
+<h3 id="sigma">Adding many things: the &Sigma; sign</h3>
+<p>With 384 inputs, writing every term is hopeless. The Greek capital sigma, &Sigma;, means "add these up". Worked example: the weights are 2, 3 and 1; the inputs are 4, 0 and 5.</p>
+<p>Term by term: 2 &times; 4 = 8, 3 &times; 0 = 0, 1 &times; 5 = 5. Total 8 + 0 + 5 = 13. In symbols:</p>
+<div class="formula"><span class="big">&Sigma;</span><sub><var>i</var>=1</sub><sup>3</sup> <var>w</var><sub><var>i</var></sub><var>x</var><sub><var>i</var></sub> = <var>w</var><sub>1</sub><var>x</var><sub>1</sub> + <var>w</var><sub>2</sub><var>x</var><sub>2</sub> + <var>w</var><sub>3</sub><var>x</var><sub>3</sub> = 13<span class="cap">i counts from 1 to 3. For each i, multiply w_i by x_i, then add the results.</span></div>
+<p>This "multiply pairs and add" is called the <a class="g" href="glossary.html#dot-product">dot product</a>. It is the most common calculation in all of AI, and <a href="maths-vectors-matrices.html">chapter 4</a> gives it a picture.</p>
+<div class="callout note"><span class="title">Try it</span><p>Work out <span class="math">&Sigma;<sub>i=1</sub><sup>4</sup> i<sup>2</sup></span>.</p></div>
+<details><summary>Answer</summary><div><p>1 + 4 + 9 + 16 = 30.</p></div></details>
+
+<h2 id="curves">Curves and composition</h2>
+<p>Not every function is a straight line. <span class="math"><var>g</var>(<var>x</var>) = <var>x</var><sup>2</sup></span> makes a U-shaped curve (a parabola): g(&minus;2) = 4, g(0) = 0, g(3) = 9. Its lowest point is at x = 0. Finding the lowest point of a curve is what training a model means, so the parabola will come back many times.</p>
+<p>Functions can be chained: feed one machine's output into another. If <span class="math"><var>f</var>(<var>x</var>) = 2<var>x</var> + 1</span> and <span class="math"><var>g</var>(<var>x</var>) = <var>x</var><sup>2</sup></span>, then <span class="math"><var>g</var>(<var>f</var>(3))</span> means: first f(3) = 7, then g(7) = 49. This is called <b>composition</b>. A neural network is a long composition: layer after layer, each feeding the next. <a href="maths-derivatives.html#chain-rule">The chain rule</a> tells us how to find slopes through such chains.</p>
+<div class="callout note"><span class="title">Try it</span><p>With the same f and g, find f(g(3)). Is it the same as g(f(3))?</p></div>
+<details><summary>Answer</summary><div><p>g(3) = 9, then f(9) = 19. It is not 49: the order of the machines matters.</p></div></details>
+
+<h2 id="in-ai">In AI</h2>
+<p>A <b>model</b> is a function whose rule contains adjustable numbers called <a class="g" href="glossary.html#parameter">parameters</a>. The simplest model is a line, <span class="math"><var>y</var> = <var>w</var><var>x</var> + <var>b</var></span>, with two parameters <var>w</var> and <var>b</var>. A large language model is also a function: its input is a list of token ids and its output is a probability for every possible next token. It just has billions of parameters instead of two. Learning means adjusting the parameters until the function's outputs match the data, which is the subject of Part II.</p>
+
+<p>Plain functions with no learned parameters are the safe choice for money figures. The rule can be read and checked, and the same input always gives the same output. A months-of-cover calculator is one line of algebra: <code>months_covered = cash &divide; monthly_expenses</code>. With 12,000 in cash and 3,000 a month of expenses it returns 4 months, and it refuses expenses of zero, because dividing by zero has no answer.</p>
+<p>A language model should not do this arithmetic in its head. A well-built system lets the model call such a function as a tool and quote the result (<a href="tools.html">chapter 28</a> explains why).</p>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-agent.html">Lab 5</a> you give a model small plain functions as tools and watch it call them instead of guessing the arithmetic.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>What do m and b mean in y = mx + b?</summary><div><p>m is the slope: how much y rises for each step of 1 in x. b is the intercept: the value of y when x is 0.</p></div></details>
+<details><summary>Why is a squared number never negative?</summary><div><p>Because a positive times a positive is positive, and a negative times a negative is also positive. Only 0 squared is 0.</p></div></details>
+<details><summary>What does &Sigma;<sub>i=1</sub><sup>3</sup> w<sub>i</sub>x<sub>i</sub> compute for w = (1, 2, 3) and x = (3, 2, 1)?</summary><div><p>1 &times; 3 + 2 &times; 2 + 3 &times; 1 = 3 + 4 + 3 = 10.</p></div></details>
+<details><summary>In what sense is a neural network a composition of functions?</summary><div><p>Each layer is a function of the previous layer's output. The whole network is the first layer's function, fed into the second, fed into the third, and so on: f<sub>3</sub>(f<sub>2</sub>(f<sub>1</sub>(x))).</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:linear-equations-graphs" target="_blank" rel="noopener noreferrer">Linear equations &amp; graphs (Khan Academy, Algebra 1)</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Short lessons plus practice on slope, intercepts and plotting straight lines, the exact groundwork this chapter needs.</span></li>
+<li><a href="https://www.khanacademy.org/math/algebra/x2f8bb11595b61c86:functions" target="_blank" rel="noopener noreferrer">Functions (Khan Academy, Algebra 1)</a> <span class="pill">video</span> <span class="pill">beginner</span><br><span class="res-note">Builds the idea of a function as an input-to-output rule, with notation, domain and range, and graded exercises.</span></li>
+<li><a href="https://www.mathsisfun.com/equation_of_line.html" target="_blank" rel="noopener noreferrer">Equation of a Straight Line</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">One-page walk through y = mx + b with an interactive graph, handy as a quick refresher on slope and intercept.</span></li>
+<li><a href="https://www.mathsisfun.com/sets/function.html" target="_blank" rel="noopener noreferrer">What is a Function</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Plain-language picture of functions as machines that map inputs to outputs, good before reading any ML notation.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-maths-functions">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/plot.js"></script>
+<script src="assets/widgets/line.js"></script>
+</body>
+</html>

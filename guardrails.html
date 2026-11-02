@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>34. Guardrails &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 34</p>
+<h1>Guardrails</h1>
+<p class="lead">A guardrail is a rule, enforced by code, that sits between a model and the world: it decides what may go into the model, what the model may do, and what may come out of it to a customer. A model's good behaviour is a tendency; a guardrail turns the behaviours you cannot do without into guarantees, or at least into things you can measure.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>No prompt makes a model never wrong, never rude and never fooled. When an answer is about someone's money, you need a place where code says "no" for certain, and you need to know how often that "no" is right.</p></div>
+
+<h2 id="layers">Three places to put a guardrail</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Where</th><th>What it does</th><th>Typical checks</th></tr>
+<tr><td>Before the model (input)</td><td>Decides whether to spend a model call at all, and cleans what is sent</td><td>Length cap, rate limit, budget, topic and abuse classifier, personal-data scrubbing</td></tr>
+<tr><td>Around the model (process)</td><td>Limits what the model can reach while it works</td><td>Allowed tools per task, read-only tools, turn and spend caps</td></tr>
+<tr><td>After the model (output)</td><td>Decides whether the answer is shown</td><td>Schema validation, deterministic rules, a second model scoring the answer, required disclosure wording</td></tr>
+</table></div>
+<p>Put the cheap, exact checks first. A length check costs nothing and is never wrong about the length; a model classifier costs money and is sometimes wrong. If the cheap check already says no, the expensive one never runs.</p>
+
+<h2 id="input">Input guardrails</h2>
+<p><b>Caps and rate limits.</b> A cap on input length bounds the cost of any one request. A rate limit bounds how fast one user can spend. A common form is a sliding window: keep the times of a user's recent requests, drop those older than the window, and refuse when the count left is at the limit.</p>
+<p>Worked: the limit is 30 requests per 60 seconds. A user has sent requests at seconds 0, 1, 2, &hellip; 29 (30 requests). At second 45 all 30 are still inside the window, so request 31 is refused. At second 61 the request from second 0 is more than 60 seconds old and is dropped, 29 remain, and the new request is allowed.</p>
+<p><b>Topic and abuse classification.</b> A small, cheap model reads the question and says whether it is on topic and whether it is abusive, before any expensive work starts. Its answer is a label in a fixed schema, not free text, so code can act on it.</p>
+<p><b>Personal-data scrubbing.</b> Names, phone numbers, emails, identity numbers and bank account numbers are replaced by placeholders before any text reaches a model, and the real values are put back only in the text the customer sees. The model can still say "thanks, &lt;PERSON_A&gt;" without ever knowing the name.</p>
+
+<div class="widget" id="w-piiscrub">
+<div class="widget-head"><span class="tag">Toy</span><h4>Replace personal data with placeholders, then restore it</h4></div>
+<p class="hint">This toy uses three regular expressions and six first names. A real scrubber uses a trained entity recogniser (for example Presidio with a spaCy language model) plus custom recognisers for each kind of identifier. Example 3 shows why a name list is not enough.</p>
+</div>
+
+<p><b>Order of the gate.</b> Run the code limits first (input length, rate limit, a daily token budget per user and in total) and only then ask the classifier model. If the classifier errors, fail closed: send a fixed safe reply, not a guess. A question whose stakes the classifier cannot judge should count as high stakes. Counters kept in one process reset when it restarts and do not add up across servers; that is acceptable in a prototype if you write it down, and not in production.</p>
+
+<h3 id="scrub-lessons">What makes a scrubber hold up</h3>
+<p>A scrubber fails in two directions: it misses personal data, and it masks things that are not personal. Most of its quality comes from small rules like these:</p>
+<ul>
+<li><b>Use context for numbers.</b> A long digit string is a bank account number only after a word such as "account" or "a/c" and with enough digits (say 9), so a bare amount such as "120000" stays in the clear. An IBAN is recognised by its shape: two letters, two check digits, then 11 to 30 letters or digits.</li>
+<li><b>Money is not a phone number.</b> A figure written with two decimal places ("800.00") is an amount, even though a phone-number library may read it as a toll-free number.</li>
+<li><b>Numbers with a country code are phone numbers</b> even outside the ranges a phone library holds as valid; after "+" accept any code, but after "00" accept only the codes you serve, since account and order numbers also start with "00".</li>
+<li><b>End a name at the first word that holds a digit.</b> In "Ravi Kumar 5000" the name is masked and the amount kept, and a sentence-opening word such as "Email" or "Call" is not taken for a name.</li>
+<li><b>Replace overlapping matches as one.</b> An email address that contains a first name must not leave its tail in the clear.</li>
+<li><b>Label by kind, count like spreadsheet columns.</b> <code>&lt;PERSON_A&gt;</code>, <code>&lt;EMAIL_A&gt;</code>, <code>&lt;IBAN_A&gt;</code>, then A to Z, then AA, AB and on, so a long text never runs out of labels. Keep one pattern for them all (<code>&lt;[A-Z]+_[A-Z]+&gt;</code>) so restoring is one pass.</li>
+<li><b>Mask dictionaries by key name.</b> Data bound for logs and traces is masked by the names of its keys (anything ending in <code>no</code>, bank identifiers, the last four digits of an account), not by guessing at the values.</li>
+</ul>
+<p><b>Where the real values come back.</b> Scrub at the start of the request and again at the gateway (<a href="harness.html#single-gateway">chapter 33</a>). Real values come back only in what the person sees on screen, never in what the server stores, judges or logs. Facts recalled from an earlier request must not take this request's values: a person reads as "a person" and another placeholder reads as plain words for its kind, such as "an account number" (<a href="memory.html">chapter 37</a>).</p>
+<p><b>Measure it.</b> Build a test set of rows with planted personal data and rows of clean text. Require 100% recall for the formats you must never miss (emails, identity numbers, account numbers, IBANs, phone formats), a lower bar for names and addresses, and zero false masks on clean text. Also check each planted row after masking: fail if a planted value is left in the clear, if text is glued to the end of a placeholder (the tail of a value replaced short), or if words that must stay, such as an amount after a name, are lost.</p>
+
+<h2 id="output">Output guardrails</h2>
+<ul>
+<li><b>Validate the shape.</b> Ask for structured output and validate it against a schema. A model answer that does not parse is not an answer.</li>
+<li><b>Deterministic rules next.</b> Anything code can decide exactly (every figure comes from a tool result, every source has a date, the required disclosure is the last line) is decided by code.</li>
+<li><b>A model check last,</b> for what code cannot decide: is this suitable for this customer's risk profile? Is it safe? Give the checking model a rubric with levels, and a strict pass mark.</li>
+<li><b>Fail closed.</b> If a check errors, the answer is not shown. A guardrail that passes everything when it breaks is worse than none, because people believe it is there.</li>
+<li><b>Cheap first, in code.</b> Run the deterministic rules first and call the model check only if they pass. The model check scores each rubric criterion (for example suitability and safety) on a small scale, 0 to 2, and blocks on anything below the top mark.</li>
+<li><b>Allow exact exceptions.</b> A rule such as "no digits in prose" can skip a headline quoted word for word from this answer's own tool results; a headline changed by one character is checked like any other prose.</li>
+</ul>
+
+<h2 id="disclosures">Required wording, owned by code</h2>
+<p>Some lines must appear word for word: a disclosure that says an answer is AI-generated and not a guarantee, for example. A model asked to write such a line will sometimes paraphrase it, shorten it or forget it. So the wording lives in code as a constant, code decides which wording an answer needs, and a deterministic check refuses an answer whose last line of prose is not that exact wording. An answer that also cites a public web page ends with a second fixed sentence on that same line, and the check wants both.</p>
+<p>Two refinements make this work in practice. First, when the right wording depends on what the answer used, code chooses it from the record of what happened, not from the model's own claim. Second, when the only fault is that the line is missing, code can add it, because the words are known exactly; any other fault still blocks the answer. The prompts render the same constant, so the model and the check never disagree about the words.</p>
+<p>Worked: a medication-information assistant looks up the leaflet for a drug. If the lookup found a current leaflet, code picks the wording that names the manufacturer's leaflet and its date. If the lookup found none, code picks the wording that says no current leaflet was on file and to ask a pharmacist. If it found a leaflet and also cited a clinical guideline, code picks the wording that names both sources. The model wrote none of these choices; the tool trace decided each one.</p>
+
+<h2 id="maths">How good is a guardrail? Precision and recall</h2>
+<p>A guardrail that blocks answers is a classifier, and it makes two kinds of mistake: it lets bad answers through (misses) and it blocks good ones (false alarms). Count both.</p>
+<p>Worked: of 1,000 answers, 50 are bad. The check blocks 45 of the bad ones and 30 of the 950 good ones.</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Measure</th><th>Sum</th><th>Value</th></tr>
+<tr><td>Recall (share of bad answers caught)</td><td class="num">45 / 50</td><td class="num">0.90</td></tr>
+<tr><td>Precision (share of blocks that were right)</td><td class="num">45 / (45 + 30)</td><td class="num">0.60</td></tr>
+<tr><td>False alarm rate (good answers blocked)</td><td class="num">30 / 950</td><td class="num">0.032</td></tr>
+<tr><td>Bad answers reaching customers</td><td class="num">5 / 1,000</td><td class="num">0.5%</td></tr>
+</table></div>
+<p>Two checks in a row: if a second check catches 80% of what the first one missed, and the two fail independently, the bad answers that get through fall from 5 to 5 &times; 0.2 = 1 per 1,000. False alarms add up the other way: every check you add can block good answers too. Independence is the weak assumption: two checks that look at the same thing tend to miss the same answers.</p>
+
+<h2 id="tools">Guardrail tools</h2>
+<p>Libraries exist for each layer: Presidio finds and replaces personal data; NeMo Guardrails and Guardrails AI let you declare rules about topics, dialogue and output shape. They are useful, but each one still needs the measurements above on your own data before you trust it.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A rate limit allows 5 requests per 10 seconds. A user sends requests at seconds 0, 2, 4, 6, 8 and then at 9, 10.5 and 12.1. Which are refused? (A request is dropped from the window when it is more than 10 seconds old.)</p></div>
+<details><summary>Answer</summary><div><p>At 9 the window holds 0, 2, 4, 6, 8: five, so 9 is refused (refused requests are not recorded). At 10.5 the request from second 0 is 10.5 seconds old and is dropped; four remain, so 10.5 is allowed. At 12.1 the request from second 2 is 10.1 seconds old and is dropped, leaving 4, 6, 8, 10.5: four, so 12.1 is allowed. Only the request at second 9 is refused.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-guardrails.html">Lab 7</a> you build an input guard that masks personal data, a passage guard that drops and fences retrieved text, and an output guard that fails closed, then measure each one on labelled data.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why run the length cap before the topic classifier?</summary><div><p>It is free and exact; when it refuses, the paid, less reliable model call is never made.</p></div></details>
+<details><summary>A check blocks 40 of 50 bad answers and 10 of 950 good ones. Give recall and precision.</summary><div><p>Recall 40 / 50 = 0.8. Precision 40 / 50 = 0.8 (40 right blocks out of 50 blocks).</p></div></details>
+<details><summary>What should happen when the model check itself errors?</summary><div><p>The answer is treated as failed and not shown (fail closed), and the customer gets a safe fallback.</p></div></details>
+<details><summary>Why should a scrubber leave "800.00" alone, when a phone library may read it as a toll-free number?</summary><div><p>It has two decimal places, so it is written as money. Masking it would hide an amount the answer needs, and nothing personal would be protected.</p></div></details>
+<details><summary>A medication answer looked up the leaflet, found none current, and ended without a disclosure. What happens?</summary><div><p>Code picks the no-leaflet wording from the tool trace and, because the line is the only fault and its wording is absent, appends it. The disclosure rule is checked again, and the answer goes on to the rest of the checks.</p></div></details>
+<details><summary>Why can a model still write "thanks, &lt;PERSON_A&gt;" usefully?</summary><div><p>The placeholder stands in for the name consistently, so the model can refer to the person; code swaps the real name back only in what the customer sees.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://presidio.dataprivacystack.org/" target="_blank" rel="noopener noreferrer">Presidio</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Docs for the PII detection and anonymisation toolkit; the project moved from Microsoft&#x27;s site to this address.</span></li>
+<li><a href="https://docs.nvidia.com/nemo/guardrails/about-nemo-guardrails-library/overview" target="_blank" rel="noopener noreferrer">Overview | NVIDIA NeMo Guardrails Library Developer Guide</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">An open-source toolkit for input, output and dialogue rails, a useful reference architecture.</span></li>
+<li><a href="https://developers.openai.com/cookbook/examples/how_to_use_guardrails" target="_blank" rel="noopener noreferrer">How to implement LLM guardrails</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Cookbook notebook showing input and output checks run alongside the main model call.</span></li>
+<li><a href="https://guardrailsai.com/guardrails/docs" target="_blank" rel="noopener noreferrer">Introduction - Guardrails AI</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Docs for a validator-based guardrail library, another pattern for checking model output.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-guardrails">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/piiscrub.js"></script>
+</body>
+</html>

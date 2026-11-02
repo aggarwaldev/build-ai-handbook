@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>22. Context engineering and choosing models &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 22</p>
+<h1>Context engineering and choosing models</h1>
+<p class="lead">Prompt engineering is about the words of the instructions. Context engineering is about everything else that goes into the window on each call: which history, which documents, which tool results, in what order and how much of each. The second half of the chapter covers the other big lever you control: which model gets the call.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Most failures of a working AI feature are context failures: the fact the model needed was not in the window, was buried in the middle of it, or was crowded out by things it did not need. And most of the bill is input tokens sent again on every call. Getting the context right improves quality and cost at the same time.</p></div>
+
+<h2 id="what">The window is a budget</h2>
+<p>A model sees only what is in its context window on this call (<a href="llm-tokens.html#context-window">chapter 16</a>). A typical call of an assistant that uses tools might hold:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Part</th><th>Tokens</th><th>Changes between calls?</th></tr>
+<tr><td>System prompt</td><td class="num">1,500</td><td>No</td></tr>
+<tr><td>Tool definitions</td><td class="num">2,000</td><td>No</td></tr>
+<tr><td>Earlier turns of the chat</td><td class="num">6,000</td><td>Grows each turn</td></tr>
+<tr><td>Retrieved passages (3 &times; 400)</td><td class="num">1,200</td><td>Per question</td></tr>
+<tr><td>Tool results</td><td class="num">2,500</td><td>Per question</td></tr>
+<tr><td>The question</td><td class="num">50</td><td>Per question</td></tr>
+<tr><td><b>Total input</b></td><td class="num"><b>13,250</b></td><td></td></tr>
+</table></div>
+<p>At $2 per million input tokens and $10 per million output tokens, with a 600-token answer, one call costs 13,250 &times; 2 / 10<sup>6</sup> + 600 &times; 10 / 10<sup>6</sup> = $0.0265 + $0.006 = <b>$0.0325</b>, or $32.50 per thousand questions. Notice that the question is 0.4% of the input. Almost everything you pay for is context you chose to send.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Context budget</h4></div>
+<p class="hint">The defaults are the table above, priced with the per-million-token prices of three Claude models. Drag the earlier turns up to 30,000 to see a long chat dominate the bill. Switch on caching for the stable prefix, then switch models.</p>
+<div id="w-ctxbudget"></div>
+</div>
+
+<h2 id="techniques">Five things to do with context</h2>
+<ol>
+<li><b>Select.</b> Send what this question needs, not everything that might help. Retrieve the top few passages (<a href="rag.html">chapter 24</a>) instead of pasting whole documents; give each step only the tools it needs.</li>
+<li><b>Order.</b> Stable material first, the changing material after it, and the question last. Models use the start and end of a long input better than the middle: in "Lost in the Middle: How Language Models Use Long Contexts" (2023), accuracy dropped when the needed fact sat mid-window. Put what matters most near an edge.</li>
+<li><b>Compress.</b> Summarise or drop old turns, trim tool results to the fields the model needs, and remove duplicates. Long agent sessions often "compact" their history: replace the oldest part with a summary written by the model, keeping decisions and open questions.</li>
+<li><b>Isolate.</b> Give a side task its own fresh context and take back only its conclusion. That is the main idea behind <a href="subagents.html">subagents</a> (chapter 32): a search that reads 40 files should not leave those 40 files in the main window.</li>
+<li><b>Persist outside the window.</b> Facts that must survive across chats belong in storage your code reads back deliberately, such as a memory store (<a href="memory.html">chapter 37</a>) or notes files, not in an ever-growing history.</li>
+</ol>
+<p>Two cheap limits go with these. Cap how much chat history is sent, for example the last three exchanges, rebuilt from stored text. And cap the length of the question a user may submit, so one huge paste cannot fill the window. Both put a ceiling on the size, and so on the cost, of every call.</p>
+<p>A useful test for any piece of context: if a careful human expert were given this window, would this piece help them answer, or would they have to skip over it?</p>
+
+<h2 id="caching">Prompt caching</h2>
+<p>Providers can cache the processed form of a prompt's opening, so a later call that starts with exactly the same tokens skips that work and pays less for it. On Anthropic's API, as its documentation described it when this book was checked:</p>
+<ul>
+<li>The cached prefix is built in the order tools, then system prompt, then messages. You mark where it ends with a <code>cache_control</code> breakpoint, up to 4 per request.</li>
+<li>A cached prefix lives 5 minutes by default, refreshed each time it is used; a 1-hour lifetime costs more to write.</li>
+<li>Writing to the 5-minute cache costs 1.25 times the input price; reading from it costs a small fraction, 0.1 times for most models.</li>
+<li>Prompts below a minimum length are not cached at all (512 tokens for the newest models, more for older ones), silently.</li>
+</ul>
+<p>The design rule that follows: put everything stable at the start and keep it byte-identical. A timestamp or a user's name near the top of the system prompt breaks the cache on every call. In the example, the 3,500 stable tokens read from cache at 0.1 times the price bring the call from $0.0325 to $0.0262, a saving of about 19% (before the cost of the occasional cache write).</p>
+
+<h2 id="choosing">Choosing a model</h2>
+<p>There is no best model, only the best model for a step. Compare candidates on the things that matter for that step:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Property</th><th>Why it matters</th><th>How to measure</th></tr>
+<tr><td>Quality on your task</td><td>Leaderboards measure someone else's task</td><td>Your own eval set (<a href="evals.html">chapter 44</a>)</td></tr>
+<tr><td>Price per input and output token</td><td>Multiplied by every call, forever</td><td>Provider price list, times your token counts</td></tr>
+<tr><td>Latency</td><td>Time to first token and tokens per second shape how a product feels to its users</td><td>Timed calls with realistic prompts</td></tr>
+<tr><td>Tool use and structured output</td><td>Some models follow schemas and tool protocols far more reliably</td><td>Count invalid outputs and repairs in your evals</td></tr>
+<tr><td>Context window</td><td>Sets the ceiling on what one call can see</td><td>Model card</td></tr>
+<tr><td>Data handling</td><td>Retention and where requests are processed matter for sensitive data</td><td>Provider terms and routing settings (<a href="regulated.html">chapter 43</a>)</td></tr>
+</table></div>
+
+<h3 id="routing">Routing: small models for easy questions</h3>
+<p>If most questions are easy, sending all of them to the largest model wastes money and time. A router classifies each request and sends it to a model tier. Worked with prices per million tokens (input/output) like those of the three Claude models used in the labs: a small model at $0.10/$0.50, a medium one at $2/$10, a large one at $4/$20, and a call of 10,000 input and 500 output tokens:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Tier</th><th>Cost per call</th><th>Share of questions</th><th>Contribution</th></tr>
+<tr><td>small</td><td class="num">$0.00125</td><td class="num">60%</td><td class="num">$0.00075</td></tr>
+<tr><td>medium</td><td class="num">$0.025</td><td class="num">35%</td><td class="num">$0.00875</td></tr>
+<tr><td>large</td><td class="num">$0.05</td><td class="num">5%</td><td class="num">$0.0025</td></tr>
+<tr><td colspan="3"><b>Average with routing</b></td><td class="num"><b>$0.012</b></td></tr>
+</table></div>
+<p>Against $0.025 for sending everything to the medium model, that is 52% cheaper, before the router's own cost. The catch is misrouting: a hard question sent to the small model gets a worse answer. Routers should fail towards the safer tier, keep a floor under categories where a weak answer is costly, and let a failed answer retry one tier up.</p>
+
+<div class="callout note"><span class="title">Try it</span><p>A chat sends its full history on every turn, and each turn adds about 800 tokens. How many history tokens does turn 20 send, and how many history tokens have been paid for across all 20 turns?</p></div>
+<details><summary>Answer</summary><div><p>Turn 20 sends the 19 earlier turns: 19 &times; 800 = 15,200 tokens. Across all turns: 800 &times; (0 + 1 + &hellip; + 19) = 800 &times; 190 = 152,000 tokens. The cost of full history grows with the square of the chat's length, which is why apps cap or summarise it.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-first-call.html">Lab 1</a> every reply carries its input and output token counts and its cost, so you can check the budget table above against a real call and watch the input grow as you add history.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>Why can adding more context make answers worse?</summary><div><p>Irrelevant material competes for the model's attention, and facts in the middle of a long input are used less reliably. More tokens also cost more and slow the call.</p></div></details>
+<details><summary>What breaks a prompt cache, and how do you avoid it?</summary><div><p>Any change in the cached prefix, such as a timestamp or a user name near the top. Keep stable content first and byte-identical, and put changing content after it.</p></div></details>
+<details><summary>What should a router do when it is unsure or fails?</summary><div><p>Fall back to a safe default tier rather than the cheapest one, and let a failed answer retry one tier up.</p></div></details>
+<details><summary>Name two cheap limits that cap the size of every call.</summary><div><p>A cap on how much chat history is sent (the last few exchanges) and a cap on the length of the question a user may submit.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://arxiv.org/abs/2307.03172" target="_blank" rel="noopener noreferrer">Lost in the Middle: How Language Models Use Long Contexts (2023)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">Finds models use information at the start and end of long prompts better than in the middle.</span></li>
+<li><a href="https://www.anthropic.com/research/effective-context-engineering-for-ai-agents" target="_blank" rel="noopener noreferrer">Effective context engineering for AI agents</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Practical guidance on what to put in context, in what order, and when to compact.</span></li>
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/context-windows" target="_blank" rel="noopener noreferrer">Context windows (Claude API docs)</a> <span class="pill">docs</span> <span class="pill">beginner</span><br><span class="res-note">How the context window fills across turns, tool calls and thinking.</span></li>
+<li><a href="https://platform.claude.com/docs/en/build-with-claude/compaction" target="_blank" rel="noopener noreferrer">Compaction overview (Claude API docs)</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Summarising older conversation to stay within the window on long tasks.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-context-engineering">All resources for this chapter</a> and 5 more.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/ctxbudget.js"></script>
+</body>
+</html>

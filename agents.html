@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>29. Agents and agentic flow &middot; Build AI handbook</title>
+<link rel="stylesheet" href="assets/handbook.css">
+<script src="assets/search-index.js"></script>
+<script src="assets/handbook.js"></script>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<div class="layout">
+<nav id="sidebar" class="sidebar"></nav>
+<main id="main" class="content">
+<article>
+<p class="kicker">Part IV &middot; Applied concepts &middot; Chapter 29</p>
+<h1>Agents and agentic flow</h1>
+<p class="lead">An agent is a model running in a loop: it looks at what it knows, decides on an action, usually a tool call, sees the result, and decides again, until it judges the task done. The word is used loosely, so this chapter pins it down, shows the loop one message at a time, and does the arithmetic that explains why agents fail more often than single calls.</p>
+
+<div class="callout why"><span class="title">Why it matters</span><p>Letting a model choose its own next step is powerful and expensive in reliability. Knowing where your system sits between "code decides every step" and "the model decides every step" tells you what can go wrong, what to cap, and what to test.</p></div>
+
+<h2 id="definition">Workflows and agents</h2>
+<p>Two designs bracket every AI application:</p>
+<ul>
+<li><b>A workflow.</b> Code fixes the steps and their order; models fill in some of them. "Classify the message, then draft a reply with the matching template, then check the reply" is a workflow, even though three models may be involved. Predictable, testable, cheaper.</li>
+<li><b>An agent.</b> The model chooses the steps: which tool, in what order, how many times, and when to stop. Flexible enough for tasks whose steps cannot be known in advance, such as searching the web until a figure is found.</li>
+</ul>
+<p>Most production systems are workflows with small agents inside them: code owns the overall flow, and a model gets freedom only within one bounded step. Start with the least autonomy that solves the problem, and add more only when a fixed flow demonstrably fails.</p>
+
+<h2 id="loop">The loop</h2>
+<p>Every agent, however it is built, runs the same loop:</p>
+<ol>
+<li><b>Observe.</b> The context holds the task, the instructions, and everything learned so far.</li>
+<li><b>Decide.</b> The model writes either an action (a tool request) or a final answer.</li>
+<li><b>Act.</b> Code runs the action, with its own checks and limits, and appends the result.</li>
+<li><b>Stop or repeat.</b> Stop on a final answer, or when a limit is reached: turns, tool calls, money or time.</li>
+</ol>
+<p>The pattern of interleaving short reasoning with actions and their observations was described in the paper "ReAct: Synergizing Reasoning and Acting in Language Models" (2022). Modern models are trained to work this way through tool calling (<a href="tools.html">chapter 28</a>), so the loop is usually a few lines of code around the model call.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Step through an agent loop</h4></div>
+<p class="hint">Click "Next message" to watch one answer being built. Then tick the bad-input box to see an error returned as data and corrected. Finally set the tool-round limit to 2 and run to the end. Watch the input tokens: each model call resends everything before it.</p>
+<div id="w-agentloop"></div>
+</div>
+
+<h2 id="reliability">Why long loops fail more often</h2>
+<p>If each step of a task goes right with probability <var>p</var>, independently, a run of <var>n</var> steps goes right every time with probability <var>p</var><sup><var>n</var></sup>. The numbers fall fast:</p>
+<div class="tbl-wrap"><table class="worked">
+<tr><th>Each step right</th><th>Steps</th><th>Whole run right</th></tr>
+<tr><td class="num">0.95</td><td class="num">10</td><td class="num">0.95<sup>10</sup> = 0.599</td></tr>
+<tr><td class="num">0.95</td><td class="num">20</td><td class="num">0.358</td></tr>
+<tr><td class="num">0.99</td><td class="num">10</td><td class="num">0.904</td></tr>
+</table></div>
+<p>Turned around: for a 20-step run to succeed 90% of the time, each step must succeed with <var>p</var> = 0.9<sup>1/20</sup> = 0.9947. Real steps are not independent (one early mistake often poisons the rest) and an agent can sometimes notice and fix a mistake, so this is a rough guide, not a law. Its lesson holds: fewer steps, more reliable steps, and checks that catch an error before the next step builds on it.</p>
+
+<div class="widget">
+<div class="widget-head"><span class="tag">Try it</span><h4>Per-step success over many steps</h4></div>
+<p class="hint">Move both sliders. How reliable must each step be for a 50-step task?</p>
+<div id="w-compound"></div>
+</div>
+
+<h2 id="patterns">Common patterns</h2>
+<div class="tbl-wrap"><table>
+<tr><th>Pattern</th><th>How it works</th><th>Good for</th></tr>
+<tr><td>Chaining</td><td>Fixed steps, each model call using the previous output</td><td>Tasks that split cleanly: extract, then summarise</td></tr>
+<tr><td>Routing</td><td>A classifier picks which path handles the input</td><td>Different kinds of question needing different experts or models</td></tr>
+<tr><td>Fan-out, fan-in</td><td>Several calls run in parallel, then their results are merged</td><td>Independent sub-questions; voting</td></tr>
+<tr><td>Orchestrator and workers</td><td>One model plans sub-tasks at run time and hands them to others</td><td>Tasks whose parts are not known in advance</td></tr>
+<tr><td>Generate, check, revise</td><td>One step produces, another evaluates, the first revises from the feedback</td><td>Outputs with clear acceptance rules</td></tr>
+</table></div>
+
+<h2 id="together">Putting the pieces together</h2>
+<p>A sturdy design uses several of these patterns at once. Code owns the outer graph, with fixed steps and edges: clean the input, classify it, plan which helpers to run (at most three, say), run them in parallel, merge their answers, check, render. Routing there is plain code driven by the labels the classifier returned.</p>
+<p>Each helper is a small, bounded agent: one model with its own allow-listed tools, at most 8 tool rounds, and a structured answer. At the limit one last call with no tools makes it answer from what it has read, and a repeated tool call gets its earlier result back with a note to answer now (<a href="tools.html#loop">chapter 28</a>). The merge step joins or rewrites the helpers' answers (fan-in).</p>
+<p>The check step is generate, check, revise: deterministic rules first, then a model check. A failed answer gets one retry, on a stronger model tier, with the original question followed by the block reasons; if that fails too, or the tier is already the top one, the user gets a plain fallback message such as "Please talk to a person about this one." Settling facts that matter, such as which of several figures to accept, is done by code, not by the agent (<a href="knowledge-base.html#cross-checking">chapter 27</a>).</p>
+
+<h2 id="limits">Budgets, permissions and state</h2>
+<ul>
+<li><b>Cap everything that can grow.</b> Model turns, searches, page fetches, money and wall-clock time. A good cap returns a message the model can act on ("the search limit for this run is reached"; at the spend limit, "stop and answer") rather than an exception that loses the work so far. A web-research agent might get 8 turns, 6 searches, 10 fetches and a spend limit.</li>
+<li><b>Separate deciding from doing.</b> The model proposes; code disposes. Irreversible actions (payments, sending, deleting) go to a person, or at least to a rule check, never straight from a model's request.</li>
+<li><b>Least privilege.</b> Give each agent only the tools its task needs. A search agent needs no write tools.</li>
+<li><b>Explicit state.</b> Keep the run's state in a structure your code owns (a graph's state object, a database row), not only in the model's context, so a run can be inspected, resumed or replayed.</li>
+<li><b>Trace every step.</b> When an agent goes wrong at step 7, you need steps 1 to 6 with their inputs and outputs (<a href="observability.html">chapter 45</a>).</li>
+</ul>
+
+<div class="callout note"><span class="title">Try it</span><p>An agent's run has 8 steps. Testing shows each step is right 97% of the time. Roughly how often does the whole run go right, and how many of 200 runs would you expect to contain at least one wrong step?</p></div>
+<details><summary>Answer</summary><div><p>0.97<sup>8</sup> = 0.784, so about 78% of runs are fully right and about 200 &times; 0.216 = 43 runs contain at least one wrong step, if the steps fail independently.</p></div></details>
+
+<div class="callout build"><span class="title">Build it</span><p>In <a href="lab-agent.html">Lab 5</a> you build this loop yourself for a bike shop's parts desk: four tools, a step limit you can watch stop it, and a pretend order that only runs after a person types y.</p></div>
+
+<section class="selfcheck">
+<h2 id="self-check">Self-check</h2>
+<details><summary>What is the difference between a workflow and an agent?</summary><div><p>In a workflow code fixes the steps; in an agent the model chooses its next step, including when to stop.</p></div></details>
+<details><summary>Why should a cap reply with a message instead of raising an exception?</summary><div><p>The model can read the message and finish with what it has; an exception discards the whole run.</p></div></details>
+<details><summary>Each step of a 10-step task is right 95% of the time. About how often is the whole run right?</summary><div><p>0.95<sup>10</sup> = 0.599, about 60%, assuming independent steps.</p></div></details>
+<details><summary>In the design above, which parts are chosen by a model, and which by code?</summary><div><p>Models choose the labels (the classifier), each helper's tool calls and the merged wording. Code chooses the order of steps, which helpers run, the retry and the fallback.</p></div></details>
+</section>
+<section class="chapter-res">
+<h2 id="further-reading">Further reading</h2>
+<ul class="res-list">
+<li><a href="https://arxiv.org/abs/2210.03629" target="_blank" rel="noopener noreferrer">ReAct: Synergizing Reasoning and Acting in Language Models (2022)</a> <span class="pill">paper</span> <span class="pill">advanced</span><br><span class="res-note">The paper behind the think-act-observe loop most agent frameworks use.</span></li>
+<li><a href="https://www.anthropic.com/research/building-effective-agents" target="_blank" rel="noopener noreferrer">Building effective AI agents</a> <span class="pill">article</span> <span class="pill">beginner</span><br><span class="res-note">Anthropic&#x27;s guide to workflow patterns versus agents and when the extra complexity pays off.</span></li>
+<li><a href="https://docs.langchain.com/oss/python/langchain/agents" target="_blank" rel="noopener noreferrer">Agents - Docs by LangChain</a> <span class="pill">docs</span> <span class="pill">intermediate</span><br><span class="res-note">Current LangChain/LangGraph docs on building agents; the old LangGraph agents page now redirects here.</span></li>
+<li><a href="https://lilianweng.github.io/posts/2023-06-23-agent/" target="_blank" rel="noopener noreferrer">LLM Powered Autonomous Agents</a> <span class="pill">article</span> <span class="pill">intermediate</span><br><span class="res-note">Lilian Weng&#x27;s survey of planning, memory and tool use in LLM agents.</span></li>
+</ul>
+<p class="resources-link">Free, checked on 2026-10-21. <a href="resources.html#r-agents">All resources for this chapter</a>.</p>
+</section>
+</article>
+<nav id="pager" class="pager" aria-label="Previous and next"></nav>
+</main>
+</div>
+<script src="assets/widgets/agentloop.js"></script>
+</body>
+</html>
