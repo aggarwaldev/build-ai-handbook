@@ -1,0 +1,4 @@
+# bigram.py needs nothing beyond the Python standard library.
+# tiny_transformer.py needs PyTorch. Install it into a fresh virtual environment;
+# for a GPU build, follow the selector on pytorch.org for your platform.
+torch>=2.2
