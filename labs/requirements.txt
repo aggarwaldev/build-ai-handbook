@@ -1,0 +1,5 @@
+# Everything the numbered labs need. The neural-net, tiny language model, fine-tuning and
+# MCP projects list their own extras in their folders.
+anthropic>=2.3,<3
+numpy>=1.26
+pytest>=8
