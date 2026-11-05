@@ -305,3 +305,284 @@ test('every page ends with the project footer: source, contributing, edit, repor
     await context.close();
   }
 });
+
+// ---------- Ask AI with the reader's own key ----------
+// The Anthropic API is never called: page.route answers in its place. The stand-in behaves
+// as the real API was seen to on 2026-11-06: its reply carries a CORS header that lets the page
+// read it only when the request sends anthropic-dangerous-direct-browser-access: true, so
+// without that header the browser refuses the reply, as it would refuse the real one.
+
+const ASK = require(path.join(BOOK, 'assets', 'handbook.js')).ask;
+const API = 'https://api.anthropic.com/v1/messages';
+// Not a real key, and not shaped like one.
+const TEST_KEY = 'test-key-for-the-handbook-tests-0001';
+const KEY_NAMES = ['hb-askai-key', 'hb-askai-model'];
+
+// The website's own response headers, from vercel.json, so these pages run under its CSP.
+function siteHeaders() {
+  const config = JSON.parse(fs.readFileSync(path.join(BOOK, '..', 'vercel.json'), 'utf8'));
+  const headers = {};
+  config.headers.forEach((rule) => rule.headers.forEach((h) => { headers[h.key.toLowerCase()] = h.value; }));
+  return headers;
+}
+
+async function serveWithSiteHeaders(context) {
+  const extra = siteHeaders();
+  assert.match(extra['content-security-policy'] || '', /connect-src /);
+  await context.route((url) => url.href.startsWith(base), async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, headers: Object.assign({}, response.headers(), extra) });
+  });
+}
+
+// Open a page served under the site's headers. The CSP refuses eval, which
+// page.waitForFunction needs, so wait for what the tracker draws in the top bar instead.
+async function openSitePage(context, file, errors) {
+  const page = await context.newPage();
+  page.on('pageerror', (err) => errors.push(file + ': ' + err.message));
+  await page.goto(base + file);
+  await trackerDrawn(page);
+  return page;
+}
+
+function trackerDrawn(page) {
+  return page.locator('.topbar .prog-link[aria-label^="Your progress:"]').waitFor();
+}
+
+// Stand in for the Messages API. reply(request) returns {status, body}. Returns the list of
+// requests it saw, each as {headers, body, url}. Playwright answers the CORS preflight of a
+// routed request itself, so only the POST arrives here. Playwright also adds an
+// access-control-allow-origin header for the page to any reply that has none, so where the
+// real API would send none, the stand-in names an origin no page has, and Chromium's own
+// CORS check refuses the reply.
+async function standInApi(page, reply) {
+  const seen = [];
+  await page.route(API, async (route) => {
+    const request = route.request();
+    const headers = await request.allHeaders();
+    seen.push({ headers, body: request.postData(), url: request.url() });
+    const out = reply(request);
+    const browserAllowed = headers['anthropic-dangerous-direct-browser-access'] === 'true';
+    await route.fulfill({
+      status: out.status,
+      contentType: 'application/json',
+      headers: { 'access-control-allow-origin': browserAllowed ? '*' : 'https://no-page.invalid' },
+      body: JSON.stringify(out.body)
+    });
+  });
+  return seen;
+}
+
+// Select the page's lead paragraph and press the Ask AI button beside it.
+async function openAskPanel(page) {
+  await page.evaluate(() => {
+    const p = document.querySelector('article p.lead');
+    const range = document.createRange();
+    range.selectNodeContents(p);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+  await page.locator('.ask-btn').click();
+  return page.locator('.askai');
+}
+
+function panelButtons(panel) {
+  return panel.locator(':scope > .row > button').evaluateAll((bs) => bs.map((b) => [b.textContent, b.classList.contains('primary')]));
+}
+
+function storedKeys(page) {
+  return page.evaluate((names) => {
+    const read = (s) => { const out = {}; names.forEach((n) => { const v = s.getItem(n); if (v !== null) out[n] = v; }); return out; };
+    return { local: read(localStorage), session: read(sessionStorage) };
+  }, KEY_NAMES);
+}
+
+function watchConsole(page, lines) {
+  page.on('console', (m) => lines.push(m.text()));
+}
+
+test('Ask AI: without a key the panel offers the prompt and a key field; with one, Ask here calls Anthropic from the page', async (t) => {
+  if (skipReason) { if (REQUIRED) assert.fail(skipReason); t.skip(skipReason); return; }
+  const errors = [];
+  const consoleLines = [];
+  const context = await browser.newContext();
+  try {
+    await serveWithSiteHeaders(context);
+    const page = await openSitePage(context, CHAPTER, errors);
+    watchConsole(page, consoleLines);
+    const seen = await standInApi(page, () => ({ status: 200, body: {
+      id: 'msg_test', type: 'message', role: 'assistant', model: 'claude-haiku-5-5', stop_reason: 'end_turn',
+      content: [
+        { type: 'thinking', thinking: 'private working that must not show', signature: 'sig' },
+        { type: 'text', text: 'The minus sign walks downhill.\n\n<b>Not bold</b>, just text.' }
+      ]
+    } }));
+
+    let panel = await openAskPanel(page);
+    assert.deepEqual(await panelButtons(panel), [['Copy prompt', true], ['Open in Claude', false], ['Open in Claude Desktop', false]]);
+    assert.equal(await panel.locator('.askai-key-title').innerText(), 'Answer here with your own API key');
+    assert.match(await panel.locator('.askai-key').innerText(), /straight to Anthropic, and each answer is billed to your key\. The key stays in this browser\./);
+    const keyField = panel.locator('input.askai-key-input');
+    assert.deepEqual(await keyField.evaluate((i) => [i.type, i.getAttribute('autocomplete'), i.getAttribute('spellcheck')]), ['password', 'off', 'false']);
+    assert.equal(await panel.locator('input.askai-model').inputValue(), 'claude-haiku-5-5');
+    assert.equal(await panel.locator('input.askai-remember').count(), 1, 'an http page offers to remember the key');
+    assert.equal(await panel.locator('.askai-ask').count(), 0);
+
+    await keyField.fill(TEST_KEY);
+    await panel.locator('.askai-use').click();
+    panel = page.locator('.askai');
+    assert.deepEqual(await panelButtons(panel), [['Ask here', true], ['Copy prompt', false], ['Open in Claude', false], ['Open in Claude Desktop', false]]);
+    assert.match(await panel.locator('.askai-key').innerText(), /Your key is kept for this tab only, and each answer is billed to it\./);
+    assert.deepEqual(await storedKeys(page), { local: {}, session: { 'hb-askai-key': TEST_KEY, 'hb-askai-model': 'claude-haiku-5-5' } });
+    assert.equal(await page.evaluate((k) => [...document.querySelectorAll('input, textarea')].some((i) => i.value.includes(k)) ||
+      document.documentElement.outerHTML.includes(k), TEST_KEY), false, 'the key is not left in the page');
+
+    await panel.locator('textarea').fill('Why the minus sign?');
+    await panel.locator('.askai-ask').click();
+    await panel.locator('.askai-answer p:not(.askai-wait)').first().waitFor();
+    assert.deepEqual(await panel.locator('.askai-answer p').allInnerTexts(), ['The minus sign walks downhill.', '<b>Not bold</b>, just text.']);
+    assert.equal(await panel.locator('.askai-answer b').count(), 0, 'model output is text, not HTML');
+    assert.ok(!(await panel.innerText()).includes('private working'));
+
+    assert.equal(seen.length, 1);
+    const sent = seen[0];
+    assert.equal(sent.url, API);
+    assert.equal(sent.headers['x-api-key'], TEST_KEY);
+    assert.equal(sent.headers['anthropic-version'], '2023-06-01');
+    assert.equal(sent.headers['content-type'], 'application/json');
+    assert.equal(sent.headers['anthropic-dangerous-direct-browser-access'], 'true');
+    assert.equal(sent.headers.referer, undefined, 'no referrer goes with the question');
+    assert.equal(sent.headers.cookie, undefined);
+    const body = JSON.parse(sent.body);
+    assert.deepEqual(Object.keys(body), ['model', 'max_tokens', 'system', 'messages']);
+    assert.equal(body.model, 'claude-haiku-5-5');
+    assert.equal(body.max_tokens, 2048);
+    assert.equal(body.system, ASK.SYSTEM);
+    assert.equal(body.messages.length, 1);
+    assert.equal(body.messages[0].role, 'user');
+    const lead = await page.locator('article p.lead').innerText();
+    assert.equal(body.messages[0].content, 'Chapter: How to read this book\n\nSelected passage:\n"""\n' + lead.replace(/\s+/g, ' ').trim() + '\n"""\n\nQuestion: Why the minus sign?');
+    assert.ok(!sent.body.includes(TEST_KEY));
+
+    assert.deepEqual(consoleLines.filter((l) => /Content Security Policy/.test(l)), [], 'the site\'s CSP allows the call');
+    assert.deepEqual(consoleLines.filter((l) => l.includes(TEST_KEY)), []);
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test('Ask AI: a remembered key survives a reload, a 401 reads plainly without the key, and Forget clears both stores', async (t) => {
+  if (skipReason) { if (REQUIRED) assert.fail(skipReason); t.skip(skipReason); return; }
+  const errors = [];
+  const consoleLines = [];
+  const context = await browser.newContext();
+  try {
+    await serveWithSiteHeaders(context);
+    const page = await openSitePage(context, CHAPTER, errors);
+    watchConsole(page, consoleLines);
+    let panel = await openAskPanel(page);
+    await panel.locator('input.askai-key-input').fill(TEST_KEY);
+    await panel.locator('input.askai-model').fill('claude-sonnet-5-5');
+    await panel.locator('input.askai-remember').check();
+    await panel.locator('input.askai-key-input').press('Enter');
+    assert.deepEqual(await storedKeys(page), { local: { 'hb-askai-key': TEST_KEY, 'hb-askai-model': 'claude-sonnet-5-5' }, session: {} });
+
+    await page.reload();
+    await trackerDrawn(page);
+    const seen = await standInApi(page, () => ({ status: 401, body: { type: 'error', error: { type: 'authentication_error', message: 'invalid x-api-key' } } }));
+    panel = await openAskPanel(page);
+    assert.match(await panel.locator('.askai-key').innerText(), /Your key is remembered in this browser until you press Forget the key/);
+    assert.equal(await panel.locator('input.askai-model').inputValue(), 'claude-sonnet-5-5');
+    await panel.locator('.askai-ask').click();
+    await panel.locator('.askai-answer .askai-err').waitFor();
+    assert.equal(await panel.locator('.askai-answer').innerText(),
+      'Anthropic did not accept the key (HTTP 401: invalid x-api-key). Copy prompt still works.');
+    assert.equal(JSON.parse(seen[0].body).model, 'claude-sonnet-5-5');
+    assert.ok(!(await panel.innerText()).includes(TEST_KEY));
+
+    await panel.locator('.askai-forget').click();
+    assert.deepEqual(await storedKeys(page), { local: {}, session: {} });
+    panel = page.locator('.askai');
+    assert.equal(await panel.locator('.askai-ask').count(), 0);
+    assert.equal(await panel.locator('input.askai-key-input').evaluate((i) => i === document.activeElement), true);
+    assert.deepEqual(consoleLines.filter((l) => l.includes(TEST_KEY)), []);
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test('Ask AI from a page opened from disk: no Remember box, the key stays in this tab, and the call works', async (t) => {
+  if (skipReason) { if (REQUIRED) assert.fail(skipReason); t.skip(skipReason); return; }
+  const errors = [];
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    page.on('pageerror', (err) => errors.push('file page: ' + err.message));
+    await page.goto('file://' + path.join(BOOK, CHAPTER));
+    await page.waitForFunction(() => window.HB && window.HB.built);
+    assert.equal(await page.evaluate(() => location.protocol), 'file:');
+    const seen = await standInApi(page, () => ({ status: 200, body: { content: [{ type: 'text', text: 'Answered from disk.' }], stop_reason: 'end_turn' } }));
+
+    let panel = await openAskPanel(page);
+    assert.equal(await panel.locator('input.askai-remember').count(), 0);
+    assert.match(await panel.locator('.askai-disk').innerText(), /^Opened from disk, the key is kept for this tab only/);
+    await panel.locator('input.askai-key-input').fill(TEST_KEY);
+    await panel.locator('.askai-use').click();
+    assert.deepEqual(await storedKeys(page), { local: {}, session: { 'hb-askai-key': TEST_KEY, 'hb-askai-model': 'claude-haiku-5-5' } });
+    panel = page.locator('.askai');
+    await panel.locator('.askai-ask').click();
+    await panel.locator('.askai-answer p:not(.askai-wait)').first().waitFor();
+    assert.deepEqual(await panel.locator('.askai-answer p').allInnerTexts(), ['Answered from disk.']);
+    assert.equal(seen.length, 1);
+    assert.equal(seen[0].headers.origin, 'null');
+    assert.equal(seen[0].headers['anthropic-dangerous-direct-browser-access'], 'true');
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+});
+
+test('Ask AI: the progress tracker never exports, imports over or resets the key', async (t) => {
+  if (skipReason) { if (REQUIRED) assert.fail(skipReason); t.skip(skipReason); return; }
+  const errors = [];
+  // localStorage is where the tracker and a remembered key would meet, so test that path.
+  const context = await browser.newContext({ acceptDownloads: true });
+  await context.addInitScript(() => { Object.defineProperty(window, 'indexedDB', { value: undefined, configurable: true }); });
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'hb-askai-'));
+  try {
+    const lab = await openPage(context, LAB, errors);
+    assert.equal(await lab.evaluate(() => window.HBProgress.storageKind), 'localstorage');
+    const id = await firstCheck(lab);
+    await lab.locator('ul.checklist input[type=checkbox]').first().check();
+    await waitForStoredCheck(lab, id, true);
+    const panel = await openAskPanel(lab);
+    await panel.locator('input.askai-key-input').fill(TEST_KEY);
+    await panel.locator('input.askai-remember').check();
+    await panel.locator('.askai-use').click();
+    await lab.close();
+
+    const prog = await openPage(context, 'progress.html', errors);
+    const [download] = await Promise.all([prog.waitForEvent('download'), prog.click('#pg-export')]);
+    const file = path.join(tmp, download.suggestedFilename());
+    await download.saveAs(file);
+    const exported = fs.readFileSync(file, 'utf8');
+    assert.ok(exported.includes(id), 'the export holds the tick');
+    assert.ok(!exported.includes(TEST_KEY), 'the export does not hold the key');
+    assert.ok(!exported.includes('hb-askai'), 'the export does not name the key\'s storage');
+
+    await prog.click('#pg-reset');
+    await prog.click('#pg-reset-yes');
+    await prog.waitForFunction(() => /were deleted/.test(document.getElementById('pg-backup-msg').textContent));
+    assert.equal(await prog.evaluate(() => localStorage.getItem('hb-askai-key')), TEST_KEY, 'reset deletes progress, not the key');
+    await prog.setInputFiles('#pg-import', file);
+    await prog.waitForFunction(() => /^Imported /.test(document.getElementById('pg-backup-msg').textContent));
+    assert.deepEqual(await storedKeys(prog), { local: { 'hb-askai-key': TEST_KEY, 'hb-askai-model': 'claude-haiku-5-5' }, session: {} });
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
