@@ -8,3 +8,4 @@ venv/
 labs/**/runs/
 labs/**/traces/
 tools/banned-words.local.txt
+ollama.log
