@@ -77,6 +77,7 @@
 <li>Progress belongs to the address the book was opened from. The website at <a href="https://handbook.aggarwal.dev/" target="_blank" rel="noopener noreferrer">handbook.aggarwal.dev</a>, a copy opened from disk and a copy served by <code class="path">tools/serve.py</code> on <code>http://127.0.0.1:8765/</code> each keep their own, even in the same browser. To move from one to another, press <b>Export my progress</b> on this page at the old address, open this page at the new one and press <b>Import a progress file</b>. The import merges, so you can also join two records this way.</li>
 <li>Chrome and Edge keep progress for pages opened from disk. Firefox and Safari may refuse storage for such pages, or keep each page separately. If ticks do not survive a reload, read the book on the website, or run <code>python3 tools/serve.py</code> from the repository root and open <code>http://127.0.0.1:8765/</code>.</li>
 <li>If the browser refuses all storage, every page shows a notice saying that progress is not being kept.</li>
+<li>An Anthropic API key you gave Ask AI is kept apart from your progress: an export leaves it out, and a reset leaves it in place. <b>Forget the key</b> in the Ask AI panel deletes it.</li>
 </ul>
 </article>
 <nav id="pager" class="pager" aria-label="Previous and next"></nav>

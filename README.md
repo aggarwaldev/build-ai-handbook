@@ -12,7 +12,7 @@ hands-on labs in Python.
   to a capstone assistant.
 
 There is no build step, no account and no tracking. The pages need no network, except for
-links to outside reading and the optional Ask AI helper.
+links to outside reading and Ask AI.
 
 ## Open the book
 
@@ -22,15 +22,18 @@ double-click `book/index.html`, or serve the book and open the address it prints
     python3 tools/serve.py
 
 then open <http://127.0.0.1:8765/>. `serve.py` uses only the Python standard library. It
-listens on 127.0.0.1 only and serves the files in `book/`, nothing hidden. It also powers
-the optional Ask AI helper: start it with `ANTHROPIC_API_KEY` set in your shell and the
-"Ask AI" button sends the passage you selected, and your question, to Claude. The key is
-read from the environment only and is never written to a file or a log. The default model
-is `claude-haiku-5-5`; pick another with `--model`. Run `python3 tools/serve.py --help` for
-the other options.
+listens on 127.0.0.1 only and serves the files in `book/`, nothing hidden. Serve the book
+when your browser keeps no progress for pages opened from disk (see "Your progress"
+below); `--port` picks another port.
 
-Without the helper, "Ask AI" copies a ready-made prompt that you can paste into any chat
-assistant.
+Select a passage on any page and "Ask AI" builds a prompt from it and your question: copy
+it into any chat assistant, or open it in Claude. With an Anthropic API key of your own,
+typed into the Ask AI panel, it can also answer in the page, wherever you read the book.
+The passage and your question then go from your browser straight to the Anthropic API,
+and each answer is billed to your key. The key stays in your browser, for the tab unless
+you ask the panel to remember it, and is never sent to the website or to `serve.py`. Use
+a separate key that you can delete when you are done. Chapter 1 (`book/reading.html`)
+has the details.
 
 ## Run the labs
 

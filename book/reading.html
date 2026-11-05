@@ -47,13 +47,18 @@
 <tr><th>Way</th><th>How</th><th>Progress</th></tr>
 <tr><td>Online</td><td>Open <a href="https://handbook.aggarwal.dev/" target="_blank" rel="noopener noreferrer">handbook.aggarwal.dev</a> in a browser, on a computer or a phone. On a narrow screen the contents fold behind the menu button.</td><td>Kept in that browser, for the website's address.</td></tr>
 <tr><td>From disk</td><td>Get a copy of the repository (below) and double-click <code class="path">book/index.html</code>. It needs no network, except for links to other sites and Ask AI.</td><td>Kept in Chrome and Edge. Firefox and Safari may refuse it (<a href="#progress">see below</a>).</td></tr>
-<tr><td>Served on your computer</td><td>In a copy of the repository, run <code>python3 tools/serve.py</code> and open <code>http://127.0.0.1:8765/</code>. With your own Anthropic key, Ask AI can also answer inside the page (<a href="#ask-ai-helper">see below</a>).</td><td>Kept in every browser, for that address.</td></tr>
+<tr><td>Served on your computer</td><td>In a copy of the repository, run <code>python3 tools/serve.py</code> and open <code>http://127.0.0.1:8765/</code> (<a href="#serve">see below</a>).</td><td>Kept in every browser, for that address.</td></tr>
 </table></div>
 <p>To get a copy, clone the repository with git, or <a href="https://github.com/aggarwaldev/build-ai-handbook/archive/refs/heads/main.zip" target="_blank" rel="noopener noreferrer">download it as a ZIP</a> and unpack it. The labs need the same copy.</p>
 <pre><code>git clone https://github.com/aggarwaldev/build-ai-handbook
 cd build-ai-handbook                   <span class="c"># the repository root: book/, labs/ and tools/</span></code></pre>
 <p>Each address keeps its own progress, even in the same browser: the website, the book opened from disk and the book served on your computer start with separate records. To move your progress from one to another, or to join two records, use <b>Export</b> on the <a href="progress.html#backup">progress page</a> at one address and <b>Import</b> at the other.</p>
-<p>The website sets no cookies, runs no analytics and loads nothing from other sites: every script, style and image comes from the site itself. Your progress and notes stay in your browser.</p>
+<p>The website sets no cookies, runs no analytics and loads nothing from other sites: every script, style and image comes from the site itself. Your progress and notes stay in your browser. If you give Ask AI your own Anthropic API key, your question and the passage go from your browser straight to Anthropic, and nothing goes to the website (<a href="#ask-ai-key">see below</a>).</p>
+<h3 id="serve">Serving the book on your computer</h3>
+<p><code class="path">tools/serve.py</code> serves your copy of the book on your own machine, for browsers that keep no progress for pages opened from disk. It uses only the Python standard library and holds no keys.</p>
+<pre><code>python3 tools/serve.py                 <span class="c"># or pick the port: --port 8800</span>
+<span class="c"># then open http://127.0.0.1:8765/</span></code></pre>
+<p>It listens on <code>127.0.0.1</code> only and answers only requests addressed to it there. It serves files from <code class="path">book/</code> only, and only of these kinds: HTML, CSS, JavaScript, SVG, PNG, JPEG, WOFF2, JSON, text, Markdown and Python. Any path with a part that starts with a dot, such as <code>.git</code> or <code>.env</code>, is refused, and so are folder listings.</p>
 
 <h2 id="conventions">Conventions</h2>
 <h3 id="citing-code">How the book names files</h3>
@@ -93,7 +98,7 @@ cd build-ai-handbook                   <span class="c"># the repository root: bo
 <div class="callout warn"><span class="title">Careful</span><p>Opened straight from disk, the book keeps progress in Chrome and Edge, but Firefox and Safari may refuse storage for such pages or keep each page separately. If your ticks do not survive a reload, or every page shows a notice that progress is not being saved, read the book on the website, or serve your copy: run <code>python3 tools/serve.py</code> from the repository root and open <code>http://127.0.0.1:8765/</code>. Then export from the old address and import at the new one to bring your progress with you.</p></div>
 
 <h2 id="ask-ai">Ask AI about any passage</h2>
-<p>Select some text on any page and an <b>Ask AI</b> button appears beside it. It opens a small panel with your selection, the chapter title and a box for your question. Only those three things are ever sent anywhere: the book's own text and what you type.</p>
+<p>Select some text on any page and an <b>Ask AI</b> button appears beside it. It opens a small panel with your selection, the chapter title and a box for your question. Only those three things go into the question: the book's own text and what you type.</p>
 <h3 id="ask-ai-default">The default: Claude in a new tab</h3>
 <p>The panel builds one prompt from the chapter title, the selection (trimmed to 1,500 characters) and your question, and offers three ways to use it:</p>
 <ul>
@@ -102,21 +107,15 @@ cd build-ai-handbook                   <span class="c"># the repository root: bo
 <li><b>Open in Claude Desktop</b> uses the desktop app's documented link, <code>claude://claude.ai/new?q=</code>, which fills the prompt in for you to read and send. It needs the Claude desktop app installed.</li>
 </ul>
 <p>You need to be signed in to Claude. Nothing else is needed: no key and no server.</p>
-<h3 id="ask-ai-helper">Optional: serve the book, with answers inside the page</h3>
-<p><code class="path">tools/serve.py</code> serves the book on your own machine. It uses only the Python standard library. Without a key it simply serves the book, which also makes progress tracking work in every browser. With your own Anthropic key it answers Ask AI questions inside the panel.</p>
-<pre><code>python3 tools/serve.py                      # serve the book
-export ANTHROPIC_API_KEY=...                # optional: your own key; never write it into a file here
-python3 tools/serve.py --port 8765 --cap 50 --model claude-haiku-5-5
-# then open http://127.0.0.1:8765/</code></pre>
+<h3 id="ask-ai-key">Optional: answers in the page, with your own API key</h3>
+<p>With an Anthropic API key of your own, the panel can answer in the page itself, wherever you read the book: on the website, from disk or served on your computer. Under <b>Answer here with your own API key</b> in the panel, paste your key and press <b>Use this key</b>. The panel then shows an <b>Ask here</b> button.</p>
 <ul>
-<li>It listens on <code>127.0.0.1</code> only. It serves files from <code class="path">book/</code> only, and only of these kinds: HTML, CSS, JavaScript, SVG, PNG, JPEG, WOFF2, JSON, text, Markdown and Python. Any path with a part that starts with a dot, such as <code>.git</code> or <code>.env</code>, is refused, and so are folder listings.</li>
-<li>The panel shows an <b>Ask here</b> button when the page is served by the helper and a key is set. The page calls the helper's own <code>/ask</code> route, which calls the Anthropic Messages API with the model <code>claude-haiku-5-5</code> (change it with <code>--model</code>) and a limit of 2,048 output tokens. Current Claude models think before they answer and the thinking counts toward that limit, which is why it is not smaller. The helper shows only the text of the answer.</li>
-<li>The key is read from the <code>ANTHROPIC_API_KEY</code> environment variable. It never reaches the page and is never printed or logged.</li>
-<li>Every request must carry the helper's own address as its Host, and <code>/ask</code> must also come from the helper's own origin. A request from any other site is refused, and there are no CORS headers.</li>
-<li>Each run allows at most <code>--cap</code> questions (50 by default). The panel shows how many are left.</li>
-<li>Without a key, <code>/ask</code> answers "no API key set" and the panel offers the three buttons of the default mode instead.</li>
+<li><b>What is sent, and where.</b> Ask here sends the chapter title, the selection (trimmed to 3,000 characters) and your question from your browser straight to the Anthropic Messages API, and nowhere else: not to the website and not to <code class="path">tools/serve.py</code>. It asks the model <code>claude-haiku-5-5</code>, unless you name another in the panel's <b>Model</b> box, with a limit of 2,048 output tokens. Current Claude models think before they answer and the thinking counts toward that limit, which is why it is not smaller. The panel shows only the text of the answer.</li>
+<li><b>Where the key is kept.</b> In this browser only, and by default for this tab only: it is gone when you close the tab. Tick <b>Remember the key in this browser</b> to keep it until you press <b>Forget the key</b>. A page opened from disk does not offer the box, because files opened from disk can share one storage area, so another file could read the key. The key goes only to Anthropic, in the request's <code>x-api-key</code> header. It is never part of the prompt or of an address, and a progress export leaves it out.</li>
+<li><b>What it costs.</b> Each answer is billed to your key, as any API call is. The book sets no limit of its own; your Anthropic account's limits apply.</li>
+<li><b>When it fails.</b> The panel shows Anthropic's own error message, such as a key it does not accept or a rate limit. Copy prompt and the Claude links still work.</li>
 </ul>
-<div class="callout warn"><span class="title">Careful</span><p>Answers in the page use your own Anthropic key and cost a little each, as any API call does. The cap keeps a run's cost small; restart the helper to reset it.</p></div>
+<div class="callout warn"><span class="title">Careful</span><p>Anyone who has your key can spend your money. Make a separate key for the book, as <a href="lab-setup.html#claude">Lab 0</a> describes, with a monthly spend limit set in the Console. Delete it in the Console when you no longer need it, or at once if you think someone else has seen it. While the key is kept, a browser extension that may read this site's pages can read the key too, so do not keep one on a shared computer.</p></div>
 
 <h2 id="labs">Running the labs</h2>
 <p>The labs in <code class="path">labs/</code> are small Python programs with tests. <a href="lab-setup.html">Lab 0</a> walks through the setup; in short:</p>
@@ -162,8 +161,8 @@ licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/</code></p
 <tr><td><code class="path">tools/build_site_meta.py</code></td><td>Writes a marked block in each page's <code>head</code>: a description from the page's lead paragraph, its address on the website, the icon and the tags that link previews read. It also writes <code class="path">book/sitemap.xml</code> and <code class="path">book/robots.txt</code>. <code>--check</code> only reports what is out of date.</td><td>After you add a page, or change a page's main heading or lead paragraph.</td></tr>
 <tr><td><code class="path">tools/check_links.py</code></td><td>Checks that every internal link points at a file that exists, and at an <code>id</code> that exists in it.</td><td>Before every commit.</td></tr>
 <tr><td><code class="path">tools/check_book.py</code></td><td>Checks the book's structure: every page is in the contents list and loads the shared files, titles follow the pattern, heading ids are unique, checklist ids are unique and named after their page, callouts use the four kinds above, and every path in a <code>code class="path"</code> under <code class="path">labs/</code>, <code class="path">tools/</code> or <code class="path">book/</code> exists. It also checks that the repository and website addresses in <code class="path">book/assets/handbook.js</code> match the ones the Python tools use.</td><td>Before every commit.</td></tr>
-<tr><td><code class="path">tools/serve.py</code></td><td>Optional: serves the book on 127.0.0.1, with in-page Ask AI answers if you set a key (see <a href="#ask-ai-helper">above</a>).</td><td>When you want reliable progress tracking or answers inside the page.</td></tr>
-<tr><td><code class="path">tools/tests/</code></td><td>Tests for the progress tracker's logic, run with <code>node --test tools/tests/*.test.js</code>.</td><td>After you change <code class="path">book/assets/progress.js</code>.</td></tr>
+<tr><td><code class="path">tools/serve.py</code></td><td>Optional: serves the book on 127.0.0.1, for browsers that keep no progress for pages opened from disk (see <a href="#serve">above</a>).</td><td>When your ticks do not survive a reload of a page opened from disk.</td></tr>
+<tr><td><code class="path">tools/tests/</code></td><td>Tests for the progress tracker, the footer's links and the Ask AI request, run with <code>node --test tools/tests/*.test.js</code>.</td><td>After you change <code class="path">book/assets/progress.js</code> or <code class="path">book/assets/handbook.js</code>.</td></tr>
 </table></div>
 <pre><code>python3 tools/build_search_index.py
 python3 tools/check_links.py

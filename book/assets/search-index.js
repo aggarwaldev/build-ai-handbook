@@ -79,6 +79,11 @@ window.HANDBOOK_SEARCH = {
      "level": 2
     },
     {
+     "id": "serve",
+     "text": "Serving the book on your computer",
+     "level": 3
+    },
+    {
      "id": "conventions",
      "text": "Conventions",
      "level": 2
@@ -124,8 +129,8 @@ window.HANDBOOK_SEARCH = {
      "level": 3
     },
     {
-     "id": "ask-ai-helper",
-     "text": "Optional: serve the book, with answers inside the page",
+     "id": "ask-ai-key",
+     "text": "Optional: answers in the page, with your own API key",
      "level": 3
     },
     {
