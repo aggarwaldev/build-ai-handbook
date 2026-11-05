@@ -121,6 +121,7 @@ When a browser refuses all storage, every page says that progress is not being k
 | `book/assets/search-index.js` | Generated search index; do not edit by hand |
 | `book/assets/widgets/` | One script per interactive widget |
 | `book/assets/icon.svg` | The site icon: the book's blue, with a variant for dark themes |
+| `book/sitemap.xml`, `book/robots.txt` | For search engines: every page's address, and where the sitemap is. Generated; do not edit by hand |
 | `labs/` | The lab code and its tests, plus the larger projects from earlier chapters |
 | `tools/` | The local server and the checks below |
 | `labs/notebooks/` | One notebook per lab, generated from `labs/notebooks/src/` |
@@ -134,12 +135,19 @@ All of these use only the Python standard library or Node's built-in test runner
     python3 tools/check_links.py                 # every internal link and #id resolves
     python3 tools/check_book.py                  # reading order, page structure, ids, paths
     python3 tools/build_search_index.py --check  # the search index is up to date
+    python3 tools/build_site_meta.py --check     # page heads, sitemap.xml and robots.txt are up to date
     node --test tools/tests/*.test.js            # the progress tracker
     python3 tools/build_notebooks.py --check     # notebooks match their sources; launch links
     python tools/run_notebooks.py                # every notebook runs on the fake backend
 
 After you add or rename a page, heading or checklist step, run
 `python3 tools/build_search_index.py` to rebuild the search index.
+
+After you add a page, or change a page's main heading or lead paragraph, run
+`python3 tools/build_site_meta.py`. It rewrites the marked block in each page's head (a
+description from the lead paragraph, the page's address on the website, the icon and the
+tags that link previews read), `book/sitemap.xml` and `book/robots.txt`, and changes only
+the files that are out of date.
 
 The tracker tests in `tools/tests/browser.test.js` drive the real pages in headless
 Chromium. They need the `playwright` package with a browser it has already installed, and

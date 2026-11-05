@@ -1,0 +1,5 @@
+# Written by tools/build_site_meta.py. Do not edit by hand.
+User-agent: *
+Allow: /
+
+Sitemap: https://handbook.aggarwal.dev/sitemap.xml

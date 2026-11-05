@@ -4,6 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>1. How to read this book &middot; Build AI handbook</title>
+<!-- page metadata: written by tools/build_site_meta.py, do not edit by hand -->
+<meta name="description" content="What the five parts cover, what the boxes, widgets and checklists mean, how the book keeps your progress, how to ask an AI about a passage…">
+<link rel="canonical" href="https://handbook.aggarwal.dev/reading.html">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<meta property="og:site_name" content="Build AI handbook">
+<meta property="og:type" content="article">
+<meta property="og:title" content="How to read this book">
+<meta property="og:description" content="What the five parts cover, what the boxes, widgets and checklists mean, how the book keeps your progress, how to ask an AI about a passage…">
+<meta property="og:url" content="https://handbook.aggarwal.dev/reading.html">
+<meta name="twitter:card" content="summary">
+<!-- end of page metadata -->
 <link rel="stylesheet" href="assets/handbook.css">
 <script src="assets/search-index.js"></script>
 <script src="assets/handbook.js"></script>
@@ -111,6 +122,7 @@ cd labs &amp;&amp; python -m pytest           # every lab's tests, offline</code
 <div class="tbl-wrap"><table>
 <tr><th>Script</th><th>What it does</th><th>Run it when</th></tr>
 <tr><td><code class="path">tools/build_search_index.py</code></td><td>Reads every page's headings, the glossary and the lab checklists into <code class="path">book/assets/search-index.js</code>, which the search box, the glossary hover and the progress page use. <code>--check</code> only reports whether the file is stale.</td><td>After you add a page, a heading, a checklist item or a glossary entry.</td></tr>
+<tr><td><code class="path">tools/build_site_meta.py</code></td><td>Writes a marked block in each page's <code>head</code>: a description from the page's lead paragraph, its address on the website, the icon and the tags that link previews read. It also writes <code class="path">book/sitemap.xml</code> and <code class="path">book/robots.txt</code>. <code>--check</code> only reports what is out of date.</td><td>After you add a page, or change a page's main heading or lead paragraph.</td></tr>
 <tr><td><code class="path">tools/check_links.py</code></td><td>Checks that every internal link points at a file that exists, and at an <code>id</code> that exists in it.</td><td>Before every commit.</td></tr>
 <tr><td><code class="path">tools/check_book.py</code></td><td>Checks the book's structure: every page is in the contents list and loads the shared files, titles follow the pattern, heading ids are unique, checklist ids are unique and named after their page, callouts use the four kinds above, and every path in a <code>code class="path"</code> under <code class="path">labs/</code> exists.</td><td>Before every commit.</td></tr>
 <tr><td><code class="path">tools/serve.py</code></td><td>Optional: serves the book on 127.0.0.1, with in-page Ask AI answers if you set a key (see <a href="#ask-ai-helper">above</a>).</td><td>When you want reliable progress tracking or answers inside the page.</td></tr>

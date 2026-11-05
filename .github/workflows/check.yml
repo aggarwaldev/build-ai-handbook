@@ -33,6 +33,9 @@ jobs:
       - name: Notebooks match their sources and every lab page links them
         run: python3 tools/build_notebooks.py --check
 
+      - name: Page heads, sitemap and robots.txt are up to date
+        run: python3 tools/build_site_meta.py --check
+
       - name: Progress tracker tests
         run: node --test tools/tests/*.test.js
 
