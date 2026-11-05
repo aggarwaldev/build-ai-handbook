@@ -17,8 +17,9 @@ What it checks:
    start with their page's file name without .html, then a colon.
 5. h2 and h3 ids are unique within each page.
 6. Callouts use only the kinds note, why, warn and build.
-7. Every <code class="path"> that names something under labs/, tools/ or assets/ exists
-   (labs/ and tools/ from the repository root, assets/ inside book/).
+7. Every <code class="path"> that names something under labs/, tools/ or book/ exists.
+   Paths are named from the repository root, so one that starts with assets/ is reported:
+   in the repository that folder is book/assets/.
    The one exception is a folder a lab creates when it runs, such as
    labs/02-prompt-bench/runs/: it passes when it ends in "/", git ignores it, and the
    folder that holds it exists.
@@ -47,7 +48,7 @@ TEXT_SUFFIXES = {".html", ".js", ".css", ".py", ".md", ".txt", ".json", ".jsonl"
 TEXT_NAMES = {".gitignore"}
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache"}
 CALLOUT_KINDS = {"note", "why", "warn", "build"}
-CHECKED_PATH_ROOTS = ("labs/", "tools/", "assets/")
+CHECKED_PATH_ROOTS = ("labs/", "tools/", "book/")
 TITLE_SUFFIX = "Build AI handbook"
 
 # (what to report, pattern). Case matters only where a word is a common English word.
@@ -263,13 +264,15 @@ def check_pages(problems: list[str]) -> int:
                 )
 
         for text, line in facts.paths:
+            if text.startswith("assets/"):
+                problems.append(f"{name}:{line}: path {text!r}: name it from the repository root, book/{text}")
+                continue
             if not text.startswith(CHECKED_PATH_ROOTS):
                 continue
-            base = BOOK if text.startswith("assets/") else ROOT
             if any(ch in text for ch in "*?["):
-                if not glob.glob(str(base / text)):
+                if not glob.glob(str(ROOT / text)):
                     problems.append(f"{name}:{line}: path {text!r} matches nothing")
-            elif not (base / text).exists() and not _run_output_folder(text):
+            elif not (ROOT / text).exists() and not _run_output_folder(text):
                 problems.append(f"{name}:{line}: path {text!r} does not exist")
     return n_checks
 

@@ -65,7 +65,7 @@
 <li><a href="progress.html"><b>Your progress</b></a> shows it all: where to continue, each part and lab, recent activity, your notes and the self-check answers you opened.</li>
 </ul>
 <p>Progress is stored in this browser, in its IndexedDB storage (or its local storage if IndexedDB is not available). Clearing the site's data deletes it, and another browser or device starts empty. To back it up or move it, use <b>Export</b> on the progress page, then <b>Import</b> on the other side: an import merges, keeping the newer record wherever both sides have one.</p>
-<div class="callout warn"><span class="title">Careful</span><p>Opened straight from disk, the book keeps progress in Chrome and Edge, but Firefox and Safari may refuse storage for such pages or keep each page separately. If your ticks do not survive a reload, or every page shows a notice that progress is not being saved, serve the book instead: run <code>python3 tools/serve.py</code> in the book's folder and open <code>http://127.0.0.1:8765/</code>. Progress belongs to the address, so the book from disk and the book from the server keep separate records; export from one and import into the other to join them.</p></div>
+<div class="callout warn"><span class="title">Careful</span><p>Opened straight from disk, the book keeps progress in Chrome and Edge, but Firefox and Safari may refuse storage for such pages or keep each page separately. If your ticks do not survive a reload, or every page shows a notice that progress is not being saved, serve the book instead: run <code>python3 tools/serve.py</code> from the repository root and open <code>http://127.0.0.1:8765/</code>. Progress belongs to the address, so the book from disk and the book from the server keep separate records; export from one and import into the other to join them.</p></div>
 
 <h2 id="ask-ai">Ask AI about any passage</h2>
 <p>Select some text on any page and an <b>Ask AI</b> button appears beside it. It opens a small panel with your selection, the chapter title and a box for your question. Only those three things are ever sent anywhere: the book's own text and what you type.</p>
@@ -84,7 +84,7 @@ export ANTHROPIC_API_KEY=...                # optional: your own key; never writ
 python3 tools/serve.py --port 8765 --cap 50 --model claude-haiku-5-5
 # then open http://127.0.0.1:8765/</code></pre>
 <ul>
-<li>It listens on <code>127.0.0.1</code> only. It serves files from the book's folder and only of these kinds: HTML, CSS, JavaScript, SVG, PNG, JPEG, WOFF2, JSON, text, Markdown and Python. Any path with a part that starts with a dot, such as <code>.git</code> or <code>.env</code>, is refused, and so are folder listings.</li>
+<li>It listens on <code>127.0.0.1</code> only. It serves files from <code class="path">book/</code> only, and only of these kinds: HTML, CSS, JavaScript, SVG, PNG, JPEG, WOFF2, JSON, text, Markdown and Python. Any path with a part that starts with a dot, such as <code>.git</code> or <code>.env</code>, is refused, and so are folder listings.</li>
 <li>The panel shows an <b>Ask here</b> button when the page is served by the helper and a key is set. The page calls the helper's own <code>/ask</code> route, which calls the Anthropic Messages API with the model <code>claude-haiku-5-5</code> (change it with <code>--model</code>) and a limit of 2,048 output tokens. Current Claude models think before they answer and the thinking counts toward that limit, which is why it is not smaller. The helper shows only the text of the answer.</li>
 <li>The key is read from the <code>ANTHROPIC_API_KEY</code> environment variable. It never reaches the page and is never printed or logged.</li>
 <li>Every request must carry the helper's own address as its Host, and <code>/ask</code> must also come from the helper's own origin. A request from any other site is refused, and there are no CORS headers.</li>
@@ -110,11 +110,11 @@ cd labs &amp;&amp; python -m pytest           # every lab's tests, offline</code
 <p>The book is plain HTML, CSS and JavaScript, with helper scripts in <code class="path">tools/</code>. Each runs with plain <code>python3</code> and needs nothing installed.</p>
 <div class="tbl-wrap"><table>
 <tr><th>Script</th><th>What it does</th><th>Run it when</th></tr>
-<tr><td><code class="path">tools/build_search_index.py</code></td><td>Reads every page's headings, the glossary and the lab checklists into <code class="path">assets/search-index.js</code>, which the search box, the glossary hover and the progress page use. <code>--check</code> only reports whether the file is stale.</td><td>After you add a page, a heading, a checklist item or a glossary entry.</td></tr>
+<tr><td><code class="path">tools/build_search_index.py</code></td><td>Reads every page's headings, the glossary and the lab checklists into <code class="path">book/assets/search-index.js</code>, which the search box, the glossary hover and the progress page use. <code>--check</code> only reports whether the file is stale.</td><td>After you add a page, a heading, a checklist item or a glossary entry.</td></tr>
 <tr><td><code class="path">tools/check_links.py</code></td><td>Checks that every internal link points at a file that exists, and at an <code>id</code> that exists in it.</td><td>Before every commit.</td></tr>
 <tr><td><code class="path">tools/check_book.py</code></td><td>Checks the book's structure: every page is in the contents list and loads the shared files, titles follow the pattern, heading ids are unique, checklist ids are unique and named after their page, callouts use the four kinds above, and every path in a <code>code class="path"</code> under <code class="path">labs/</code> exists.</td><td>Before every commit.</td></tr>
 <tr><td><code class="path">tools/serve.py</code></td><td>Optional: serves the book on 127.0.0.1, with in-page Ask AI answers if you set a key (see <a href="#ask-ai-helper">above</a>).</td><td>When you want reliable progress tracking or answers inside the page.</td></tr>
-<tr><td><code class="path">tools/tests/</code></td><td>Tests for the progress tracker's logic, run with <code>node --test tools/tests/*.test.js</code>.</td><td>After you change <code class="path">assets/progress.js</code>.</td></tr>
+<tr><td><code class="path">tools/tests/</code></td><td>Tests for the progress tracker's logic, run with <code>node --test tools/tests/*.test.js</code>.</td><td>After you change <code class="path">book/assets/progress.js</code>.</td></tr>
 </table></div>
 <pre><code>python3 tools/build_search_index.py
 python3 tools/check_links.py
@@ -126,18 +126,18 @@ cd labs &amp;&amp; python -m pytest</code></pre>
 <h3 id="add-a-page">Adding a page</h3>
 <ol>
 <li>Copy an existing page, such as this one, and change its title, kicker and body. Keep the <code>head</code>, the sidebar <code>nav</code> and the pager <code>nav</code> as they are. The title ends with <code>&amp;middot; Build AI handbook</code>.</li>
-<li>Add the page to the <code>BOOK</code> list at the top of <code class="path">assets/handbook.js</code>, on one line like its neighbours. The sidebar, the previous and next links, the search and the progress tracker all follow that list.</li>
+<li>Add the page to the <code>BOOK</code> list at the top of <code class="path">book/assets/handbook.js</code>, on one line like its neighbours. The sidebar, the previous and next links, the search and the progress tracker all follow that list.</li>
 <li>Add a card for it to the contents on <code class="path">index.html</code>.</li>
 <li>Give every <code>h2</code> and <code>h3</code> an <code>id</code>, so search can link to it.</li>
 <li>For a lab, end its steps with <code>&lt;ul class="checklist"&gt;</code>, one <code>&lt;li data-check="page-name:step"&gt;</code> per step, where <code>page-name</code> is the file name without <code>.html</code>.</li>
 <li>Run the search index, the link check and the book check.</li>
 </ol>
-<p>Widgets live in <code class="path">assets/widgets/</code>, one file per widget, each loaded only by the pages that use it. They use the small helpers in <code class="path">assets/handbook.js</code> (<code>HB.el</code>, <code>HB.svg</code>, <code>HB.fmt</code>) and read colours from the CSS variables, so they follow the light and dark themes.</p>
+<p>Widgets live in <code class="path">book/assets/widgets/</code>, one file per widget, each loaded only by the pages that use it. They use the small helpers in <code class="path">book/assets/handbook.js</code> (<code>HB.el</code>, <code>HB.svg</code>, <code>HB.fmt</code>) and read colours from the CSS variables, so they follow the light and dark themes.</p>
 
 <section class="selfcheck">
 <h2 id="self-check">Self-check</h2>
 <details><summary>Why does the book never cite line numbers?</summary><div><p>Line numbers change with every edit above them, so they go stale quickly and send readers to the wrong place. A file and a function name stay correct much longer, and a search finds them.</p></div></details>
-<details><summary>You add a new chapter file. What else must change for it to appear in the sidebar?</summary><div><p>The <code>BOOK</code> list in <code class="path">assets/handbook.js</code>. Then add a card to the contents in <code class="path">index.html</code>, and rerun <code class="path">tools/build_search_index.py</code> so search finds its headings.</p></div></details>
+<details><summary>You add a new chapter file. What else must change for it to appear in the sidebar?</summary><div><p>The <code>BOOK</code> list in <code class="path">book/assets/handbook.js</code>. Then add a card to the contents in <code class="path">index.html</code>, and rerun <code class="path">tools/build_search_index.py</code> so search finds its headings.</p></div></details>
 <details><summary>You ticked steps in a lab, opened the book on another computer, and the ticks are gone. Why, and what do you do?</summary><div><p>Progress lives only in the browser where you made it. Export it from the progress page on the first computer and import the file on the second; the import keeps the newer record wherever both have one.</p></div></details>
 <details><summary>A widget shows six-number vectors for embeddings. Is that what real systems use?</summary><div><p>No. Real embedding models produce hundreds or thousands of numbers per text. The widget uses six so you can read every number; the maths is identical.</p></div></details>
 </section>
