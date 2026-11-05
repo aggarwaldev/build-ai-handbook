@@ -16,7 +16,8 @@ links to outside reading and the optional Ask AI helper.
 
 ## Open the book
 
-Either double-click `book/index.html`, or serve the book and open the address it prints:
+Read it online at <https://handbook.aggarwal.dev/>. To read it on your own machine, either
+double-click `book/index.html`, or serve the book and open the address it prints:
 
     python3 tools/serve.py
 
