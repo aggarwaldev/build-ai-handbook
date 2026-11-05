@@ -1,6 +1,6 @@
 # Lab 10: capstone, a small assistant
 
-The page that explains this lab is `lab-capstone.html` at the root of the book.
+The page that explains this lab is `book/lab-capstone.html`.
 
 A help-desk assistant for the invented Brindlemere City Library, built from the earlier labs:
 Lab 3's retrieval over `labs/03-rag/docs/`, a Lab 5 tool loop with two read-only tools

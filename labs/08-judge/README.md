@@ -1,6 +1,6 @@
 # Lab 8: an LLM judge you can trust
 
-The page that explains this lab is `lab-judge.html` at the root of the book.
+The page that explains this lab is `book/lab-judge.html`.
 
 - `judge.py`: a pass/fail judge with a rubric and strict JSON parsing, measured against
   human labels: agreement, Cohen's kappa, a confusion matrix, recall per defect type and a

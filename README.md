@@ -16,12 +16,12 @@ links to outside reading and the optional Ask AI helper.
 
 ## Open the book
 
-Either double-click `index.html`, or serve the folder and open the address it prints:
+Either double-click `book/index.html`, or serve the book and open the address it prints:
 
     python3 tools/serve.py
 
 then open <http://127.0.0.1:8765/>. `serve.py` uses only the Python standard library. It
-listens on 127.0.0.1 only and serves the book's own files, nothing hidden. It also powers
+listens on 127.0.0.1 only and serves the files in `book/`, nothing hidden. It also powers
 the optional Ask AI helper: start it with `ANTHROPIC_API_KEY` set in your shell and the
 "Ask AI" button sends the passage you selected, and your question, to Claude. The key is
 read from the environment only and is never written to a file or a log. The default model
@@ -49,8 +49,8 @@ variable chooses who answers:
 | `fake` | nothing | free; scripted replies, for reading the code and for tests |
 
 `LLM_MODEL` picks a model inside the backend. Never put a key in a file inside the
-repository. Lab 0 (`lab-setup.html`) walks through all of this, and `labs/README.md` lists
-every lab's folder and how to run it.
+repository. Lab 0 (`book/lab-setup.html`) walks through all of this, and `labs/README.md`
+lists every lab's folder and how to run it.
 
 Run the tests:
 
@@ -94,9 +94,10 @@ The book keeps track of what you have read and built, in your browser only:
 - each lab's checklist turns into tick boxes, and ticking every step marks the lab done;
 - the sidebar shows a tick for done pages and a count per part, and the top bar shows the
   overall percentage;
-- `progress.html` shows it all in one place, with where to continue, recent activity, your
-  notes and the self-check answers you have opened. It can export everything as one JSON
-  file, import such a file (merging it with what is there, newer record wins) and reset.
+- `book/progress.html` shows it all in one place, with where to continue, recent activity,
+  your notes and the self-check answers you have opened. It can export everything as one
+  JSON file, import such a file (merging it with what is there, newer record wins) and
+  reset.
 
 Progress is stored in the browser's IndexedDB, or its local storage when IndexedDB is not
 available. Nothing is sent anywhere. Progress belongs to the address the book was opened
@@ -109,20 +110,21 @@ When a browser refuses all storage, every page says that progress is not being k
 
 | Path | What it holds |
 | --- | --- |
-| `index.html` | The cover: how to use the book, reading paths and the full contents |
-| `reading.html` | How to read the book: conventions, boxes, self-checks, labs, keeping current |
-| `progress.html` | Your progress page |
-| `*.html` | One page per chapter, lab and reference page |
-| `assets/handbook.js` | Builds the sidebar, search, pager and Ask AI box. Its `BOOK` list sets the reading order |
-| `assets/progress.js` | The progress tracker |
-| `assets/handbook.css` | All styles, light and dark |
-| `assets/search-index.js` | Generated search index; do not edit by hand |
-| `assets/widgets/` | One script per interactive widget |
+| `book/` | The book, and the whole website: every page and its assets |
+| `book/index.html` | The cover: how to use the book, reading paths and the full contents |
+| `book/reading.html` | How to read the book: conventions, boxes, self-checks, labs, keeping current |
+| `book/progress.html` | Your progress page |
+| `book/*.html` | One page per chapter, lab and reference page |
+| `book/assets/handbook.js` | Builds the sidebar, search, pager and Ask AI box. Its `BOOK` list sets the reading order |
+| `book/assets/progress.js` | The progress tracker |
+| `book/assets/handbook.css` | All styles, light and dark |
+| `book/assets/search-index.js` | Generated search index; do not edit by hand |
+| `book/assets/widgets/` | One script per interactive widget |
 | `labs/` | The lab code and its tests, plus the larger projects from earlier chapters |
 | `tools/` | The local server and the checks below |
 | `labs/notebooks/` | One notebook per lab, generated from `labs/notebooks/src/` |
 | `binder/`, `.devcontainer/` | Set-up for Binder and GitHub Codespaces |
-| `vercel.json`, `.vercelignore` | Headers and file list for hosting on Vercel |
+| `vercel.json` | Hosting on Vercel: publishes `book/`, with security headers |
 
 ## Checks
 
@@ -156,14 +158,14 @@ pull request (`.github/workflows/check.yml`).
 
 ## Publish it
 
-The book is a static site: serve the repository root as it is. On Vercel, import the
-repository with the framework preset "Other", no build command and the root as the output
-folder. `vercel.json` adds security headers, and `.vercelignore` keeps the labs and tools
-off the site, since no page links to them. On a public address the Ask AI box copies a
-ready-made prompt instead of calling a model, so no key is ever needed on the server.
+The book is a static site: the `book/` folder as it is. On Vercel, import the repository
+with the framework preset "Other" and no build command. `vercel.json` makes `book/` the
+output folder, so nothing outside it reaches the site, and adds security headers. On a
+public address the Ask AI box copies a ready-made prompt instead of calling a model, so no
+key is ever needed on the server.
 
 ## Licence
 
-The code (everything under `labs/`, `tools/` and `assets/`, the notebooks, and the code
-samples in the pages) is under the MIT License, in `LICENSE`. The text of the book is under
-Creative Commons Attribution 4.0 (CC BY 4.0), in `LICENSE-TEXT`.
+The code (everything under `labs/`, `tools/` and `book/assets/`, the notebooks, and the
+code samples in the pages) is under the MIT License, in `LICENSE`. The text of the book is
+under Creative Commons Attribution 4.0 (CC BY 4.0), in `LICENSE-TEXT`.

@@ -1,6 +1,6 @@
 # Lab 7: guardrails you can test
 
-The page that explains this lab is `lab-guardrails.html` at the root of the book.
+The page that explains this lab is `book/lab-guardrails.html`.
 
 - `guardrails.py`: masks emails, phone numbers and card numbers before a model call, flags
   and fences retrieved passages, checks the model's JSON reply, and fails closed.
