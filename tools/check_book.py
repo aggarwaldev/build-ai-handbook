@@ -23,6 +23,10 @@ What it checks:
    The one exception is a folder a lab creates when it runs, such as
    labs/02-prompt-bench/runs/: it passes when it ends in "/", git ignores it, and the
    folder that holds it exists.
+8. book/assets/handbook.js names the same repository, branch and site address as the
+   Python tools: REPO and BRANCH in tools/build_notebooks.py, SITE_URL in
+   tools/build_site_meta.py. The footer's links come from the first, the page heads and
+   the sitemap from the second.
 
 Standard library only. Run from anywhere:
 
@@ -41,7 +45,9 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from build_notebooks import BRANCH, REPO  # noqa: E402
 from build_search_index import BOOK, ROOT, book_entries, book_key_count  # noqa: E402
+from build_site_meta import SITE_URL  # noqa: E402
 
 SELF = Path(__file__).resolve()
 TEXT_SUFFIXES = {".html", ".js", ".css", ".py", ".md", ".txt", ".json", ".jsonl", ".ipynb", ".yml", ".yaml", ".toml", ".ini", ".cfg"}
@@ -61,6 +67,7 @@ BANNED: list[tuple[str, re.Pattern[str]]] = [
     ("old code path in a path tag", re.compile(r'class="path">\s*(?:app|corpus|evals)/')),
 ]
 LOCAL_WORDS = ROOT / "tools" / "banned-words.local.txt"
+_JS_ADDRESS_RE = re.compile(r"^\s*var (REPO|BRANCH|BOOK_URL) = '([^'\\]*)';", re.M)
 
 
 def local_banned() -> list[tuple[str, re.Pattern[str]]]:
@@ -277,9 +284,29 @@ def check_pages(problems: list[str]) -> int:
     return n_checks
 
 
+def check_addresses(problems: list[str]) -> None:
+    """handbook.js and the Python tools must name the same repository, branch and site."""
+    source = (BOOK / "assets" / "handbook.js").read_text(encoding="utf-8")
+    found: dict[str, list[str]] = {}
+    for name, value in _JS_ADDRESS_RE.findall(source):
+        found.setdefault(name, []).append(value)
+    expected = {
+        "REPO": (REPO, "tools/build_notebooks.py REPO"),
+        "BRANCH": (BRANCH, "tools/build_notebooks.py BRANCH"),
+        "BOOK_URL": (SITE_URL, "tools/build_site_meta.py SITE_URL"),
+    }
+    for name, (want, where) in expected.items():
+        values = found.get(name, [])
+        if len(values) != 1:
+            problems.append(f"book/assets/handbook.js: expected one line `var {name} = '...';`, found {len(values)}")
+        elif values[0] != want:
+            problems.append(f"book/assets/handbook.js: {name} is {values[0]!r} but {where} is {want!r}")
+
+
 def main() -> int:
     problems: list[str] = []
     files = check_book_list(problems)
+    check_addresses(problems)
     n_pages = len(list(BOOK.glob("*.html")))
     scanned = check_banned(problems)
     n_checks = check_pages(problems)

@@ -107,6 +107,14 @@ progress; use Export and Import to move it. Chrome and Edge keep progress for pa
 from disk. Firefox and Safari may not; if ticks do not survive a reload, use `serve.py`.
 When a browser refuses all storage, every page says that progress is not being kept.
 
+## Contributing
+
+Corrections, problem reports and better labs are welcome. Report a mistake or a lab that
+does not work at <https://github.com/aggarwaldev/build-ai-handbook/issues>. To propose a
+new chapter or lab, open an issue first, so the scope is agreed before anyone writes it.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) explains how to set up, the checks to run before a
+pull request and how the book is written.
+
 ## Layout
 
 | Path | What it holds |
@@ -116,36 +124,47 @@ When a browser refuses all storage, every page says that progress is not being k
 | `book/reading.html` | How to read the book: conventions, boxes, self-checks, labs, keeping current |
 | `book/progress.html` | Your progress page |
 | `book/*.html` | One page per chapter, lab and reference page |
-| `book/assets/handbook.js` | Builds the sidebar, search, pager and Ask AI box. Its `BOOK` list sets the reading order |
+| `book/assets/handbook.js` | Builds the sidebar, search, pager, footer and Ask AI box. Its `BOOK` list sets the reading order |
 | `book/assets/progress.js` | The progress tracker |
 | `book/assets/handbook.css` | All styles, light and dark |
 | `book/assets/search-index.js` | Generated search index; do not edit by hand |
 | `book/assets/widgets/` | One script per interactive widget |
+| `book/assets/icon.svg` | The site icon: the book's blue, with a variant for dark themes |
+| `book/sitemap.xml`, `book/robots.txt` | For search engines: every page's address, and where the sitemap is. Generated; do not edit by hand |
 | `labs/` | The lab code and its tests, plus the larger projects from earlier chapters |
 | `tools/` | The local server and the checks below |
 | `labs/notebooks/` | One notebook per lab, generated from `labs/notebooks/src/` |
 | `binder/`, `.devcontainer/` | Set-up for Binder and GitHub Codespaces |
 | `vercel.json` | Hosting on Vercel: publishes `book/`, with security headers |
+| `CONTRIBUTING.md` | How to report a problem, propose a change and check it before a pull request |
+| `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` | The issue forms and the pull request template |
 
 ## Checks
 
 All of these use only the Python standard library or Node's built-in test runner:
 
     python3 tools/check_links.py                 # every internal link and #id resolves
-    python3 tools/check_book.py                  # reading order, page structure, ids, paths
+    python3 tools/check_book.py                  # reading order, page structure, ids, paths, addresses
     python3 tools/build_search_index.py --check  # the search index is up to date
-    node --test tools/tests/*.test.js            # the progress tracker
+    python3 tools/build_site_meta.py --check     # page heads, sitemap.xml and robots.txt are up to date
+    node --test tools/tests/*.test.js            # the progress tracker and the footer's links
     python3 tools/build_notebooks.py --check     # notebooks match their sources; launch links
     python tools/run_notebooks.py                # every notebook runs on the fake backend
 
 After you add or rename a page, heading or checklist step, run
 `python3 tools/build_search_index.py` to rebuild the search index.
 
-The tracker tests in `tools/tests/browser.test.js` drive the real pages in headless
-Chromium. They need the `playwright` package with a browser it has already installed, and
-are skipped when it is missing. To run them, point `NODE_PATH` at a `node_modules` folder
-that holds playwright. Set `REQUIRE_BROWSER=1` to make a missing browser fail the run
-instead; CI does.
+After you add a page, or change a page's main heading or lead paragraph, run
+`python3 tools/build_site_meta.py`. It rewrites the marked block in each page's head (a
+description from the lead paragraph, the page's address on the website, the icon and the
+tags that link previews read), `book/sitemap.xml` and `book/robots.txt`, and changes only
+the files that are out of date.
+
+The tests in `tools/tests/browser.test.js` drive the real pages in headless Chromium: the
+progress tracker, and the footer's links on a chapter and on the cover. They need the
+`playwright` package with a browser it has already installed, and are skipped when it is
+missing. To run them, point `NODE_PATH` at a `node_modules` folder that holds playwright.
+Set `REQUIRE_BROWSER=1` to make a missing browser fail the run instead; CI does.
 
 `check_book.py` also reads `tools/banned-words.local.txt` if you create it: one pattern per
 line that must not appear in the book. git ignores that file, so a private list stays

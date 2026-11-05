@@ -74,6 +74,11 @@ window.HANDBOOK_SEARCH = {
      "level": 2
     },
     {
+     "id": "where-to-read",
+     "text": "Where to read it",
+     "level": 2
+    },
+    {
      "id": "conventions",
      "text": "Conventions",
      "level": 2
@@ -126,6 +131,16 @@ window.HANDBOOK_SEARCH = {
     {
      "id": "labs",
      "text": "Running the labs",
+     "level": 2
+    },
+    {
+     "id": "reuse",
+     "text": "Reusing and crediting the book",
+     "level": 2
+    },
+    {
+     "id": "contribute",
+     "text": "Help improve the book",
      "level": 2
     },
     {

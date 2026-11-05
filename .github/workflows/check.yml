@@ -33,7 +33,10 @@ jobs:
       - name: Notebooks match their sources and every lab page links them
         run: python3 tools/build_notebooks.py --check
 
-      - name: Progress tracker tests
+      - name: Page heads, sitemap and robots.txt are up to date
+        run: python3 tools/build_site_meta.py --check
+
+      - name: Progress tracker and footer tests
         run: node --test tools/tests/*.test.js
 
       - name: Install the lab requirements
@@ -64,7 +67,7 @@ jobs:
           npm install --no-save --prefix "$RUNNER_TEMP/pw" playwright@1.49.0
           "$RUNNER_TEMP/pw/node_modules/.bin/playwright" install --with-deps chromium
 
-      - name: Progress tracker in a real browser
+      - name: Progress tracker and footer in a real browser
         env:
           NODE_PATH: ${{ runner.temp }}/pw/node_modules
           REQUIRE_BROWSER: "1"

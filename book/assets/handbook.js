@@ -10,9 +10,43 @@
    entry does not parse.
 
    When the sidebar and pager are built, HB.built becomes true and the document receives an
-   'hb-built' event. assets/progress.js (the reading tracker) waits for it. */
+   'hb-built' event. assets/progress.js (the reading tracker) waits for it.
+
+   The addresses below and the footer's links are pure: in Node they are module.exports, so
+   `node --test tools/tests/*.test.js` can test them. */
 (function () {
   'use strict';
+
+  /* ---------- where the book lives ----------
+     The repository, its default branch and the published site. tools/check_book.py fails
+     if these differ from the constants the Python tools in tools/ use. */
+  var REPO = 'aggarwaldev/build-ai-handbook';
+  var BRANCH = 'main';
+  var BOOK_URL = 'https://handbook.aggarwal.dev/';
+
+  // A page's canonical address: the cover is the site's root.
+  function pageUrl(file) {
+    return file === 'index.html' ? BOOK_URL : BOOK_URL + file;
+  }
+
+  // The footer's links for one page, given its file name and title.
+  function footerLinks(file, title) {
+    var repo = 'https://github.com/' + REPO;
+    return {
+      source: repo,
+      contribute: repo + '/blob/' + BRANCH + '/CONTRIBUTING.md',
+      edit: repo + '/edit/' + BRANCH + '/book/' + encodeURIComponent(file),
+      report: repo + '/issues/new?template=mistake.yml&title=' + encodeURIComponent('Mistake: ' + title) +
+        '&page=' + encodeURIComponent(pageUrl(file)),
+      textLicence: repo + '/blob/' + BRANCH + '/LICENSE-TEXT',
+      codeLicence: repo + '/blob/' + BRANCH + '/LICENSE'
+    };
+  }
+
+  if (typeof module === 'object' && module && module.exports) {
+    module.exports = { REPO: REPO, BRANCH: BRANCH, BOOK_URL: BOOK_URL, pageUrl: pageUrl, footerLinks: footerLinks };
+  }
+  if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
   // Load the progress tracker beside this script, so no page has to name it.
   (function loadProgress() {
@@ -367,6 +401,28 @@
     if (i < BOOK.length - 1) pager.appendChild(el('a', { class: 'next', href: BOOK[i + 1].file, rel: 'next' }, [el('small', { text: 'Next' }), label(BOOK[i + 1])]));
   }
 
+  /* ---------- footer: the project, its source and its licences ---------- */
+  function buildFooter(file) {
+    var main = document.getElementById('main');
+    if (!main || main.querySelector('.foot')) return;
+    var title = null;
+    BOOK.forEach(function (b) { if (b.file === file) title = b.title; });
+    var links = footerLinks(file, title || chapterTitle());
+    // Outside links open in a new tab, as every outside link in the pages does.
+    function out(href, text) { return el('a', { href: href, target: '_blank', rel: 'noopener noreferrer', text: text }); }
+    function item(href, text) { return el('li', null, out(href, text)); }
+    main.appendChild(el('footer', { class: 'foot' }, [
+      el('p', null, [el('b', { text: 'Build AI handbook.' }), ' Your reading progress stays in this browser.']),
+      el('ul', { class: 'foot-links' }, [
+        item(links.source, 'Source on GitHub'),
+        item(links.contribute, 'Contribute'),
+        item(links.edit, 'Edit this page'),
+        item(links.report, 'Report a problem')
+      ]),
+      el('p', null, [out(links.textLicence, 'Text CC BY 4.0'), ', ', out(links.codeLicence, 'code MIT')])
+    ]));
+  }
+
   /* ---------- on this page ---------- */
   function buildOnThisPage() {
     var heads = document.querySelectorAll('article h2[id]');
@@ -510,7 +566,7 @@
       if (text.replace(/\s/g, '').length < 3) return null;
       var node = sel.anchorNode && (sel.anchorNode.nodeType === 1 ? sel.anchorNode : sel.anchorNode.parentNode);
       if (!node || !node.closest) return null;
-      if (!node.closest('#main') || node.closest('.askai, input, textarea, select, button')) return null;
+      if (!node.closest('#main') || node.closest('.askai, .foot, input, textarea, select, button')) return null;
       return { text: text, rect: sel.getRangeAt(0).getBoundingClientRect() };
     }
     function place() {
@@ -612,15 +668,11 @@
     buildTopbar();
     buildSidebar(file);
     buildPager(file);
+    buildFooter(file);
     window.HB.built = true;
     try { document.dispatchEvent(new CustomEvent('hb-built')); } catch (e) { /* progress.js also checks HB.built */ }
     decorate();
     buildOnThisPage();
     glossaryTips();
-    var foot = document.querySelector('.foot');
-    if (!foot) {
-      var main = document.getElementById('main');
-      if (main) main.appendChild(el('p', { class: 'foot', text: 'Build AI handbook. It runs from disk with no network; your reading progress stays in this browser.' }));
-    }
   });
 })();

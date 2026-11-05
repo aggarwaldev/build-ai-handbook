@@ -1,0 +1,53 @@
+name: A lab does not work
+description: A lab, its tests or its notebook fails, or does something its page does not describe.
+title: "Lab: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Lab 0 (`book/lab-setup.html`) covers the setup every lab needs. If a lab fails on Claude or Ollama, try it with `LLM_BACKEND=fake` too: a failure on the fake backend needs no key to reproduce.
+
+        Remove any API key or token from what you paste below.
+  - type: input
+    id: lab
+    attributes:
+      label: Lab
+      description: Its number and name, or the folder in `labs/`.
+      placeholder: Lab 3, RAG from scratch
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Backend
+      description: The value of `LLM_BACKEND` when it failed. If you set `LLM_MODEL`, name the model under Steps.
+      options:
+        - fake
+        - anthropic
+        - ollama
+        - Not set
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: The commands you ran, from the repository root, or the notebook cell that failed.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Output
+      description: What you saw, in full, such as the error and its traceback. It is shown as code.
+      render: text
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: Python version and operating system
+      description: The output of `python --version`, and your operating system. For a notebook, say whether it ran on Colab, Binder or Codespaces.
+      placeholder: Python 3.12.4 on macOS 15
+    validations:
+      required: true

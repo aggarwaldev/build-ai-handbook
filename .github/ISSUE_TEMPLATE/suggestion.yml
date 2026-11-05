@@ -1,0 +1,57 @@
+name: Suggest a chapter, lab or improvement
+description: Propose new material or a larger change, so the scope is agreed before anyone writes it.
+title: "Suggestion: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Each chapter builds only on the chapters before it, and every lab is a small program with tests. A new page changes the reading order, and a new chapter renumbers the chapters after it, so agree here what it covers and where it goes before you write it. `CONTRIBUTING.md` says how a page or lab is put together.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What you suggest
+      options:
+        - A new chapter
+        - A new lab
+        - A change to an existing chapter or lab
+        - Something else
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: The idea
+      description: What it would cover or change, in a few sentences.
+    validations:
+      required: true
+  - type: textarea
+    id: reader
+    attributes:
+      label: What a reader gains
+      description: What a reader could understand or build afterwards that the book does not teach today.
+    validations:
+      required: true
+  - type: textarea
+    id: placement
+    attributes:
+      label: Where it fits
+      description: Which part it belongs to, and which chapters a reader needs first.
+    validations:
+      required: false
+  - type: textarea
+    id: sources
+    attributes:
+      label: Sources
+      description: Optional. Documentation, papers or code it would draw on.
+    validations:
+      required: false
+  - type: dropdown
+    id: author
+    attributes:
+      label: Would you write it?
+      options:
+        - Yes, once the scope is agreed
+        - I could help
+        - No, I am only suggesting it
+    validations:
+      required: false

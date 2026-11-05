@@ -253,3 +253,55 @@ test('with no storage at all the page says so and the book still works', async (
     await context.close();
   }
 });
+
+// The footer's links, read from the page: [text, href, target, rel] for each.
+function footerLinks(page) {
+  return page.$$eval('#main > footer.foot a', (as) => as.map((a) => [a.textContent, a.getAttribute('href'), a.getAttribute('target'), a.getAttribute('rel')]));
+}
+
+function expectedFooter(file, title, address) {
+  const repo = 'https://github.com/aggarwaldev/build-ai-handbook';
+  const out = (text, href) => [text, href, '_blank', 'noopener noreferrer'];
+  return [
+    out('Source on GitHub', repo),
+    out('Contribute', repo + '/blob/main/CONTRIBUTING.md'),
+    out('Edit this page', repo + '/edit/main/book/' + file),
+    out('Report a problem', repo + '/issues/new?template=mistake.yml&title=' + encodeURIComponent('Mistake: ' + title) + '&page=' + encodeURIComponent(address)),
+    out('Text CC BY 4.0', repo + '/blob/main/LICENSE-TEXT'),
+    out('code MIT', repo + '/blob/main/LICENSE')
+  ];
+}
+
+test('every page ends with the project footer: source, contributing, edit, report and licences', async (t) => {
+  if (skipReason) { if (REQUIRED) assert.fail(skipReason); t.skip(skipReason); return; }
+  const errors = [];
+  const context = await browser.newContext();
+  try {
+    const chapter = await openPage(context, CHAPTER, errors);
+    assert.deepEqual(await footerLinks(chapter),
+      expectedFooter(CHAPTER, 'How to read this book', 'https://handbook.aggarwal.dev/' + CHAPTER));
+    assert.match(await chapter.locator('footer.foot').innerText(), /^Build AI handbook\. Your reading progress stays in this browser\./);
+    // It comes after the progress box and the pager, as the last thing in the page's main column.
+    assert.equal(await chapter.evaluate(() => {
+      const foot = document.querySelector('footer.foot');
+      const after = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+      return after(document.querySelector('.hb-track'), foot) && after(document.getElementById('pager'), foot) &&
+        document.getElementById('main').lastElementChild === foot && document.querySelectorAll('.foot').length === 1;
+    }), true);
+    // Tab from the last pager link lands on the footer's first link, which shows a focus ring.
+    await chapter.locator('#pager a').last().focus();
+    await chapter.keyboard.press('Tab');
+    assert.deepEqual(await chapter.evaluate(() => {
+      const a = document.activeElement;
+      return [a.textContent, !!a.closest('footer.foot'), getComputedStyle(a).outlineStyle];
+    }), ['Source on GitHub', true, 'solid']);
+
+    // The cover, opened at the site's root rather than as index.html.
+    const cover = await openPage(context, '', errors);
+    assert.deepEqual(await footerLinks(cover),
+      expectedFooter('index.html', 'Cover and contents', 'https://handbook.aggarwal.dev/'));
+    assert.deepEqual(errors, []);
+  } finally {
+    await context.close();
+  }
+});
