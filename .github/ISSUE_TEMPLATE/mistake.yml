@@ -1,0 +1,37 @@
+name: Mistake in the book
+description: A sentence, number, formula, code sample or link on a page is wrong or out of date.
+title: "Mistake: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        One mistake per issue keeps each one easy to fix. If you know the fix, the "Edit this page" link at the foot of every page lets you propose it as a pull request instead.
+  - type: input
+    id: page
+    attributes:
+      label: Page
+      description: The page's address, with the section if you can.
+      placeholder: https://handbook.aggarwal.dev/embeddings.html#similarity
+    validations:
+      required: true
+  - type: textarea
+    id: wrong
+    attributes:
+      label: What is wrong
+      description: Quote the sentence, number, formula or code, and say what is wrong with it.
+    validations:
+      required: true
+  - type: textarea
+    id: correction
+    attributes:
+      label: What it should say
+      description: Your correction, if you have one.
+    validations:
+      required: false
+  - type: textarea
+    id: source
+    attributes:
+      label: Source
+      description: Optional. A link to documentation, a paper or a run that supports the correction.
+    validations:
+      required: false
