@@ -20,7 +20,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const { spawn } = require('node:child_process');
 
-const ROOT = path.resolve(__dirname, '..', '..');
+const BOOK = path.resolve(__dirname, '..', '..', 'book');
 const LAB = 'lab-setup.html';
 const CHAPTER = 'reading.html';
 
@@ -35,7 +35,7 @@ let skipReason = playwright ? '' : 'playwright is not installed (set NODE_PATH t
 
 function startServer() {
   return new Promise((resolve, reject) => {
-    const proc = spawn('python3', ['-u', '-m', 'http.server', '0', '--bind', '127.0.0.1', '--directory', ROOT], { stdio: ['ignore', 'pipe', 'pipe'] });
+    const proc = spawn('python3', ['-u', '-m', 'http.server', '0', '--bind', '127.0.0.1', '--directory', BOOK], { stdio: ['ignore', 'pipe', 'pipe'] });
     let out = '';
     const timer = setTimeout(() => reject(new Error('http.server did not start: ' + out)), 10000);
     proc.stdout.on('data', (chunk) => {
@@ -49,7 +49,7 @@ function startServer() {
 
 test.before(async () => {
   if (!playwright) return;
-  if (!fs.existsSync(path.join(ROOT, LAB))) { skipReason = LAB + ' does not exist yet'; return; }
+  if (!fs.existsSync(path.join(BOOK, LAB))) { skipReason = LAB + ' does not exist yet'; return; }
   try {
     browser = await playwright.chromium.launch();
   } catch (e) {

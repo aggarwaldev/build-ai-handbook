@@ -32,6 +32,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+BOOK = ROOT / "book"
 SRC = ROOT / "labs" / "notebooks" / "src"
 OUT = ROOT / "labs" / "notebooks"
 
@@ -245,10 +246,10 @@ def build(stem: str, source: str) -> str:
 def page_links_problems() -> list[str]:
     problems = []
     for stem, page in LABS.items():
-        text = (ROOT / page).read_text(encoding="utf-8")
+        text = (BOOK / page).read_text(encoding="utf-8")
         for name, url in (("Colab", colab_url(stem)), ("Binder", binder_url(stem)), ("Codespaces", CODESPACES_URL)):
             if f'href="{html_attr(url)}"' not in text:
-                problems.append(f"{page}: no {name} link to {stem}")
+                problems.append(f"book/{page}: no {name} link to {stem}")
     return problems
 
 

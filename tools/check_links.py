@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Check every internal link in the book: the file exists, and so does the #id it names.
 
-It reads every .html file in the repository (the pages at the root, and any page under
+It reads every .html file in the repository (the pages in book/, and any page under
 labs/ or tools/), skipping hidden folders and virtual environments. From each it collects
 a[href], link[href], script[src] and img[src] and checks every relative target. It also
-checks that every page named in the BOOK list in assets/handbook.js exists, since the
+checks that every page named in the BOOK list in book/assets/handbook.js exists, since the
 sidebar is built from it. An absolute http(s) link is counted and listed but not fetched:
 the book works offline.
 
@@ -24,7 +24,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_search_index import ROOT, book_entries  # noqa: E402
+from build_search_index import BOOK, ROOT, book_entries  # noqa: E402
 
 _LINK_ATTRS = {"a": "href", "link": "href", "script": "src", "img": "src"}
 _SKIP_DIRS = {"node_modules", "venv", "__pycache__"}
@@ -93,8 +93,8 @@ def main() -> int:
 
     for entry in book_entries():
         checked += 1
-        if not (ROOT / str(entry["file"])).is_file():
-            broken.append(f"assets/handbook.js: BOOK names a missing page {entry['file']}")
+        if not (BOOK / str(entry["file"])).is_file():
+            broken.append(f"book/assets/handbook.js: BOOK names a missing page {entry['file']}")
 
     print(f"pages: {len(pages)}")
     print(f"internal links checked: {checked}")
