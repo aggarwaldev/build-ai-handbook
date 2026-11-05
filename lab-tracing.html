@@ -102,6 +102,13 @@
 <li><b>By key name, exact.</b> A value stored under <code>email</code> or <code>api_key</code> is replaced whole, whatever it looks like. The names are matched exactly. A rule such as "any key containing <code>token</code>" looks safer, and would also hide <code>input_tokens</code> and <code>output_tokens</code>, the counts you most need.</li>
 <li><b>By content, a detector.</b> Every other string goes through <code>mask</code>, which finds emails, phone numbers and card numbers in free text. It is only as good as Lab 7's harness says it is: a phone number written as <code>555-010-0142</code> will reach the trace in clear.</li>
 </ul>
+<div class="run-online">
+<p class="label">Run this lab without installing anything:</p>
+<a class="btn primary" href="https://colab.research.google.com/github/aggarwaldev/build-ai-handbook/blob/main/labs/notebooks/lab-09-tracing.ipynb" target="_blank" rel="noopener noreferrer">Open in Colab</a>
+<a class="btn" href="https://mybinder.org/v2/gh/aggarwaldev/build-ai-handbook/main?urlpath=lab/tree/labs/notebooks/lab-09-tracing.ipynb" target="_blank" rel="noopener noreferrer">Launch on Binder</a>
+<a class="btn" href="https://codespaces.new/aggarwaldev/build-ai-handbook?quickstart=1" target="_blank" rel="noopener noreferrer">Open in Codespaces</a>
+<p class="hint">Colab needs a Google account and Codespaces a GitHub account. Binder needs no account, but can take a few minutes to start. The notebook follows this page step by step; tick the checklist here, in the book, to keep your progress.</p>
+</div>
 <p>The previews of a call's input and output are cut to 200 characters, and the order matters: mask first, then cut. Cut first, and an email address split at the 200th character leaves a fragment such as <code>sam.tay</code> that the masker no longer recognises. The demo's question holds an email and a phone number; the line in step 3 shows both as placeholders, and two tests read back the files they wrote and check that the raw values are absent.</p>
 
 <h2 id="step-5">Step 5: summarise a run</h2>

@@ -56,6 +56,13 @@
 <li><b>Freeze them.</b> Comparing two runs means nothing if the cases changed in between. Each run records a short hash of the case file, and <code>compare</code> warns when two runs used different ones.</li>
 <li><b>Keep them out of the prompt.</b> If a prompt's examples are copied from the test cases, the bench measures memory, not skill: the same leak as training on the <a class="g" href="glossary.html#test-set">test set</a> (<a href="ml-generalisation.html#leakage">chapter 11</a>). A test checks that v3's examples are not test cases.</li>
 </ul>
+<div class="run-online">
+<p class="label">Run this lab without installing anything:</p>
+<a class="btn primary" href="https://colab.research.google.com/github/aggarwaldev/build-ai-handbook/blob/main/labs/notebooks/lab-02-prompt-bench.ipynb" target="_blank" rel="noopener noreferrer">Open in Colab</a>
+<a class="btn" href="https://mybinder.org/v2/gh/aggarwaldev/build-ai-handbook/main?urlpath=lab/tree/labs/notebooks/lab-02-prompt-bench.ipynb" target="_blank" rel="noopener noreferrer">Launch on Binder</a>
+<a class="btn" href="https://codespaces.new/aggarwaldev/build-ai-handbook?quickstart=1" target="_blank" rel="noopener noreferrer">Open in Codespaces</a>
+<p class="hint">Colab needs a Google account and Codespaces a GitHub account. Binder needs no account, but can take a few minutes to start. The notebook follows this page step by step; tick the checklist here, in the book, to keep your progress.</p>
+</div>
 
 <h2 id="step-2">Step 2: prompt versions in files</h2>
 <p>Each version is a plain text file, sent as the system prompt. The customer's message goes in the user turn, wrapped the same way for every version, so the prompt is the only thing that changes:</p>

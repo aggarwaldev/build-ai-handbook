@@ -37,6 +37,13 @@
 <li>The files, in <code class="path">labs/05-agent/</code>: <code class="path">agent.py</code> (the tools, the checks, the loop and the stand-in model, about 500 lines), <code class="path">catalogue.json</code> (twelve invented parts with prices in GBP) and <code class="path">test_agent.py</code>.</li>
 <li>Cost: nothing on the fake backend or Ollama; about a tenth of a cent a run on <code>claude-haiku-5-5</code> (<a href="#cost">worked out below</a>).</li>
 </ul>
+<div class="run-online">
+<p class="label">Run this lab without installing anything:</p>
+<a class="btn primary" href="https://colab.research.google.com/github/aggarwaldev/build-ai-handbook/blob/main/labs/notebooks/lab-05-agent.ipynb" target="_blank" rel="noopener noreferrer">Open in Colab</a>
+<a class="btn" href="https://mybinder.org/v2/gh/aggarwaldev/build-ai-handbook/main?urlpath=lab/tree/labs/notebooks/lab-05-agent.ipynb" target="_blank" rel="noopener noreferrer">Launch on Binder</a>
+<a class="btn" href="https://codespaces.new/aggarwaldev/build-ai-handbook?quickstart=1" target="_blank" rel="noopener noreferrer">Open in Codespaces</a>
+<p class="hint">Colab needs a Google account and Codespaces a GitHub account. Binder needs no account, but can take a few minutes to start. The notebook follows this page step by step; tick the checklist here, in the book, to keep your progress.</p>
+</div>
 
 <h2 id="tools">Step 1: describe the tools</h2>
 <p>A tool is two halves. The model sees a <b>name</b>, a <b>description</b> and an <b>input schema</b>; your code holds the <b>function</b>, which the model never sees. In <code class="path">agent.py</code> each tool is a small <code>Tool</code> record that keeps the two halves together:</p>

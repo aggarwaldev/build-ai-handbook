@@ -207,6 +207,13 @@
 <li data-check="lab-capstone:scorecard">I ran the evaluation and can explain each of the three failures.</li>
 <li data-check="lab-capstone:tests">The lab's tests pass.</li>
 </ul>
+<div class="run-online">
+<p class="label">Run this lab without installing anything:</p>
+<a class="btn primary" href="https://colab.research.google.com/github/aggarwaldev/build-ai-handbook/blob/main/labs/notebooks/lab-10-capstone.ipynb" target="_blank" rel="noopener noreferrer">Open in Colab</a>
+<a class="btn" href="https://mybinder.org/v2/gh/aggarwaldev/build-ai-handbook/main?urlpath=lab/tree/labs/notebooks/lab-10-capstone.ipynb" target="_blank" rel="noopener noreferrer">Launch on Binder</a>
+<a class="btn" href="https://codespaces.new/aggarwaldev/build-ai-handbook?quickstart=1" target="_blank" rel="noopener noreferrer">Open in Codespaces</a>
+<p class="hint">Colab needs a Google account and Codespaces a GitHub account. Binder needs no account, but can take a few minutes to start. The notebook follows this page step by step; tick the checklist here, in the book, to keep your progress.</p>
+</div>
 
 <h2 id="run-it">Run it</h2>
 <p>The tests cover the brief's four promises and the joins between the pieces: masking happens before the model sees the text (every request is read back), the user still sees their own details, a citation that was not retrieved fails closed, seven kinds of bad reply each fail closed, a check that raises blocks, <code>not_found</code> and <code>refuse</code> show fixed replies, <code>my_loans</code> reads only the signed-in record and refuses a member id, a passage carrying instructions is dropped, every run writes a trace, the cap refuses a call before it is sent and stops a loop that never ends, the budget counts the tool definitions, the step limit runs no tool it cannot read, and the scorecard on the fake backend. From <code class="path">labs/</code>:</p>

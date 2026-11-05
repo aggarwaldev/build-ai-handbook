@@ -145,6 +145,13 @@ OutputVerdict(ok=False, shown="Sorry, I can't give you a checked answer to that 
 <li><b>Catch rate</b> (recall): planted rows caught, divided by planted rows.</li>
 <li><b>False-alarm rate</b>: clean rows flagged, divided by clean rows.</li>
 </ul>
+<div class="run-online">
+<p class="label">Run this lab without installing anything:</p>
+<a class="btn primary" href="https://colab.research.google.com/github/aggarwaldev/build-ai-handbook/blob/main/labs/notebooks/lab-07-guardrails.ipynb" target="_blank" rel="noopener noreferrer">Open in Colab</a>
+<a class="btn" href="https://mybinder.org/v2/gh/aggarwaldev/build-ai-handbook/main?urlpath=lab/tree/labs/notebooks/lab-07-guardrails.ipynb" target="_blank" rel="noopener noreferrer">Launch on Binder</a>
+<a class="btn" href="https://codespaces.new/aggarwaldev/build-ai-handbook?quickstart=1" target="_blank" rel="noopener noreferrer">Open in Codespaces</a>
+<p class="hint">Colab needs a Google account and Codespaces a GitHub account. Binder needs no account, but can take a few minutes to start. The notebook follows this page step by step; tick the checklist here, in the book, to keep your progress.</p>
+</div>
 <p>The output guard is measured one check at a time: each check against the rows planted for it, and against every clean row. That shows which check is weak, which a single pass-or-fail total would hide.</p>
 <pre><code>$ python labs/07-guardrails/guardrails.py harness
 Input guard: personal data masked before the model call

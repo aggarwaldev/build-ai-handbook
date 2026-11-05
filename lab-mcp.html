@@ -39,6 +39,13 @@
 <li>The files, in <code class="path">labs/06-mcp-server/</code>: <code class="path">deposits.py</code> (the rates and the sum), <code class="path">server.py</code> (the MCP server), <code class="path">client.py</code> (the SDK client), <code class="path">wire.py</code> (raw messages, standard library only) and <code class="path">test_mcp_server.py</code>.</li>
 <li>Cost: nothing. This lab makes no model calls, so it costs $0 on <code>claude-haiku-5-5</code> as on Ollama and the fake backend, and needs no API key. When a host's model later uses your server, the host's own model calls are what cost money.</li>
 </ul>
+<div class="run-online">
+<p class="label">Run this lab without installing anything:</p>
+<a class="btn primary" href="https://colab.research.google.com/github/aggarwaldev/build-ai-handbook/blob/main/labs/notebooks/lab-06-mcp.ipynb" target="_blank" rel="noopener noreferrer">Open in Colab</a>
+<a class="btn" href="https://mybinder.org/v2/gh/aggarwaldev/build-ai-handbook/main?urlpath=lab/tree/labs/notebooks/lab-06-mcp.ipynb" target="_blank" rel="noopener noreferrer">Launch on Binder</a>
+<a class="btn" href="https://codespaces.new/aggarwaldev/build-ai-handbook?quickstart=1" target="_blank" rel="noopener noreferrer">Open in Codespaces</a>
+<p class="hint">Colab needs a Google account and Codespaces a GitHub account. Binder needs no account, but can take a few minutes to start. The notebook follows this page step by step; tick the checklist here, in the book, to keep your progress.</p>
+</div>
 
 <h2 id="logic">Step 1: keep the logic plain</h2>
 <p>Start with no MCP at all. <code class="path">deposits.py</code> holds the invented rates and one sum, the value of a deposit after whole years of yearly compounding, in exact decimals:</p>

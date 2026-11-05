@@ -581,3 +581,10 @@ ol.pg-activity time { display: inline-block; min-width: 150px; color: var(--mute
 @media print {
   .hb-track, .pg-actions, .pg-confirm { display: none !important; }
 }
+
+/* Launch links on lab pages: Colab, Binder, Codespaces */
+.run-online { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 14px 0 20px; }
+.run-online .label { flex-basis: 100%; margin: 0; font-weight: 600; font-size: 14px; }
+.run-online a.btn { text-decoration: none; }
+.run-online a.btn.primary:hover { filter: brightness(1.08); }
+.run-online .hint { flex-basis: 100%; margin: 2px 0 0; font-size: 13px; color: var(--muted); }
