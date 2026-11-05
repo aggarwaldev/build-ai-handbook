@@ -37,10 +37,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_notebooks import BOOK_URL  # noqa: E402
 from build_search_index import BOOK, ROOT, book_entries  # noqa: E402
 
-# The address the site is published at. It should be build_notebooks.BOOK_URL, the address
-# the notebooks link to; while that still names the site's earlier address, this tool keeps
-# its own. When the two are equal, replace this line with SITE_URL = BOOK_URL.
-SITE_URL = "https://handbook.aggarwal.dev/"
+# The address the site is published at: the same one the notebooks link to.
+SITE_URL = BOOK_URL
 
 SITE_NAME = "Build AI handbook"
 ICON = "assets/icon.svg"
@@ -289,8 +287,6 @@ def main(argv: list[str]) -> int:
             path.write_text(text, encoding="utf-8")
             print(f"wrote {rel}")
 
-    if BOOK_URL != SITE_URL:
-        print(f"note: tools/build_notebooks.py BOOK_URL is {BOOK_URL}; pages use {SITE_URL}")
     print(f"pages: {len(files)}; out of date: {len(stale)}; problems: {len(problems)}")
     for line in problems + stale:
         print("  " + line)
