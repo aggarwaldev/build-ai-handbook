@@ -9,7 +9,7 @@ What it checks:
    callout kinds and paths), plus any patterns listed one per line in
    tools/banned-words.local.txt (# starts a comment). git ignores that file, so a private
    list of names never lands in the repository. It reads every text file git knows about or
-   would add (.html .js .css .py .md .txt .json .jsonl .yml .yaml .toml .ini .cfg, and
+   would add (.html .js .css .py .md .txt .json .jsonl .ipynb .yml .yaml .toml .ini .cfg, and
    .gitignore), except this script and the local list.
 3. Every page loads assets/handbook.css, assets/search-index.js and assets/handbook.js,
    has the sidebar and pager navs, and has a <title> ending in "Build AI handbook".
@@ -42,7 +42,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_search_index import ROOT, book_entries, book_key_count  # noqa: E402
 
 SELF = Path(__file__).resolve()
-TEXT_SUFFIXES = {".html", ".js", ".css", ".py", ".md", ".txt", ".json", ".jsonl", ".yml", ".yaml", ".toml", ".ini", ".cfg"}
+TEXT_SUFFIXES = {".html", ".js", ".css", ".py", ".md", ".txt", ".json", ".jsonl", ".ipynb", ".yml", ".yaml", ".toml", ".ini", ".cfg"}
 TEXT_NAMES = {".gitignore"}
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache"}
 CALLOUT_KINDS = {"note", "why", "warn", "build"}
