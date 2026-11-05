@@ -1,6 +1,8 @@
 /* Build AI handbook: navigation, search, theme and shared helpers.
-   Vanilla JS, no network. Loaded in <head> of every page (not deferred), so the theme
-   applies before the page paints; everything that needs the DOM waits for it.
+   Vanilla JS, no network, except one call: Ask AI, when the reader has given it their own
+   Anthropic API key, sends their question from this page to the Anthropic Messages API.
+   Loaded in <head> of every page (not deferred), so the theme applies before the page
+   paints; everything that needs the DOM waits for it.
 
    BOOK is the single list of pages, in reading order. Add a page here and the sidebar,
    previous/next links, search and the progress tracker pick it up (run
@@ -12,8 +14,8 @@
    When the sidebar and pager are built, HB.built becomes true and the document receives an
    'hb-built' event. assets/progress.js (the reading tracker) waits for it.
 
-   The addresses below and the footer's links are pure: in Node they are module.exports, so
-   `node --test tools/tests/*.test.js` can test them. */
+   The addresses below, the footer's links and the Ask AI request are pure: in Node they are
+   module.exports, so `node --test tools/tests/*.test.js` can test them. */
 (function () {
   'use strict';
 
@@ -43,8 +45,111 @@
     };
   }
 
+  /* ---------- Ask AI: the request to Anthropic and its reply ----------
+     With the reader's own key, "Ask here" calls the Anthropic Messages API straight from
+     this page; no other server sees the question or the key. The functions here build the
+     request and read the reply from plain values; the panel further down uses them.
+     tools/check_book.py fails unless vercel.json's connect-src names ASK_API's origin and
+     no other site. */
+  var ASK_API = 'https://api.anthropic.com/v1/messages';
+  var ASK_API_VERSION = '2023-06-01';
+  var ASK_MODEL = 'claude-haiku-5-5';
+  // Current Claude models think before they answer, and the thinking counts toward
+  // max_tokens, so the limit is 2048 rather than a few hundred. They also reject the
+  // temperature setting, so the request does not send one.
+  var ASK_MAX_TOKENS = 2048;
+  var ASK_LIMITS = { title: 200, selection: 4000, question: 1000, model: 100 };
+  var ASK_SYSTEM =
+    'You are a patient tutor for a reader of the Build AI handbook, a free book that teaches ' +
+    'how AI works and how to build with it, from school algebra to agents, with hands-on labs ' +
+    'in Python. The reader selected a passage and asks about it. Answer in plain English with ' +
+    'short sentences, show worked numbers before symbols, and keep to the question. If a small ' +
+    'code example helps, keep it short and runnable. If you are not sure of something, say so.';
+  var ASK_NETWORK_ERROR = 'Could not reach Anthropic. Check your connection and try again, or use Copy prompt.';
+  var ASK_UNREADABLE = 'Anthropic’s reply could not be read. Copy prompt still works.';
+
+  function clip(value, max) { return String(value === null || value === undefined ? '' : value).trim().slice(0, max).trim(); }
+
+  // The one user message: the chapter, the passage and the question.
+  function askUserText(title, selection, question) {
+    var q = clip(question, ASK_LIMITS.question) || 'Please explain this passage in plain English.';
+    return 'Chapter: ' + clip(title, ASK_LIMITS.title) + '\n\nSelected passage:\n"""\n' +
+      clip(selection, ASK_LIMITS.selection) + '\n"""\n\nQuestion: ' + q;
+  }
+
+  // The fetch() for one question. The key goes in the x-api-key header and nowhere else.
+  function askRequest(key, model, title, selection, question) {
+    var body = {
+      model: clip(model, ASK_LIMITS.model) || ASK_MODEL,
+      max_tokens: ASK_MAX_TOKENS,
+      system: ASK_SYSTEM,
+      messages: [{ role: 'user', content: askUserText(title, selection, question) }]
+    };
+    return {
+      url: ASK_API,
+      init: {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': ASK_API_VERSION,
+          // Without this header the API's reply carries no CORS header, and the browser
+          // refuses to hand it to the page.
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify(body),
+        credentials: 'omit',
+        referrerPolicy: 'no-referrer',
+        cache: 'no-store'
+      }
+    };
+  }
+
+  // The answer's paragraphs. A reply can also hold "thinking" and other blocks; only its
+  // "text" blocks are the answer.
+  function askAnswer(reply) {
+    var blocks = reply && Array.isArray(reply.content) ? reply.content : [];
+    var paras = [];
+    blocks.forEach(function (b) {
+      if (!b || b.type !== 'text' || typeof b.text !== 'string') return;
+      b.text.split(/\n[ \t]*\n/).forEach(function (p) { if (p.trim()) paras.push(p.trim()); });
+    });
+    if (paras.length) return paras;
+    var stop = reply && reply.stop_reason;
+    if (stop === 'max_tokens') return ['(The model used its whole token allowance, thinking included, before it wrote an answer. Try a narrower question.)'];
+    if (stop === 'refusal') return ['(The model declined to answer this question.)'];
+    return ['(The model returned no text.)'];
+  }
+
+  // One plain sentence for a reply with an error status, with the API's own message. That
+  // message does not hold the key; if it ever did, the key would be cut out.
+  function askErrorText(status, reply, key) {
+    var what = status === 401 ? 'Anthropic did not accept the key'
+      : status === 403 ? 'Anthropic does not allow this key to make the request'
+        : status === 429 ? 'Anthropic is limiting requests from this key for now'
+          : status === 529 ? 'Anthropic is overloaded at the moment'
+            : status >= 500 ? 'Anthropic could not answer just now'
+              : 'Anthropic refused the request';
+    var message = reply && reply.error && typeof reply.error.message === 'string' ? reply.error.message : '';
+    if (key) message = message.split(key).join('[your key]');
+    message = message.replace(/\s+/g, ' ').trim().slice(0, 300).replace(/[.\s]+$/, '');
+    return what + ' (HTTP ' + status + (message ? ': ' + message : '') + '). Copy prompt still works.';
+  }
+
+  // Whether the key may be kept beyond this tab. Every page opened from disk can share one
+  // storage area, so any other file opened from disk could read a key kept there.
+  function askCanRemember(protocol) { return protocol === 'https:' || protocol === 'http:'; }
+
   if (typeof module === 'object' && module && module.exports) {
-    module.exports = { REPO: REPO, BRANCH: BRANCH, BOOK_URL: BOOK_URL, pageUrl: pageUrl, footerLinks: footerLinks };
+    module.exports = {
+      REPO: REPO, BRANCH: BRANCH, BOOK_URL: BOOK_URL, pageUrl: pageUrl, footerLinks: footerLinks,
+      ask: {
+        API: ASK_API, API_VERSION: ASK_API_VERSION, MODEL: ASK_MODEL, MAX_TOKENS: ASK_MAX_TOKENS,
+        LIMITS: ASK_LIMITS, SYSTEM: ASK_SYSTEM, NETWORK_ERROR: ASK_NETWORK_ERROR, UNREADABLE: ASK_UNREADABLE,
+        userText: askUserText, request: askRequest, answer: askAnswer, errorText: askErrorText,
+        canRemember: askCanRemember
+      }
+    };
   }
   if (typeof window === 'undefined' || typeof document === 'undefined') return;
 
@@ -509,18 +614,24 @@
   }
 
   /* ---------- Ask AI on selected text ----------
-     Mode (a), the default: build a prompt and copy it (the reliable path), or pass it in a
-     link: claude.ai/new?q= is not documented by Anthropic and may arrive empty, while the
-     desktop app's claude://claude.ai/new?q= link is documented to prefill only. Mode (b): when the page is served by tools/serve.py on 127.0.0.1, POST the
-     question to that helper's same-origin /ask and show the answer here. Only the chapter
-     title, the selected handbook text and the reader's question are ever sent. */
+     The panel builds a prompt from the chapter title, the selected text and the reader's
+     question, and offers three ways to take it to Claude: copy it (the reliable path), or
+     pass it in a link: claude.ai/new?q= is not documented by Anthropic and may arrive empty,
+     while the desktop app's claude://claude.ai/new?q= link is documented to prefill only.
+     With the reader's own Anthropic API key, "Ask here" sends the same three things from
+     this page to the Messages API (askRequest above) and shows the answer in the panel.
+     The key stays in this browser: in sessionStorage by default, in localStorage when the
+     reader asks for that on an http(s) page. Its storage names are the panel's own;
+     assets/progress.js never reads, exports or deletes them. */
   var ASK = {
     claudeNew: 'https://claude.ai/new',
     claudeDesktop: 'claude://claude.ai/new',
     urlSelectionMax: 1500,
-    helperSelectionMax: 3000,
+    selectionMax: 3000,
     questionMax: 1000,
-    helper: null // set to the /health reply when the helper answers
+    keyName: 'hb-askai-key',
+    modelName: 'hb-askai-model',
+    memory: null // {key, model} when the browser refuses both storage areas: this page only
   };
 
   function chapterTitle() {
@@ -539,17 +650,48 @@
       'Please answer as a patient tutor for someone new to AI and maths: plain English, short sentences, and numbers before symbols.';
   }
 
-  function detectHelper() {
-    if (!/^https?:$/.test(window.location.protocol)) return;
-    if (!/^(127\.0\.0\.1|localhost)$/.test(window.location.hostname)) return;
-    if (!window.fetch) return;
-    var ctrl = window.AbortController ? new AbortController() : null;
-    var timer = setTimeout(function () { if (ctrl) ctrl.abort(); }, 1500);
-    fetch('/health', { cache: 'no-store', signal: ctrl ? ctrl.signal : undefined })
-      .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (j) { if (j && j.service === 'build-ai-handbook-helper') ASK.helper = j; })
-      .catch(function () { /* not the helper: mode (a) */ })
-      .then(function () { clearTimeout(timer); });
+  // sessionStorage or localStorage, or null when the browser refuses it.
+  function webStore(name) {
+    try { var s = window[name]; s.getItem(ASK.keyName); return s; } catch (e) { return null; }
+  }
+  // The reader's key and model, and where they are kept: 'local' (remembered in this
+  // browser), 'session' (this tab) or 'page' (this page only). Null when there is no key.
+  function savedKey() {
+    var places = [['session', 'sessionStorage']];
+    if (askCanRemember(window.location.protocol)) places.unshift(['local', 'localStorage']);
+    for (var i = 0; i < places.length; i++) {
+      var s = webStore(places[i][1]);
+      try {
+        var key = s && s.getItem(ASK.keyName);
+        if (key) return { key: key, model: s.getItem(ASK.modelName) || ASK_MODEL, where: places[i][0] };
+      } catch (e) { /* refused: try the next */ }
+    }
+    return ASK.memory ? { key: ASK.memory.key, model: ASK.memory.model, where: 'page' } : null;
+  }
+  function forgetKey() {
+    ASK.memory = null;
+    ['localStorage', 'sessionStorage'].forEach(function (name) {
+      var s = webStore(name);
+      try { if (s) { s.removeItem(ASK.keyName); s.removeItem(ASK.modelName); } } catch (e) { /* nothing kept there */ }
+    });
+  }
+  function saveKey(key, model, remember) {
+    forgetKey();
+    var where = remember && askCanRemember(window.location.protocol) ? 'local' : 'session';
+    try {
+      var s = webStore(where === 'local' ? 'localStorage' : 'sessionStorage');
+      s.setItem(ASK.keyName, key);
+      s.setItem(ASK.modelName, model);
+    } catch (e) {
+      forgetKey();
+      ASK.memory = { key: key, model: model };
+    }
+  }
+  function saveModel(model) {
+    var saved = savedKey();
+    if (!saved) return;
+    if (saved.where === 'page') { ASK.memory.model = model; return; }
+    try { webStore(saved.where === 'local' ? 'localStorage' : 'sessionStorage').setItem(ASK.modelName, model); } catch (e) { /* keep the old one */ }
   }
 
   function askAi() {
@@ -586,21 +728,24 @@
     btn.addEventListener('click', function () { btn.style.display = 'none'; open(pending); });
 
     function close() { if (panel && panel.parentNode) panel.parentNode.removeChild(panel); panel = null; }
-    function open(rawSelection) {
+    // focus: 'ask' after a key is saved, 'key' after it is forgotten, else the question.
+    function open(rawSelection, draft, focus) {
       close();
       var title = chapterTitle();
-      var helper = ASK.helper && ASK.helper.ask && ASK.helper.key_set;
-      var shown = trimTo(rawSelection, helper ? ASK.helperSelectionMax : ASK.urlSelectionMax);
-      var question = el('textarea', { rows: '3', maxlength: String(ASK.questionMax), placeholder: 'Your question, for example: explain this with a simpler example.' });
+      var saved = savedKey();
+      var shown = trimTo(rawSelection, saved ? ASK.selectionMax : ASK.urlSelectionMax);
+      var urlSel = trimTo(rawSelection, ASK.urlSelectionMax).text;
+      var question = el('textarea', { rows: '3', maxlength: String(ASK.questionMax), 'aria-label': 'Your question', placeholder: 'Your question, for example: explain this with a simpler example.' });
+      question.value = draft || '';
       var answer = el('div', { class: 'askai-answer', 'aria-live': 'polite' });
-      var status = el('p', { class: 'askai-mode' });
       var closeBtn = el('button', { class: 'icon-btn askai-close', type: 'button', 'aria-label': 'Close', text: '×' });
       closeBtn.addEventListener('click', close);
-      var copyBtn = el('button', { class: 'btn' + (helper ? '' : ' primary'), type: 'button', text: 'Copy prompt' });
+      var askBtn = saved ? el('button', { class: 'btn primary askai-ask', type: 'button', text: 'Ask here' }) : null;
+      var copyBtn = el('button', { class: 'btn' + (saved ? '' : ' primary'), type: 'button', text: 'Copy prompt' });
       var openBtn = el('button', { class: 'btn', type: 'button', text: 'Open in Claude' });
       var desktopBtn = el('button', { class: 'btn', type: 'button', text: 'Open in Claude Desktop' });
-      var askBtn = helper ? el('button', { class: 'btn primary', type: 'button', text: 'Ask here' }) : null;
-      var urlSel = trimTo(rawSelection, ASK.urlSelectionMax).text;
+      var keyField = null;
+      function reopen(focusOn) { open(rawSelection, question.value, focusOn); }
 
       openBtn.addEventListener('click', function () {
         var prompt = buildPrompt(title, urlSel, question.value);
@@ -619,31 +764,85 @@
         } catch (e) { fallbackCopy(prompt); done(); }
         window.open(ASK.claudeNew, '_blank', 'noopener');
       });
+
+      function show(nodes) { answer.textContent = ''; nodes.forEach(function (n) { answer.appendChild(n); }); }
+      function errorLine(text) { return el('p', { class: 'askai-err', text: text }); }
       if (askBtn) {
         askBtn.addEventListener('click', function () {
+          var now = savedKey();
+          if (!now) { reopen('key'); return; } // forgotten in another tab
+          var req = askRequest(now.key, now.model, title, trimTo(rawSelection, ASK.selectionMax).text, question.value);
           askBtn.disabled = true;
-          answer.textContent = 'Asking…';
-          fetch('/ask', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: title, selection: shown.text, question: question.value.trim() })
-          }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
-            .then(function (res) {
-              answer.innerHTML = '';
-              if (!res.ok) { answer.appendChild(el('p', { class: 'askai-err', text: res.j.error || 'The helper refused the request.' })); return; }
-              String(res.j.answer || '').split(/\n{2,}/).forEach(function (para) { answer.appendChild(el('p', { text: para })); });
-              if (typeof res.j.remaining === 'number') { ASK.helper.remaining = res.j.remaining; status.textContent = modeText(); }
+          show([el('p', { class: 'askai-wait', text: 'Asking Anthropic…' })]);
+          fetch(req.url, req.init)
+            .then(function (r) {
+              return r.text().then(function (body) {
+                var data = null;
+                try { data = JSON.parse(body); } catch (e) { data = null; }
+                return { ok: r.ok, status: r.status, data: data };
+              });
             })
-            .catch(function () { answer.textContent = 'Could not reach the helper. Use Open in Claude instead.'; })
-            .then(function () { askBtn.disabled = false; });
+            .then(function (res) {
+              if (!res.ok) return [errorLine(askErrorText(res.status, res.data, now.key))];
+              if (!res.data) return [errorLine(ASK_UNREADABLE)];
+              // Model output goes in as text, never as HTML.
+              return askAnswer(res.data).map(function (p) { return el('p', { text: p }); });
+            }, function () { return [errorLine(ASK_NETWORK_ERROR)]; })
+            .then(function (nodes) { show(nodes); askBtn.disabled = false; });
         });
       }
-      function modeText() {
-        if (helper) return 'Answers come from the local helper (tools/serve.py) with your own Anthropic key. ' + ASK.helper.remaining + ' of ' + ASK.helper.cap + ' questions left in this server run. Each answer costs a little.';
-        if (ASK.helper && !ASK.helper.key_set) return 'The local helper is running without ANTHROPIC_API_KEY, so use Copy prompt or one of the Claude links instead.';
-        return 'Copy prompt copies the prompt and opens Claude: paste it there. Open in Claude passes the prompt in the address, which claude.ai does not document, so the box may arrive empty. Open in Claude Desktop uses the desktop app\u2019s documented link, which fills the prompt in for you to send.';
+
+      // Without a key: the form that takes one. With a key: where it is kept, and Forget.
+      function keyForm() {
+        keyField = el('input', { type: 'password', class: 'askai-key-input', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', placeholder: 'Your Anthropic API key' });
+        var modelField = el('input', { type: 'text', class: 'askai-model', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', maxlength: String(ASK_LIMITS.model), value: ASK_MODEL });
+        var remember = askCanRemember(window.location.protocol) ? el('input', { type: 'checkbox', class: 'askai-remember' }) : null;
+        var useBtn = el('button', { class: 'btn askai-use', type: 'button', text: 'Use this key' });
+        var msg = el('p', { class: 'askai-err', 'aria-live': 'polite' });
+        function use() {
+          var key = keyField.value.trim();
+          if (!key) { msg.textContent = 'Paste your API key first.'; keyField.focus(); return; }
+          if (!/^[\x21-\x7e]{1,400}$/.test(key)) { msg.textContent = 'That is not an API key: a key is one word of letters, digits and dashes, with no spaces.'; keyField.focus(); return; }
+          keyField.value = '';
+          saveKey(key, clip(modelField.value, ASK_LIMITS.model) || ASK_MODEL, !!(remember && remember.checked));
+          reopen('ask');
+        }
+        useBtn.addEventListener('click', use);
+        [keyField, modelField].forEach(function (f) {
+          f.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); use(); } });
+        });
+        return el('div', { class: 'askai-key' }, [
+          el('p', { class: 'askai-key-title' }, el('b', { text: 'Answer here with your own API key' })),
+          el('p', { class: 'askai-mode', text: 'The passage and your question then go from this browser straight to Anthropic, and each answer is billed to your key. The key stays in this browser. Use a key made for this, which you can delete when you are done. ' },
+            el('a', { href: 'reading.html#ask-ai', text: 'How it works' })),
+          el('div', { class: 'askai-fields' }, [
+            el('label', null, [el('span', { text: 'API key' }), keyField]),
+            el('label', null, [el('span', { text: 'Model' }), modelField])
+          ]),
+          remember
+            ? el('label', { class: 'askai-check' }, [remember, 'Remember the key in this browser'])
+            : el('p', { class: 'askai-note askai-disk', text: 'Opened from disk, the key is kept for this tab only: files opened from disk can share one storage area, so another file could read it.' }),
+          el('div', { class: 'row' }, useBtn),
+          msg
+        ]);
       }
-      status.textContent = modeText();
+      function keyControls() {
+        var modelField = el('input', { type: 'text', class: 'askai-model', autocomplete: 'off', spellcheck: 'false', autocapitalize: 'off', maxlength: String(ASK_LIMITS.model), value: saved.model });
+        modelField.addEventListener('change', function () {
+          var model = clip(modelField.value, ASK_LIMITS.model) || ASK_MODEL;
+          modelField.value = model;
+          saveModel(model);
+        });
+        var forgetBtn = el('button', { class: 'btn askai-forget', type: 'button', text: 'Forget the key' });
+        forgetBtn.addEventListener('click', function () { forgetKey(); reopen('key'); });
+        var kept = saved.where === 'local' ? 'remembered in this browser until you press Forget the key'
+          : saved.where === 'session' ? 'kept for this tab only'
+            : 'kept on this page only, because this browser refuses storage';
+        return el('div', { class: 'askai-key' }, [
+          el('p', { class: 'askai-mode', text: 'Ask here sends the passage and your question from this browser straight to Anthropic and shows the answer below. Your key is ' + kept + ', and each answer is billed to it.' }),
+          el('div', { class: 'askai-fields' }, [el('label', null, [el('span', { text: 'Model' }), modelField]), forgetBtn])
+        ]);
+      }
 
       panel = el('div', { class: 'askai', role: 'dialog', 'aria-label': 'Ask AI about the selected text' }, [
         el('div', { class: 'askai-head' }, [el('b', { text: 'Ask AI' }), closeBtn]),
@@ -652,18 +851,20 @@
         shown.trimmed ? el('p', { class: 'askai-note', text: 'The selection was trimmed to keep the request short.' }) : null,
         question,
         el('div', { class: 'row' }, [askBtn, copyBtn, openBtn, desktopBtn]),
-        status,
+        saved ? null : el('p', { class: 'askai-mode', text: 'Copy prompt copies the prompt and opens Claude: paste it there. Open in Claude passes the prompt in the address, which claude.ai does not document, so the box may arrive empty. Open in Claude Desktop uses the desktop app’s documented link, which fills the prompt in for you to send.' }),
+        saved ? keyControls() : keyForm(),
         answer
       ]);
       document.body.appendChild(panel);
       panel.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') close(); });
-      question.focus();
+      if (focus === 'ask' && askBtn) askBtn.focus();
+      else if (focus === 'key' && keyField) keyField.focus();
+      else question.focus();
     }
   }
 
   ready(function () {
     var file = currentFile();
-    detectHelper();
     askAi();
     buildTopbar();
     buildSidebar(file);

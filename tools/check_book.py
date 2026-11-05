@@ -27,6 +27,11 @@ What it checks:
    Python tools: REPO and BRANCH in tools/build_notebooks.py, SITE_URL in
    tools/build_site_meta.py. The footer's links come from the first, the page heads and
    the sitemap from the second.
+9. The website's Content-Security-Policy in vercel.json lets the pages connect to one other
+   site, the Anthropic API that Ask AI calls (ASK_API in book/assets/handbook.js), and to
+   nothing else: connect-src is exactly 'self' and that origin, and no other directive names
+   an outside origin. Keywords such as 'self' and 'none', and the data: and blob: schemes,
+   name no other site.
 
 Standard library only. Run from anywhere:
 
@@ -37,12 +42,14 @@ from __future__ import annotations
 
 import glob
 import html
+import json
 import re
 import subprocess
 import sys
 from collections import Counter
 from html.parser import HTMLParser
 from pathlib import Path
+from urllib.parse import urlsplit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from build_notebooks import BRANCH, REPO  # noqa: E402
@@ -68,6 +75,11 @@ BANNED: list[tuple[str, re.Pattern[str]]] = [
 ]
 LOCAL_WORDS = ROOT / "tools" / "banned-words.local.txt"
 _JS_ADDRESS_RE = re.compile(r"^\s*var (REPO|BRANCH|BOOK_URL) = '([^'\\]*)';", re.M)
+_JS_ASK_API_RE = re.compile(r"^\s*var ASK_API = '([^'\\]*)';", re.M)
+VERCEL = ROOT / "vercel.json"
+# CSP sources that name no other site: quoted keywords ('self', 'none', 'unsafe-inline', …)
+# and these schemes, which mean data held in the page itself.
+CSP_LOCAL_SCHEMES = {"data:", "blob:"}
 
 
 def local_banned() -> list[tuple[str, re.Pattern[str]]]:
@@ -303,10 +315,68 @@ def check_addresses(problems: list[str]) -> None:
             problems.append(f"book/assets/handbook.js: {name} is {values[0]!r} but {where} is {want!r}")
 
 
+def check_csp(problems: list[str]) -> str:
+    """vercel.json's CSP: connect-src is 'self' plus the Ask AI API's origin; no other outside origin.
+
+    Returns connect-src as written, for the summary ("missing" if there is none)."""
+    source = (BOOK / "assets" / "handbook.js").read_text(encoding="utf-8")
+    apis = _JS_ASK_API_RE.findall(source)
+    if len(apis) != 1:
+        problems.append(f"book/assets/handbook.js: expected one line `var ASK_API = '...';`, found {len(apis)}")
+        return "missing"
+    api = urlsplit(apis[0])
+    if api.scheme != "https" or not api.netloc:
+        problems.append(f"book/assets/handbook.js: ASK_API {apis[0]!r} is not an https address")
+        return "missing"
+    api_origin = f"{api.scheme}://{api.netloc}"
+    try:
+        config = json.loads(VERCEL.read_text(encoding="utf-8"))
+        policies = [
+            header["value"]
+            for rule in config.get("headers", [])
+            for header in rule.get("headers", [])
+            if str(header.get("key", "")).lower() == "content-security-policy"
+        ]
+    except (OSError, ValueError, AttributeError, KeyError, TypeError) as exc:
+        problems.append(f"vercel.json: could not read its headers: {exc}")
+        return "missing"
+    if len(policies) != 1:
+        problems.append(f"vercel.json: expected one Content-Security-Policy header, found {len(policies)}")
+        return "missing"
+    directives: dict[str, list[str]] = {}
+    for part in str(policies[0]).split(";"):
+        tokens = part.split()
+        if not tokens:
+            continue
+        name = tokens[0].lower()
+        if name in directives:
+            problems.append(f"vercel.json: CSP directive {name} appears twice")
+        directives[name] = tokens[1:]
+    connect = directives.get("connect-src")
+    if connect is None:
+        problems.append(f"vercel.json: CSP has no connect-src; Ask AI needs connect-src 'self' {api_origin}")
+    elif sorted(connect) != sorted(["'self'", api_origin]):
+        problems.append(
+            f"vercel.json: CSP connect-src is {' '.join(connect)!r}; it must be exactly 'self' {api_origin}, "
+            "the address Ask AI calls (ASK_API in book/assets/handbook.js)"
+        )
+    for name, sources in directives.items():
+        if name == "connect-src":
+            continue
+        outside = [s for s in sources if not s.startswith("'") and s.lower() not in CSP_LOCAL_SCHEMES]
+        if outside:
+            problems.append(
+                f"vercel.json: CSP {name} names {' '.join(outside)}; the pages load nothing from other sites, "
+                "and only connect-src may name one (the Anthropic API)"
+            )
+    return " ".join(connect) if connect is not None else "missing"
+
+
 def main() -> int:
     problems: list[str] = []
     files = check_book_list(problems)
     check_addresses(problems)
+    connect_src = check_csp(problems)
     n_pages = len(list(BOOK.glob("*.html")))
     scanned = check_banned(problems)
     n_checks = check_pages(problems)
@@ -315,6 +385,7 @@ def main() -> int:
     print(f"BOOK entries: {len(files)}; pages in book/: {n_pages}")
     print(f"text files scanned for banned words: {scanned}")
     print(f"progress checkpoints: {n_checks}")
+    print(f"website CSP connect-src: {connect_src}")
     print(f"problems: {len(problems)}")
     for line in problems:
         print("  " + line)

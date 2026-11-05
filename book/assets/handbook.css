@@ -445,8 +445,24 @@ dl.glossary dt:target { color: var(--accent); }
 .askai textarea { width: 100%; font: inherit; padding: 7px 9px; border-radius: 8px; border: 1px solid var(--border); background: var(--surface-2); color: var(--text); margin-bottom: 8px; }
 .askai .row { display: flex; gap: 8px; flex-wrap: wrap; }
 .askai-mode { font-size: 12px; color: var(--muted); margin: 8px 0 0; }
-.askai-answer p { margin: 8px 0 0; }
+.askai-answer:not(:empty) { margin-top: 10px; border-top: 1px solid var(--border); }
+.askai-answer p { margin: 8px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.askai-answer .askai-wait { color: var(--muted); }
 .askai-err { color: var(--red); }
+.askai-err:empty { display: none; }
+.askai-key { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--border); }
+.askai-key .askai-mode { margin-top: 2px; }
+.askai-key-title { margin: 0; }
+.askai-fields { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-end; margin: 8px 0; }
+.askai-fields label { display: flex; flex-direction: column; gap: 2px; font-size: 12px; color: var(--muted); flex: 1 1 150px; }
+.askai-fields input {
+  font: inherit; font-size: 14px; padding: 6px 9px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text); width: 100%; min-width: 0;
+}
+.askai-fields input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+.askai-check { display: flex; align-items: center; gap: 6px; font-size: 13px; margin: 0 0 8px; cursor: pointer; }
+.askai-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.askai-key .askai-note { margin: 0 0 8px; }
 @media (max-width: 640px) { .askai { left: 8px; right: 8px; bottom: 8px; width: auto; } }
 @media print { .ask-btn, .askai { display: none !important; } }
 
