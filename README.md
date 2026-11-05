@@ -156,14 +156,6 @@ requirements.
 The same checks, the lab tests, the notebooks and the browser tests run on every push and
 pull request (`.github/workflows/check.yml`).
 
-## Publish it
-
-The book is a static site: the `book/` folder as it is. On Vercel, import the repository
-with the framework preset "Other" and no build command. `vercel.json` makes `book/` the
-output folder, so nothing outside it reaches the site, and adds security headers. On a
-public address the Ask AI box copies a ready-made prompt instead of calling a model, so no
-key is ever needed on the server.
-
 ## Licence
 
 The code (everything under `labs/`, `tools/` and `book/assets/`, the notebooks, and the
