@@ -115,7 +115,7 @@ When a browser refuses all storage, every page says that progress is not being k
 | `book/reading.html` | How to read the book: conventions, boxes, self-checks, labs, keeping current |
 | `book/progress.html` | Your progress page |
 | `book/*.html` | One page per chapter, lab and reference page |
-| `book/assets/handbook.js` | Builds the sidebar, search, pager and Ask AI box. Its `BOOK` list sets the reading order |
+| `book/assets/handbook.js` | Builds the sidebar, search, pager, footer and Ask AI box. Its `BOOK` list sets the reading order |
 | `book/assets/progress.js` | The progress tracker |
 | `book/assets/handbook.css` | All styles, light and dark |
 | `book/assets/search-index.js` | Generated search index; do not edit by hand |
