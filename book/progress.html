@@ -30,7 +30,7 @@
 <p class="lead">What you have read, built and noted so far. There is no account and nothing is sent anywhere: the book keeps your progress in this browser, on this device.</p>
 
 <div class="callout note"><span class="title">Where your progress lives</span>
-<p>Everything on this page stays in this browser. Clearing this site&rsquo;s data, or your browsing data, deletes it. A different browser, a private window or another device starts empty. To keep a copy or to move to another device, use <a href="#backup">Export</a> and then Import on the other side.</p></div>
+<p>Everything on this page stays in this browser. Clearing this site&rsquo;s data, or your browsing data, deletes it. A different browser, a private window or another device starts empty, and so does the same book at another address, such as the website and a copy on your computer. To keep a copy, or to move your progress, use <a href="#backup">Export</a> and then Import on the other side.</p></div>
 
 <h2 id="overall">Overall</h2>
 <div id="pg-overall" class="pg-panel"><p class="pg-none">Reading your progress&hellip; If this message stays, the tracker could not start in this browser.</p></div>
@@ -74,8 +74,8 @@
 <div id="pg-store"></div>
 <ul>
 <li>The tracker uses your browser&rsquo;s IndexedDB storage, or its local storage when IndexedDB is not available. It uses no cookies, no account and no network.</li>
-<li>Progress belongs to the address the book was opened from. The book opened from disk and the same book served by <code class="path">tools/serve.py</code> on <code>http://127.0.0.1:8765/</code> keep separate progress; export from one and import into the other to join them.</li>
-<li>Chrome and Edge keep progress for pages opened from disk. Firefox and Safari may refuse storage for such pages, or keep each page separately. If ticks do not survive a reload, run <code>python3 tools/serve.py</code> in the book&rsquo;s folder and open <code>http://127.0.0.1:8765/</code>.</li>
+<li>Progress belongs to the address the book was opened from. The website at <a href="https://handbook.aggarwal.dev/" target="_blank" rel="noopener noreferrer">handbook.aggarwal.dev</a>, a copy opened from disk and a copy served by <code class="path">tools/serve.py</code> on <code>http://127.0.0.1:8765/</code> each keep their own, even in the same browser. To move from one to another, press <b>Export my progress</b> on this page at the old address, open this page at the new one and press <b>Import a progress file</b>. The import merges, so you can also join two records this way.</li>
+<li>Chrome and Edge keep progress for pages opened from disk. Firefox and Safari may refuse storage for such pages, or keep each page separately. If ticks do not survive a reload, read the book on the website, or run <code>python3 tools/serve.py</code> from the repository root and open <code>http://127.0.0.1:8765/</code>.</li>
 <li>If the browser refuses all storage, every page shows a notice saying that progress is not being kept.</li>
 </ul>
 </article>
