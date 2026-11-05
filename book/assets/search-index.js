@@ -74,6 +74,11 @@ window.HANDBOOK_SEARCH = {
      "level": 2
     },
     {
+     "id": "where-to-read",
+     "text": "Where to read it",
+     "level": 2
+    },
+    {
      "id": "conventions",
      "text": "Conventions",
      "level": 2

@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>1. How to read this book &middot; Build AI handbook</title>
 <!-- page metadata: written by tools/build_site_meta.py, do not edit by hand -->
-<meta name="description" content="What the five parts cover, what the boxes, widgets and checklists mean, how the book keeps your progress, how to ask an AI about a passage…">
+<meta name="description" content="What the five parts cover and where to read them, what the boxes, widgets and checklists mean, how the book keeps your progress…">
 <link rel="canonical" href="https://handbook.aggarwal.dev/reading.html">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <meta property="og:site_name" content="Build AI handbook">
 <meta property="og:type" content="article">
 <meta property="og:title" content="How to read this book">
-<meta property="og:description" content="What the five parts cover, what the boxes, widgets and checklists mean, how the book keeps your progress, how to ask an AI about a passage…">
+<meta property="og:description" content="What the five parts cover and where to read them, what the boxes, widgets and checklists mean, how the book keeps your progress…">
 <meta property="og:url" content="https://handbook.aggarwal.dev/reading.html">
 <meta name="twitter:card" content="summary">
 <!-- end of page metadata -->
@@ -27,7 +27,7 @@
 <article>
 <p class="kicker">Start here &middot; Chapter 1</p>
 <h1>How to read this book</h1>
-<p class="lead">What the five parts cover, what the boxes, widgets and checklists mean, how the book keeps your progress, how to ask an AI about a passage, and how to keep the book correct when you change it.</p>
+<p class="lead">What the five parts cover and where to read them, what the boxes, widgets and checklists mean, how the book keeps your progress, how to ask an AI about a passage, and how to keep the book correct when you change it.</p>
 
 <h2 id="shape">The shape of the book</h2>
 <p>The book climbs a ladder. Each rung uses only what the rungs below it taught, and the labs in Part V let you build what the rungs describe.</p>
@@ -40,6 +40,20 @@
 <tr><td><a href="lab-setup.html">V. Build it</a></td><td>Eleven labs in Python. You make a model call, test prompts, build retrieval with citations and measure it, write an agent and an MCP server, add guardrails, a judge and tracing, and put them together.</td><td>Never, if you want hands-on experience: this is the point of the book.</td></tr>
 </table></div>
 <p>The cover gives three <a href="index.html#reading-paths">reading paths</a>: <b>Build now</b> starts with the labs and dips into the concepts each one needs, <b>Foundations</b> reads Parts I to III in order, and <b>Shipping</b> covers running AI that other people rely on.</p>
+
+<h2 id="where-to-read">Where to read it</h2>
+<p>The book is free and needs no account. Its source is one public repository, <a href="https://github.com/aggarwaldev/build-ai-handbook" target="_blank" rel="noopener noreferrer">aggarwaldev/build-ai-handbook</a> on GitHub, and the website publishes that repository's <code class="path">book/</code> folder, so the pages are the same wherever you read them. There are three ways to open it:</p>
+<div class="tbl-wrap"><table>
+<tr><th>Way</th><th>How</th><th>Progress</th></tr>
+<tr><td>Online</td><td>Open <a href="https://handbook.aggarwal.dev/" target="_blank" rel="noopener noreferrer">handbook.aggarwal.dev</a> in a browser, on a computer or a phone. On a narrow screen the contents fold behind the menu button.</td><td>Kept in that browser, for the website's address.</td></tr>
+<tr><td>From disk</td><td>Get a copy of the repository (below) and double-click <code class="path">book/index.html</code>. It needs no network, except for links to other sites and Ask AI.</td><td>Kept in Chrome and Edge. Firefox and Safari may refuse it (<a href="#progress">see below</a>).</td></tr>
+<tr><td>Served on your computer</td><td>In a copy of the repository, run <code>python3 tools/serve.py</code> and open <code>http://127.0.0.1:8765/</code>. With your own Anthropic key, Ask AI can also answer inside the page (<a href="#ask-ai-helper">see below</a>).</td><td>Kept in every browser, for that address.</td></tr>
+</table></div>
+<p>To get a copy, clone the repository with git, or <a href="https://github.com/aggarwaldev/build-ai-handbook/archive/refs/heads/main.zip" target="_blank" rel="noopener noreferrer">download it as a ZIP</a> and unpack it. The labs need the same copy.</p>
+<pre><code>git clone https://github.com/aggarwaldev/build-ai-handbook
+cd build-ai-handbook                   <span class="c"># the repository root: book/, labs/ and tools/</span></code></pre>
+<p>Each address keeps its own progress, even in the same browser: the website, the book opened from disk and the book served on your computer start with separate records. To move your progress from one to another, or to join two records, use <b>Export</b> on the <a href="progress.html#backup">progress page</a> at one address and <b>Import</b> at the other.</p>
+<p>The website sets no cookies, runs no analytics and loads nothing from other sites: every script, style and image comes from the site itself. Your progress and notes stay in your browser.</p>
 
 <h2 id="conventions">Conventions</h2>
 <h3 id="citing-code">How the book names files</h3>
@@ -75,8 +89,8 @@
 <li><b>The sidebar</b> shows a tick beside pages you have finished, a dot beside pages you have opened but not finished, and done/total for each part. The progress link in the top bar shows the percentage of chapters and labs done.</li>
 <li><a href="progress.html"><b>Your progress</b></a> shows it all: where to continue, each part and lab, recent activity, your notes and the self-check answers you opened.</li>
 </ul>
-<p>Progress is stored in this browser, in its IndexedDB storage (or its local storage if IndexedDB is not available). Clearing the site's data deletes it, and another browser or device starts empty. To back it up or move it, use <b>Export</b> on the progress page, then <b>Import</b> on the other side: an import merges, keeping the newer record wherever both sides have one.</p>
-<div class="callout warn"><span class="title">Careful</span><p>Opened straight from disk, the book keeps progress in Chrome and Edge, but Firefox and Safari may refuse storage for such pages or keep each page separately. If your ticks do not survive a reload, or every page shows a notice that progress is not being saved, serve the book instead: run <code>python3 tools/serve.py</code> from the repository root and open <code>http://127.0.0.1:8765/</code>. Progress belongs to the address, so the book from disk and the book from the server keep separate records; export from one and import into the other to join them.</p></div>
+<p>Progress is stored in this browser, in its IndexedDB storage (or its local storage if IndexedDB is not available). Clearing the site's data deletes it, and another browser or device starts empty. It also belongs to the address the book was opened from, so the website and a copy on your computer keep separate records (<a href="#where-to-read">see above</a>). To back it up or move it, use <b>Export</b> on the progress page, then <b>Import</b> on the other side: an import merges, keeping the newer record wherever both sides have one.</p>
+<div class="callout warn"><span class="title">Careful</span><p>Opened straight from disk, the book keeps progress in Chrome and Edge, but Firefox and Safari may refuse storage for such pages or keep each page separately. If your ticks do not survive a reload, or every page shows a notice that progress is not being saved, read the book on the website, or serve your copy: run <code>python3 tools/serve.py</code> from the repository root and open <code>http://127.0.0.1:8765/</code>. Then export from the old address and import at the new one to bring your progress with you.</p></div>
 
 <h2 id="ask-ai">Ask AI about any passage</h2>
 <p>Select some text on any page and an <b>Ask AI</b> button appears beside it. It opens a small panel with your selection, the chapter title and a box for your question. Only those three things are ever sent anywhere: the book's own text and what you type.</p>
@@ -115,6 +129,7 @@ cd labs &amp;&amp; python -m pytest           # every lab's tests, offline</code
 <li>Python 3.10 or newer. The numbered labs need only <code>anthropic</code>, <code>numpy</code> and <code>pytest</code>; the projects in chapters 15, 20, 30 and 41 list their own extras in their folders.</li>
 <li>The environment variable <code>LLM_BACKEND</code> picks who answers: <code>anthropic</code> (Claude, with your <code>ANTHROPIC_API_KEY</code>), <code>ollama</code> (a free model running on your computer) or <code>fake</code> (a scripted stand-in that needs nothing). The tests always use the fake backend, so they cost nothing and need no network.</li>
 <li>Every lab page says what a run costs on Claude and how that was worked out. Ollama and the fake backend cost nothing.</li>
+<li>To run a lab without installing anything, use the buttons near the top of its page. <b>Open in Colab</b> (with a Google account) and <b>Launch on Binder</b> (no account, but slow to start) open the lab's notebook from <code class="path">labs/notebooks/</code>, which follows the page step by step. <b>Open in Codespaces</b> (with a GitHub account) opens the whole repository on a machine already set up, where the commands above work as written.</li>
 </ul>
 
 <h2 id="keeping-current">Keeping this book current</h2>
