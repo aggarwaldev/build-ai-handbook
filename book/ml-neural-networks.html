@@ -80,7 +80,7 @@
 <p class="hint">Start with XOR and 0 hidden layers: logistic regression draws one straight line and is stuck at about 50% accuracy, however long it trains. Switch to 1 hidden layer with 4 neurons and train again. Then try the ring and the spiral; the spiral needs 2 hidden layers and patience. Push the learning rate to 2 to see training become unstable.</p>
 <div id="w-nntrain"></div>
 </div>
-<p>The widget runs plain full-batch gradient descent with exactly the backpropagation above, written out in <code class="path">assets/widgets/nntrain.js</code>. <a href="project-neural-net.html">Chapter 15</a> has you write the same thing in Python with NumPy.</p>
+<p>The widget runs plain full-batch gradient descent with exactly the backpropagation above, written out in <code class="path">book/assets/widgets/nntrain.js</code>. <a href="project-neural-net.html">Chapter 15</a> has you write the same thing in Python with NumPy.</p>
 
 <h2 id="forward-only">Forward passes in everyday systems</h2>
 <p>Most applications built on trained models only ever run the forward pass: no backward pass, no training. Some call hosted language models over the network. Others also run small networks on their own machine. A local embedding model turns text into vectors; a named-entity model, such as the spaCy model inside the Presidio library, spots names and places in a message so a scrubber can mask them. When you store vectors, check the configured dimension against the model's real output size at start-up. A stored vector of the wrong length would make every search silently wrong.</p>

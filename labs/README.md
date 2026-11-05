@@ -1,7 +1,7 @@
 # Labs
 
 The runnable code for the book. Each numbered lab has a page in Part V, "Build it" (open
-`index.html` in the repository root), and a folder here. Start with Lab 0, `lab-setup.html`.
+`book/index.html`), and a folder here. Start with Lab 0, `book/lab-setup.html`.
 
 ## Set up once
 

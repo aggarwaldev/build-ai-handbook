@@ -1,6 +1,6 @@
 # Lab 9: tracing and cost
 
-The page that explains this lab is `lab-tracing.html` at the root of the book.
+The page that explains this lab is `book/lab-tracing.html`.
 
 - `tracing.py`: nested spans, one span per model call (through `llm.add_listener`), traces
   written as JSON lines with personal data masked (Lab 7's masker), a summary with a span

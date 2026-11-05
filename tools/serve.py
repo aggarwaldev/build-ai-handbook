@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Serve the Build AI handbook on 127.0.0.1, with in-page "Ask AI" answers if you want them.
 
-The book works without this script: double-click index.html. Serve it when you want
+The book works without this script: double-click book/index.html. Serve it when you want
 - progress tracking that every browser keeps (some browsers refuse storage, or keep each
   page apart, for pages opened straight from disk), and
 - "Ask AI" answers inside the page. Those use YOUR Anthropic key, so each answer costs a
@@ -14,7 +14,7 @@ Then open http://127.0.0.1:8765/ (the port you chose).
 
 What it serves, and what it refuses:
 - It listens on 127.0.0.1 only, so nothing else on your network can reach it.
-- It serves files from the repository folder, and only these kinds: .html .css .js .svg
+- It serves files from the book/ folder, and only these kinds: .html .css .js .svg
   .png .jpg .woff2 .json .txt .md .py. A path with any part starting with "." (such as
   .git or .env) is refused, as is anything outside the folder and any directory listing.
 - GET /health says the helper is running, whether a key is set (never the key), the
@@ -49,7 +49,7 @@ import urllib.request
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
-ROOT = Path(__file__).resolve().parent.parent
+BOOK = Path(__file__).resolve().parent.parent / "book"
 API_URL = "https://api.anthropic.com/v1/messages"
 API_VERSION = "2023-06-01"
 DEFAULT_MODEL = "claude-haiku-5-5"
@@ -108,7 +108,7 @@ def static_target(request_path: str) -> Path | None:
     """The file a GET may serve for this URL path, or None if it must be refused.
 
     Refused: any path part starting with "." (.git, .env, "..", ".venv"), a file type not in
-    CONTENT_TYPES, anything that resolves outside ROOT (symbolic links included), a missing
+    CONTENT_TYPES, anything that resolves outside BOOK (symbolic links included), a missing
     file, and directories other than one holding index.html.
     """
     path = unquote(urlsplit(request_path).path)
@@ -119,12 +119,12 @@ def static_target(request_path: str) -> Path | None:
         return None
     if not parts or path.endswith("/"):
         parts.append("index.html")
-    candidate = ROOT.joinpath(*parts)
+    candidate = BOOK.joinpath(*parts)
     if candidate.suffix.lower() not in CONTENT_TYPES:
         return None
     try:
         resolved = candidate.resolve(strict=True)
-        rel = resolved.relative_to(ROOT)
+        rel = resolved.relative_to(BOOK)
     except (OSError, ValueError):
         return None
     if any(p.startswith(".") for p in rel.parts) or resolved.suffix.lower() not in CONTENT_TYPES:

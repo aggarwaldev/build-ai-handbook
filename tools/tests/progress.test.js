@@ -1,4 +1,4 @@
-// Tests for the pure functions in assets/progress.js (window.HBProgress in a browser).
+// Tests for the pure functions in book/assets/progress.js (window.HBProgress in a browser).
 // Run from the repository root:  node --test tools/tests/*.test.js
 'use strict';
 
@@ -6,7 +6,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 
-const P = require(path.join(__dirname, '..', '..', 'assets', 'progress.js'));
+const P = require(path.join(__dirname, '..', '..', 'book', 'assets', 'progress.js'));
 
 // A small book in the same shape as HB.BOOK.
 const BOOK = [

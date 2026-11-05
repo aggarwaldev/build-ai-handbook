@@ -3,8 +3,8 @@
 
 What it checks:
 
-1. The BOOK list in assets/handbook.js parses (every entry), every file it names exists,
-   and every .html page at the repository root is in it.
+1. The BOOK list in book/assets/handbook.js parses (every entry), every file it names
+   exists, and every .html page in book/ is in it.
 2. Words that must not appear: leftovers from the book's earlier internal edition (its old
    callout kinds and paths), plus any patterns listed one per line in
    tools/banned-words.local.txt (# starts a comment). git ignores that file, so a private
@@ -17,7 +17,9 @@ What it checks:
    start with their page's file name without .html, then a colon.
 5. h2 and h3 ids are unique within each page.
 6. Callouts use only the kinds note, why, warn and build.
-7. Every <code class="path"> that names something under labs/, tools/ or assets/ exists.
+7. Every <code class="path"> that names something under labs/, tools/ or book/ exists.
+   Paths are named from the repository root, so one that starts with assets/ is reported:
+   in the repository that folder is book/assets/.
    The one exception is a folder a lab creates when it runs, such as
    labs/02-prompt-bench/runs/: it passes when it ends in "/", git ignores it, and the
    folder that holds it exists.
@@ -39,14 +41,14 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from build_search_index import ROOT, book_entries, book_key_count  # noqa: E402
+from build_search_index import BOOK, ROOT, book_entries, book_key_count  # noqa: E402
 
 SELF = Path(__file__).resolve()
 TEXT_SUFFIXES = {".html", ".js", ".css", ".py", ".md", ".txt", ".json", ".jsonl", ".ipynb", ".yml", ".yaml", ".toml", ".ini", ".cfg"}
 TEXT_NAMES = {".gitignore"}
 SKIP_DIRS = {".git", ".venv", "venv", "node_modules", "__pycache__", ".pytest_cache"}
 CALLOUT_KINDS = {"note", "why", "warn", "build"}
-CHECKED_PATH_ROOTS = ("labs/", "tools/", "assets/")
+CHECKED_PATH_ROOTS = ("labs/", "tools/", "book/")
 TITLE_SUFFIX = "Build AI handbook"
 
 # (what to report, pattern). Case matters only where a word is a common English word.
@@ -162,20 +164,20 @@ def check_book_list(problems: list[str]) -> list[str]:
     keys = book_key_count()
     if keys != len(entries):
         problems.append(
-            f"assets/handbook.js: {keys} BOOK entries start with `file:` but only {len(entries)} parse; "
+            f"book/assets/handbook.js: {keys} BOOK entries start with `file:` but only {len(entries)} parse; "
             "keep each entry on one line with keys file, part, n (optional), title"
         )
     files = [str(e["file"]) for e in entries]
     for name, count in Counter(files).items():
         if count > 1:
-            problems.append(f"assets/handbook.js: BOOK lists {name} {count} times")
+            problems.append(f"book/assets/handbook.js: BOOK lists {name} {count} times")
     for name in files:
-        if not (ROOT / name).is_file():
-            problems.append(f"assets/handbook.js: BOOK names a missing page {name}")
+        if not (BOOK / name).is_file():
+            problems.append(f"book/assets/handbook.js: BOOK names a missing page {name}")
     listed = set(files)
-    for page in sorted(ROOT.glob("*.html")):
+    for page in sorted(BOOK.glob("*.html")):
         if page.name not in listed:
-            problems.append(f"{page.name}: page is not in the BOOK list in assets/handbook.js")
+            problems.append(f"{page.name}: page is not in the BOOK list in book/assets/handbook.js")
     return files
 
 
@@ -219,7 +221,7 @@ def _run_output_folder(text: str) -> bool:
 def check_pages(problems: list[str]) -> int:
     seen_checks: dict[str, str] = {}
     n_checks = 0
-    for page in sorted(ROOT.glob("*.html")):
+    for page in sorted(BOOK.glob("*.html")):
         name = page.name
         stem = page.stem
         facts = _PageFacts()
@@ -262,6 +264,9 @@ def check_pages(problems: list[str]) -> int:
                 )
 
         for text, line in facts.paths:
+            if text.startswith("assets/"):
+                problems.append(f"{name}:{line}: path {text!r}: name it from the repository root, book/{text}")
+                continue
             if not text.startswith(CHECKED_PATH_ROOTS):
                 continue
             if any(ch in text for ch in "*?["):
@@ -275,12 +280,12 @@ def check_pages(problems: list[str]) -> int:
 def main() -> int:
     problems: list[str] = []
     files = check_book_list(problems)
-    n_pages = len(list(ROOT.glob("*.html")))
+    n_pages = len(list(BOOK.glob("*.html")))
     scanned = check_banned(problems)
     n_checks = check_pages(problems)
-    if not (ROOT / "assets" / "progress.js").is_file():
-        problems.append("assets/progress.js is missing: assets/handbook.js loads it on every page")
-    print(f"BOOK entries: {len(files)}; pages at the root: {n_pages}")
+    if not (BOOK / "assets" / "progress.js").is_file():
+        problems.append("book/assets/progress.js is missing: book/assets/handbook.js loads it on every page")
+    print(f"BOOK entries: {len(files)}; pages in book/: {n_pages}")
     print(f"text files scanned for banned words: {scanned}")
     print(f"progress checkpoints: {n_checks}")
     print(f"problems: {len(problems)}")

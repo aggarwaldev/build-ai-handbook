@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build assets/search-index.js: page titles and headings, glossary terms and lab checkpoints.
+"""Build book/assets/search-index.js: page titles and headings, glossary terms and lab checkpoints.
 
 The book has no server, so the search box cannot read the HTML files at run time. This
 script reads them once and writes a small JavaScript file that sets window.HANDBOOK_SEARCH:
@@ -12,7 +12,7 @@ script reads them once and writes a small JavaScript file that sets window.HANDB
   {page: [{id, text}]}. The items come from <ul class="checklist"><li data-check="…">.
   progress.html uses them to show "ticked / total" per lab.
 
-Page order comes from the BOOK list in assets/handbook.js.
+Page order comes from the BOOK list in book/assets/handbook.js.
 
 Run from the repository root with plain python3 (standard library only):
 
@@ -29,8 +29,9 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-BOOK_JS = ROOT / "assets" / "handbook.js"
-OUT = ROOT / "assets" / "search-index.js"
+BOOK = ROOT / "book"
+BOOK_JS = BOOK / "assets" / "handbook.js"
+OUT = BOOK / "assets" / "search-index.js"
 
 _STR = r"'(?P<{name}>(?:[^'\\]|\\.)*)'"
 _ENTRY_RE = re.compile(
@@ -54,7 +55,7 @@ def _js_unescape(text: str) -> str:
 
 
 def book_entries() -> list[dict[str, object]]:
-    """The BOOK list from assets/handbook.js, in order: file, part, n (or None), title."""
+    """The BOOK list from book/assets/handbook.js, in order: file, part, n (or None), title."""
     source = BOOK_JS.read_text(encoding="utf-8")
     entries: list[dict[str, object]] = []
     for match in _ENTRY_RE.finditer(source):
@@ -67,7 +68,7 @@ def book_entries() -> list[dict[str, object]]:
             }
         )
     if not entries:
-        raise SystemExit("no BOOK entries found in assets/handbook.js")
+        raise SystemExit("no BOOK entries found in book/assets/handbook.js")
     return entries
 
 
@@ -178,7 +179,7 @@ def build() -> str:
     checkpoints: dict[str, list[dict[str, str]]] = {}
     for entry in book_entries():
         file = str(entry["file"])
-        path = ROOT / file
+        path = BOOK / file
         if not path.is_file():
             # A planned page not written yet: the search lists its title only.
             print(f"note: BOOK names a page not written yet: {file}", file=sys.stderr)

@@ -1,7 +1,0 @@
-# The site is the book: the pages at the root and assets/. Nothing on it links to these.
-.github/
-.devcontainer/
-binder/
-labs/
-tools/
-README.md
