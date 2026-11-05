@@ -43,7 +43,7 @@
 
 <h2 id="conventions">Conventions</h2>
 <h3 id="citing-code">How the book names files</h3>
-<p>A file path looks like <code class="path">labs/03-rag/rag.py</code>. Paths are relative to the book's own folder, the one that holds <code class="path">index.html</code>. When a function or class matters, the book names it too. It never cites line numbers: they change with every edit, and a wrong line number is worse than none. To find a name, search the file for it.</p>
+<p>A file path looks like <code class="path">labs/03-rag/rag.py</code>. Paths are named from the root of the book's repository, the folder that holds <code class="path">book/</code>, <code class="path">labs/</code> and <code class="path">tools/</code>; the pages themselves are in <code class="path">book/</code>. <code class="path">tools/check_book.py</code> checks that every path under those three folders exists. When a function or class matters, the book names it too. It never cites line numbers: they change with every edit, and a wrong line number is worse than none. To find a name, search the file for it.</p>
 
 <h3 id="boxes">The boxes</h3>
 <div class="callout why"><span class="title">Why it matters</span><p>Explains the problem an idea solves. If you remember only one thing from a section, remember this.</p></div>
@@ -124,7 +124,7 @@ cd labs &amp;&amp; python -m pytest           # every lab's tests, offline</code
 <tr><td><code class="path">tools/build_search_index.py</code></td><td>Reads every page's headings, the glossary and the lab checklists into <code class="path">book/assets/search-index.js</code>, which the search box, the glossary hover and the progress page use. <code>--check</code> only reports whether the file is stale.</td><td>After you add a page, a heading, a checklist item or a glossary entry.</td></tr>
 <tr><td><code class="path">tools/build_site_meta.py</code></td><td>Writes a marked block in each page's <code>head</code>: a description from the page's lead paragraph, its address on the website, the icon and the tags that link previews read. It also writes <code class="path">book/sitemap.xml</code> and <code class="path">book/robots.txt</code>. <code>--check</code> only reports what is out of date.</td><td>After you add a page, or change a page's main heading or lead paragraph.</td></tr>
 <tr><td><code class="path">tools/check_links.py</code></td><td>Checks that every internal link points at a file that exists, and at an <code>id</code> that exists in it.</td><td>Before every commit.</td></tr>
-<tr><td><code class="path">tools/check_book.py</code></td><td>Checks the book's structure: every page is in the contents list and loads the shared files, titles follow the pattern, heading ids are unique, checklist ids are unique and named after their page, callouts use the four kinds above, and every path in a <code>code class="path"</code> under <code class="path">labs/</code> exists. It also checks that the repository and website addresses in <code class="path">book/assets/handbook.js</code> match the ones the Python tools use.</td><td>Before every commit.</td></tr>
+<tr><td><code class="path">tools/check_book.py</code></td><td>Checks the book's structure: every page is in the contents list and loads the shared files, titles follow the pattern, heading ids are unique, checklist ids are unique and named after their page, callouts use the four kinds above, and every path in a <code>code class="path"</code> under <code class="path">labs/</code>, <code class="path">tools/</code> or <code class="path">book/</code> exists. It also checks that the repository and website addresses in <code class="path">book/assets/handbook.js</code> match the ones the Python tools use.</td><td>Before every commit.</td></tr>
 <tr><td><code class="path">tools/serve.py</code></td><td>Optional: serves the book on 127.0.0.1, with in-page Ask AI answers if you set a key (see <a href="#ask-ai-helper">above</a>).</td><td>When you want reliable progress tracking or answers inside the page.</td></tr>
 <tr><td><code class="path">tools/tests/</code></td><td>Tests for the progress tracker's logic, run with <code>node --test tools/tests/*.test.js</code>.</td><td>After you change <code class="path">book/assets/progress.js</code>.</td></tr>
 </table></div>
@@ -137,9 +137,9 @@ cd labs &amp;&amp; python -m pytest</code></pre>
 
 <h3 id="add-a-page">Adding a page</h3>
 <ol>
-<li>Copy an existing page, such as this one, and change its title, kicker and body. Keep the <code>head</code>, the sidebar <code>nav</code> and the pager <code>nav</code> as they are. The title ends with <code>&amp;middot; Build AI handbook</code>.</li>
+<li>Copy an existing page in <code class="path">book/</code>, such as this one, and change its title, kicker and body. Keep the <code>head</code>, the sidebar <code>nav</code> and the pager <code>nav</code> as they are. The title ends with <code>&amp;middot; Build AI handbook</code>.</li>
 <li>Add the page to the <code>BOOK</code> list at the top of <code class="path">book/assets/handbook.js</code>, on one line like its neighbours. The sidebar, the previous and next links, the search and the progress tracker all follow that list.</li>
-<li>Add a card for it to the contents on <code class="path">index.html</code>.</li>
+<li>Add a card for it to the contents on <code class="path">book/index.html</code>.</li>
 <li>Give every <code>h2</code> and <code>h3</code> an <code>id</code>, so search can link to it.</li>
 <li>For a lab, end its steps with <code>&lt;ul class="checklist"&gt;</code>, one <code>&lt;li data-check="page-name:step"&gt;</code> per step, where <code>page-name</code> is the file name without <code>.html</code>.</li>
 <li>Run the search index, the link check and the book check.</li>
@@ -149,7 +149,7 @@ cd labs &amp;&amp; python -m pytest</code></pre>
 <section class="selfcheck">
 <h2 id="self-check">Self-check</h2>
 <details><summary>Why does the book never cite line numbers?</summary><div><p>Line numbers change with every edit above them, so they go stale quickly and send readers to the wrong place. A file and a function name stay correct much longer, and a search finds them.</p></div></details>
-<details><summary>You add a new chapter file. What else must change for it to appear in the sidebar?</summary><div><p>The <code>BOOK</code> list in <code class="path">book/assets/handbook.js</code>. Then add a card to the contents in <code class="path">index.html</code>, and rerun <code class="path">tools/build_search_index.py</code> so search finds its headings.</p></div></details>
+<details><summary>You add a new chapter file. What else must change for it to appear in the sidebar?</summary><div><p>The <code>BOOK</code> list in <code class="path">book/assets/handbook.js</code>. Then add a card to the contents in <code class="path">book/index.html</code>, and rerun <code class="path">tools/build_search_index.py</code> so search finds its headings.</p></div></details>
 <details><summary>You ticked steps in a lab, opened the book on another computer, and the ticks are gone. Why, and what do you do?</summary><div><p>Progress lives only in the browser where you made it. Export it from the progress page on the first computer and import the file on the second; the import keeps the newer record wherever both have one.</p></div></details>
 <details><summary>A widget shows six-number vectors for embeddings. Is that what real systems use?</summary><div><p>No. Real embedding models produce hundreds or thousands of numbers per text. The widget uses six so you can read every number; the maths is identical.</p></div></details>
 </section>
