@@ -120,6 +120,7 @@ When a browser refuses all storage, every page says that progress is not being k
 | `book/assets/handbook.css` | All styles, light and dark |
 | `book/assets/search-index.js` | Generated search index; do not edit by hand |
 | `book/assets/widgets/` | One script per interactive widget |
+| `book/assets/icon.svg` | The site icon: the book's blue, with a variant for dark themes |
 | `labs/` | The lab code and its tests, plus the larger projects from earlier chapters |
 | `tools/` | The local server and the checks below |
 | `labs/notebooks/` | One notebook per lab, generated from `labs/notebooks/src/` |
