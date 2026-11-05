@@ -1,0 +1,13 @@
+{
+  "name": "Build AI handbook labs",
+  "image": "mcr.microsoft.com/devcontainers/python:3.12",
+  "postCreateCommand": "python -m pip install -r labs/requirements.txt -r labs/06-mcp-server/requirements.txt ipykernel",
+  "customizations": {
+    "codespaces": {
+      "openFiles": ["labs/README.md"]
+    },
+    "vscode": {
+      "extensions": ["ms-python.python", "ms-toolsai.jupyter"]
+    }
+  }
+}
