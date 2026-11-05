@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Build AI, from first principles to working code &middot; Build AI handbook</title>
 <!-- page metadata: written by tools/build_site_meta.py, do not edit by hand -->
-<meta name="description" content="A free, hands-on book about how AI works and how to build with it.">
+<meta name="description" content="A free, open-source, hands-on book about how AI works and how to build with it.">
 <link rel="canonical" href="https://handbook.aggarwal.dev/">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <meta property="og:site_name" content="Build AI handbook">
 <meta property="og:type" content="website">
 <meta property="og:title" content="Build AI, from first principles to working code">
-<meta property="og:description" content="A free, hands-on book about how AI works and how to build with it.">
+<meta property="og:description" content="A free, open-source, hands-on book about how AI works and how to build with it.">
 <meta property="og:url" content="https://handbook.aggarwal.dev/">
 <meta name="twitter:card" content="summary">
 <!-- end of page metadata -->
@@ -28,7 +28,7 @@
 <div class="cover">
 <p class="kicker">Build AI handbook</p>
 <h1>Build AI, from first principles to working code</h1>
-<p class="lead">A free, hands-on book about how AI works and how to build with it. It starts from school algebra, explains how neural networks and language models learn, covers the ideas behind real AI applications, and has you build them yourself in eleven labs: a first model call, a prompt test bench, retrieval with citations, an agent, an MCP server, guardrails, a judge, tracing and a small assistant.</p>
+<p class="lead">A free, open-source, hands-on book about how AI works and how to build with it. It starts from school algebra, explains how neural networks and language models learn, covers the ideas behind real AI applications, and has you build them yourself in eleven labs: a first model call, a prompt test bench, retrieval with citations, an agent, an MCP server, guardrails, a judge, tracing and a small assistant.</p>
 </div>
 
 <div class="callout note">
@@ -37,9 +37,17 @@
 </div>
 
 <h2 id="how-to-use">How to use this book</h2>
+<p>The book is free and needs no account. You can read it in three ways, and the pages are the same in each:</p>
 <ul>
-<li><b>Open it from disk.</b> Double-click <code class="path">book/index.html</code>. There is no build step and no network access: every page, diagram and widget is plain HTML, CSS and JavaScript in this folder.</li>
-<li><b>Or serve it on your own machine.</b> Run <code>python3 tools/serve.py</code> from the repository root and open <code>http://127.0.0.1:8765/</code>. Progress tracking then works in every browser, and with your own Anthropic key Ask AI can answer inside the page. <a href="reading.html#ask-ai-helper">Chapter 1</a> says what the server does and refuses.</li>
+<li><b>Online</b> at <a href="https://handbook.aggarwal.dev/" target="_blank" rel="noopener noreferrer">handbook.aggarwal.dev</a>, on a computer or a phone. The site sets no cookies, runs no analytics and loads nothing from other sites.</li>
+<li><b>Offline, from a copy.</b> Clone <a href="https://github.com/aggarwaldev/build-ai-handbook" target="_blank" rel="noopener noreferrer">the repository</a>, or <a href="https://github.com/aggarwaldev/build-ai-handbook/archive/refs/heads/main.zip" target="_blank" rel="noopener noreferrer">download it as a ZIP</a>, and double-click <code class="path">book/index.html</code>. There is no build step and no network access: every page, diagram and widget is plain HTML, CSS and JavaScript in <code class="path">book/</code>.</li>
+<li><b>Served on your own machine.</b> Run <code>python3 tools/serve.py</code> from the repository root and open <code>http://127.0.0.1:8765/</code>. Progress tracking then works in every browser, and with your own Anthropic key Ask AI can answer inside the page. <a href="reading.html#ask-ai-helper">Chapter 1</a> says what the server does and refuses.</li>
+</ul>
+<p>Each of the three keeps its own progress; <a href="reading.html#where-to-read">chapter 1</a> compares them and says how to move your progress from one to another.</p>
+<p>The book is open source. Its pages, labs and tools are at <a href="https://github.com/aggarwaldev/build-ai-handbook" target="_blank" rel="noopener noreferrer">github.com/aggarwaldev/build-ai-handbook</a>. The text is under CC BY 4.0 and the code under the MIT License, so you may share and adapt both with credit (<a href="reading.html#reuse">how to credit it</a>). Corrections and contributions are welcome, from a typo to a new lab: <a href="reading.html#contribute">Help improve the book</a> says where to start.</p>
+<p>The labs run on your own computer once <a href="lab-setup.html">Lab 0</a> has set it up, or in the browser with nothing installed: every lab page has buttons to open it in Colab, Binder or Codespaces.</p>
+<p>Inside the book:</p>
+<ul>
 <li><b>Navigation.</b> The contents are on the left (behind the menu button on a phone). Every page ends with previous and next links. Press <kbd>/</kbd> to search chapter titles, headings and glossary terms.</li>
 <li><b>Dotted words</b> are <a href="glossary.html">glossary</a> terms, like <a class="g" href="glossary.html#token">token</a>. Hover or focus one to see a short definition; click it for the full entry.</li>
 <li><b>Boxes.</b> A green <i>Why it matters</i> box says what problem an idea solves. An amber <i>Careful</i> box marks a common mistake. A blue <i>Note</i> is a side remark. A teal <i>Build it</i> box sends you to the lab where you build the idea yourself.</li>
@@ -95,7 +103,7 @@
 
 <h3 id="toc-start">Start here</h3>
 <div class="toc-grid">
-<a class="toc-card" href="reading.html"><span class="n">Chapter 1</span><span class="t">How to read this book</span><span class="d">The parts, the boxes and widgets, progress tracking, Ask AI, and how to keep the book current.</span></a>
+<a class="toc-card" href="reading.html"><span class="n">Chapter 1</span><span class="t">How to read this book</span><span class="d">Where to read it, the parts, the boxes and widgets, progress tracking, Ask AI, reusing the book and helping to improve it.</span></a>
 <a class="toc-card" href="progress.html"><span class="n">Start here</span><span class="t">Your progress</span><span class="d">What you have read, built and noted, with export, import and reset.</span></a>
 </div>
 
@@ -184,7 +192,7 @@
 
 <div class="callout warn">
 <span class="title">A note on accuracy</span>
-<p>Model names, prices and APIs change quickly. Every number the labs print comes from running their code, and each lab says which model and prices it assumed. If something here has gone out of date, the code in <code class="path">labs/</code> and the provider's own documentation win; <a href="reading.html#keeping-current">chapter 1</a> says how to keep the book current.</p>
+<p>Model names, prices and APIs change quickly. Every number the labs print comes from running their code, and each lab says which model and prices it assumed. If something here has gone out of date, the code in <code class="path">labs/</code> and the provider's own documentation win. <a href="reading.html#contribute">Chapter 1</a> says how to report it or fix it.</p>
 </div>
 </article>
 <nav id="pager" class="pager" aria-label="Previous and next"></nav>
