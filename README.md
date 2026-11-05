@@ -133,10 +133,10 @@ When a browser refuses all storage, every page says that progress is not being k
 All of these use only the Python standard library or Node's built-in test runner:
 
     python3 tools/check_links.py                 # every internal link and #id resolves
-    python3 tools/check_book.py                  # reading order, page structure, ids, paths
+    python3 tools/check_book.py                  # reading order, page structure, ids, paths, addresses
     python3 tools/build_search_index.py --check  # the search index is up to date
     python3 tools/build_site_meta.py --check     # page heads, sitemap.xml and robots.txt are up to date
-    node --test tools/tests/*.test.js            # the progress tracker
+    node --test tools/tests/*.test.js            # the progress tracker and the footer's links
     python3 tools/build_notebooks.py --check     # notebooks match their sources; launch links
     python tools/run_notebooks.py                # every notebook runs on the fake backend
 
@@ -149,11 +149,11 @@ description from the lead paragraph, the page's address on the website, the icon
 tags that link previews read), `book/sitemap.xml` and `book/robots.txt`, and changes only
 the files that are out of date.
 
-The tracker tests in `tools/tests/browser.test.js` drive the real pages in headless
-Chromium. They need the `playwright` package with a browser it has already installed, and
-are skipped when it is missing. To run them, point `NODE_PATH` at a `node_modules` folder
-that holds playwright. Set `REQUIRE_BROWSER=1` to make a missing browser fail the run
-instead; CI does.
+The tests in `tools/tests/browser.test.js` drive the real pages in headless Chromium: the
+progress tracker, and the footer's links on a chapter and on the cover. They need the
+`playwright` package with a browser it has already installed, and are skipped when it is
+missing. To run them, point `NODE_PATH` at a `node_modules` folder that holds playwright.
+Set `REQUIRE_BROWSER=1` to make a missing browser fail the run instead; CI does.
 
 `check_book.py` also reads `tools/banned-words.local.txt` if you create it: one pattern per
 line that must not appear in the book. git ignores that file, so a private list stays
