@@ -106,6 +106,14 @@ progress; use Export and Import to move it. Chrome and Edge keep progress for pa
 from disk. Firefox and Safari may not; if ticks do not survive a reload, use `serve.py`.
 When a browser refuses all storage, every page says that progress is not being kept.
 
+## Contributing
+
+Corrections, problem reports and better labs are welcome. Report a mistake or a lab that
+does not work at <https://github.com/aggarwaldev/build-ai-handbook/issues>. To propose a
+new chapter or lab, open an issue first, so the scope is agreed before anyone writes it.
+[`CONTRIBUTING.md`](CONTRIBUTING.md) explains how to set up, the checks to run before a
+pull request and how the book is written.
+
 ## Layout
 
 | Path | What it holds |
@@ -127,6 +135,8 @@ When a browser refuses all storage, every page says that progress is not being k
 | `labs/notebooks/` | One notebook per lab, generated from `labs/notebooks/src/` |
 | `binder/`, `.devcontainer/` | Set-up for Binder and GitHub Codespaces |
 | `vercel.json` | Hosting on Vercel: publishes `book/`, with security headers |
+| `CONTRIBUTING.md` | How to report a problem, propose a change and check it before a pull request |
+| `.github/ISSUE_TEMPLATE/`, `.github/pull_request_template.md` | The issue forms and the pull request template |
 
 ## Checks
 
