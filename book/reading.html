@@ -27,7 +27,7 @@
 <article>
 <p class="kicker">Start here &middot; Chapter 1</p>
 <h1>How to read this book</h1>
-<p class="lead">What the five parts cover and where to read them, what the boxes, widgets and checklists mean, how the book keeps your progress, how to ask an AI about a passage, and how to keep the book correct when you change it.</p>
+<p class="lead">What the five parts cover and where to read them, what the boxes, widgets and checklists mean, how the book keeps your progress, how to ask an AI about a passage, how to reuse the book with credit, and how to help correct and improve it.</p>
 
 <h2 id="shape">The shape of the book</h2>
 <p>The book climbs a ladder. Each rung uses only what the rungs below it taught, and the labs in Part V let you build what the rungs describe.</p>
@@ -132,8 +132,30 @@ cd labs &amp;&amp; python -m pytest           # every lab's tests, offline</code
 <li>To run a lab without installing anything, use the buttons near the top of its page. <b>Open in Colab</b> (with a Google account) and <b>Launch on Binder</b> (no account, but slow to start) open the lab's notebook from <code class="path">labs/notebooks/</code>, which follows the page step by step. <b>Open in Codespaces</b> (with a GitHub account) opens the whole repository on a machine already set up, where the commands above work as written.</li>
 </ul>
 
+<h2 id="reuse">Reusing and crediting the book</h2>
+<p>You may copy, share, translate and adapt the book for any purpose, as long as you give credit. Two licences cover it:</p>
+<ul>
+<li><b>The text</b>, meaning the prose, figures and diagrams of the pages in <code class="path">book/</code>, is under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">Creative Commons Attribution 4.0</a> (CC BY 4.0); the repository's <a href="https://github.com/aggarwaldev/build-ai-handbook/blob/main/LICENSE-TEXT" target="_blank" rel="noopener noreferrer">LICENSE-TEXT</a> says so. Give credit, link to the licence and say whether you changed anything.</li>
+<li><b>The code</b>, meaning everything under <code class="path">labs/</code>, <code class="path">tools/</code> and <code class="path">book/assets/</code>, the notebooks and the code samples in the pages, is under the <a href="https://github.com/aggarwaldev/build-ai-handbook/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a>. Keep its copyright and licence notice with any copy of the code.</li>
+</ul>
+<p>A credit line you can copy:</p>
+<pre><code>"Build AI handbook" by Dev Aggarwal, https://handbook.aggarwal.dev/,
+licensed under CC BY 4.0: https://creativecommons.org/licenses/by/4.0/</code></pre>
+<p>If you changed the text, add what you changed, such as "Adapted: chapter 6 shortened and translated into Spanish." When you reuse one chapter, you may link to its page instead of the cover. The credit must not suggest that the author endorses you or your use.</p>
+
+<h2 id="contribute">Help improve the book</h2>
+<p>The book is open source, and corrections and improvements are welcome from anyone who reads it. You do not need to be an expert: a reader who got stuck on a step knows exactly where it is unclear. What helps most:</p>
+<ul>
+<li><b>Report a mistake or a problem.</b> A wrong number, a lab that fails, an unclear step, a dead link or a page that misbehaves in your browser: <a href="https://github.com/aggarwaldev/build-ai-handbook/issues/new/choose" target="_blank" rel="noopener noreferrer">open an issue</a> on GitHub. Name the page and the section, say what you saw and what you expected, and give your browser or operating system if it matters. The <a href="https://github.com/aggarwaldev/build-ai-handbook/issues" target="_blank" rel="noopener noreferrer">list of issues</a> shows what others have reported already.</li>
+<li><b>Fix it yourself.</b> Every page ends with an <b>Edit this page</b> link to its source on GitHub, where you can make the change and propose it as a pull request. A single typo or stale price is worth a pull request on its own.</li>
+<li><b>Improve a lab or its tests.</b> The labs are in <code class="path">labs/</code>, and their tests run on the fake backend. A clearer step, a test for a case a lab misses, or a fix that makes a lab run on another system all help.</li>
+<li><b>Propose a chapter or a lab.</b> Open an issue first and describe what it would teach and where it would fit, so the idea can be agreed before you spend time writing it.</li>
+</ul>
+<p>Issues and pull requests need a free GitHub account. The <a href="https://github.com/aggarwaldev/build-ai-handbook/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">contributing guide</a> says how to set up a copy, which checks to run and how to send a change.</p>
+
 <h2 id="keeping-current">Keeping this book current</h2>
-<p>The book is plain HTML, CSS and JavaScript, with helper scripts in <code class="path">tools/</code>. Each runs with plain <code>python3</code> and needs nothing installed.</p>
+<p>Models, prices and APIs change quickly, so parts of a book like this go out of date. It stays correct when readers point out what has changed: if you find something stale, report it or fix it as <a href="#contribute">above</a>; the <a href="https://github.com/aggarwaldev/build-ai-handbook/blob/main/CONTRIBUTING.md" target="_blank" rel="noopener noreferrer">contributing guide</a> says how to send the change. The rest of this section is for anyone changing the pages: the scripts that keep them consistent, and how to add a page.</p>
+<p>The book is plain HTML, CSS and JavaScript, with helper scripts in <code class="path">tools/</code>. The scripts run with plain <code>python3</code> and need nothing installed; the tests in <code class="path">tools/tests/</code> need Node.</p>
 <div class="tbl-wrap"><table>
 <tr><th>Script</th><th>What it does</th><th>Run it when</th></tr>
 <tr><td><code class="path">tools/build_search_index.py</code></td><td>Reads every page's headings, the glossary and the lab checklists into <code class="path">book/assets/search-index.js</code>, which the search box, the glossary hover and the progress page use. <code>--check</code> only reports whether the file is stale.</td><td>After you add a page, a heading, a checklist item or a glossary entry.</td></tr>
@@ -151,6 +173,7 @@ cd labs &amp;&amp; python -m pytest</code></pre>
 <p>The repository's continuous integration runs the same checks, and the lab tests, on every push and pull request.</p>
 
 <h3 id="add-a-page">Adding a page</h3>
+<p>For a new chapter or lab, open an issue first (<a href="#contribute">above</a>), so its place in the book is agreed before you write it. Then:</p>
 <ol>
 <li>Copy an existing page in <code class="path">book/</code>, such as this one, and change its title, kicker and body. Keep the <code>head</code>, the sidebar <code>nav</code> and the pager <code>nav</code> as they are. The title ends with <code>&amp;middot; Build AI handbook</code>.</li>
 <li>Add the page to the <code>BOOK</code> list at the top of <code class="path">book/assets/handbook.js</code>, on one line like its neighbours. The sidebar, the previous and next links, the search and the progress tracker all follow that list.</li>

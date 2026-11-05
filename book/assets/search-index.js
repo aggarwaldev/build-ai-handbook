@@ -134,6 +134,16 @@ window.HANDBOOK_SEARCH = {
      "level": 2
     },
     {
+     "id": "reuse",
+     "text": "Reusing and crediting the book",
+     "level": 2
+    },
+    {
+     "id": "contribute",
+     "text": "Help improve the book",
+     "level": 2
+    },
+    {
      "id": "keeping-current",
      "text": "Keeping this book current",
      "level": 2
