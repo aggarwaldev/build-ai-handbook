@@ -16,7 +16,8 @@ links to outside reading and the optional Ask AI helper.
 
 ## Open the book
 
-Either double-click `book/index.html`, or serve the book and open the address it prints:
+Read it online at <https://handbook.aggarwal.dev/>. To read it on your own machine, either
+double-click `book/index.html`, or serve the book and open the address it prints:
 
     python3 tools/serve.py
 
@@ -155,14 +156,6 @@ requirements.
 
 The same checks, the lab tests, the notebooks and the browser tests run on every push and
 pull request (`.github/workflows/check.yml`).
-
-## Publish it
-
-The book is a static site: the `book/` folder as it is. On Vercel, import the repository
-with the framework preset "Other" and no build command. `vercel.json` makes `book/` the
-output folder, so nothing outside it reaches the site, and adds security headers. On a
-public address the Ask AI box copies a ready-made prompt instead of calling a model, so no
-key is ever needed on the server.
 
 ## Licence
 

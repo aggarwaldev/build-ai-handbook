@@ -38,7 +38,7 @@ OUT = ROOT / "labs" / "notebooks"
 
 REPO = "aggarwaldev/build-ai-handbook"
 BRANCH = "main"
-BOOK_URL = "https://build-ai-handbook.vercel.app/"
+BOOK_URL = "https://handbook.aggarwal.dev/"
 
 # notebook stem -> the lab page it follows
 LABS = {
